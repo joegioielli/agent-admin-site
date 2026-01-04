@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+  />
+  <title>About this home</title>
+  <style>
+    /* Full viewport - calmer neutral gradient */
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: auto;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    /* Listing container - crisp white card */
+    .container {
+      background: #fff;
+      color: #1a1a1a;
+      border-radius: 16px;
+      padding: 28px;
+      width: 90%;
+      max-width: 440px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+    img {
+      width: 100%;
+      height: 240px;
+      border-radius: 12px;
+      object-fit: cover;
+      margin-bottom: 20px;
+      background: #f8f9fa;
+      display: block;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    h2 {
+      margin: 0 0 20px;
+      font-size: 1.45rem;
+      line-height: 1.25;
+      font-weight: 700;
+    }
+    .addr-line1 {
+      display: block;
+      font-weight: 800;
+      color: #111;
+      font-size: 1.2rem;
+      margin-bottom: 4px;
+    }
+    .addr-line2 {
+      display: block;
+      font-weight: 500;
+      color: #555;
+      font-size: 1rem;
+    }
+    .buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .buttons button {
+      padding: 14px 20px;
+      font-size: 1.05rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all .2s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .buttons button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    }
+    .buttons button:active {
+      transform: translateY(0);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    /* Brand orange CTA - highest priority */
+    .text-btn { 
+      background: linear-gradient(135deg, #ff6600, #e55a00);
+      color: white; 
+    }
+    /* Secondary CTA */
+    .call-btn { 
+      background: linear-gradient(135deg, #007bff, #0056b3);
+      color: white; 
+    }
+    /* Neutral nav */
+    .back-btn { 
+      background: #6c757d; 
+      color: white; 
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img
+      id="propertyImage"
+      src="https://placehold.co/400x300?text=No+Photo"
+      alt="Property image"
+    />
+    <h2 id="propertyAddress">
+      <span class="addr-line1">Loading…</span>
+      <span class="addr-line2"></span>
+    </h2>
+    <div class="buttons">
+      <button id="callBtn" class="call-btn">📞 Talk to our smart assistant</button>
+      <button id="textBtn" class="text-btn">💬 Chat about this home</button>
+      <button id="backBtn" class="back-btn">🔙 Back to homes</button>
+    </div>
+  </div>
+
+  <!-- All your existing script stays exactly the same -->
+  <script>
+    // ----- Helpers -----
+    const qs = new URLSearchParams(location.search);
+    const MLS_FROM_URL = (qs.get('mls') || '').trim();
+    const ADDRESS_FROM_URL = (qs.get('address') || '').trim();
+    const FALLBACK_SELECTED = (() => {
+      try { return localStorage.getItem('selectedListingId') || ''; }
+      catch { return ''; }
+    })();
+
+    const addrEl = document.getElementById('propertyAddress');
+    const addr1El = addrEl.querySelector('.addr-line1');
+    const addr2El = addrEl.querySelector('.addr-line2');
+    const imgEl  = document.getElementById('propertyImage');
+
+    let CURRENT = {
+      mls: MLS_FROM_URL || FALLBACK_SELECTED || '',
+      address1: ADDRESS_FROM_URL || '',
+      address2: '',
+      photoUrl: '',
+      detailsUrl: '',
+      details: {}
+    };
+
+    function joinCityStateZip(city, state, zip) {
+      const st = (state || '').trim().toUpperCase();
+      const parts = [];
+      if (city && st) parts.push(`${city}, ${st}`);
+      else if (city) parts.push(city);
+      else if (st) parts.push(st);
+      if (zip) parts.push(zip);
+      return parts.join(' ');
+    }
+
+    function pick(obj, keys, fallback = '') {
+      for (const k of keys) {
+        if (obj && obj[k] != null && String(obj[k]).trim?.() !== '') return obj[k];
+        if (obj && obj[k] != null && typeof obj[k] !== 'string') return obj[k];
+      }
+      return fallback;
+    }
+
+    const norm = (s) => String(s || '')
+      .toLowerCase()
+      .replace(/[.,]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    function computeAddressLines(addrRaw, city, state, zip) {
+      let line1 = (addrRaw || '').trim();
+      let line2 = joinCityStateZip(city, state, zip);
+
+      if (line2) {
+        const nAddr = norm(addrRaw);
+        const nCsz  = norm(line2);
+        if (nAddr.endsWith(nCsz)) {
+          const idx = nAddr.lastIndexOf(nCsz);
+          const rawBefore = addrRaw.slice(0, idx);
+          line1 = rawBefore.replace(/[,\s]+$/,'').trim();
+        } else if (!line1) {
+          line1 = '';
+        }
+      } else if (line1.includes(',')) {
+        const [a1, rest] = line1.split(/,(.+)/).map(s => (s || '').trim());
+        line1 = a1;
+        line2 = (rest || '').replace(/^[,\s]+/,'').trim();
+      }
+
+      if (norm(line1) === norm(line2)) line2 = '';
+      return { line1, line2 };
+    }
+
+    async function getJSON(url) {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Fetch failed');
+      return res.json();
+    }
+
+    function renderCard() {
+      addr1El.textContent = CURRENT.address1 || (CURRENT.mls ? `MLS #${CURRENT.mls}` : 'Property');
+      addr2El.textContent = CURRENT.address2 || '';
+      imgEl.src = CURRENT.photoUrl || 'https://placehold.co/400x300?text=No+Photo';
+    }
+
+    // ----- Load selected listing -----
+    async function init() {
+      if (!CURRENT.mls) {
+        location.href = '/listings.html';
+        return;
+      }
+
+      try {
+        const res = await fetch('/.netlify/functions/listListings', { cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed to load listings');
+        const json = await res.json();
+        const items = Array.isArray(json) ? json : (json.items || json.listings || json.files || []);
+
+        const found = items.find(it =>
+          String(it.listingId || '').trim() === CURRENT.mls ||
+          String(it.mls || '').trim() === CURRENT.mls
+        );
+
+        if (found) {
+          CURRENT.photoUrl   = found.photoUrl || found.primaryPhotoUrl || CURRENT.photoUrl;
+          CURRENT.detailsUrl = found.detailsUrl || '';
+          if (!CURRENT.address1) CURRENT.address1 = found.address || CURRENT.address1;
+          renderCard();
+
+          if (CURRENT.detailsUrl) {
+            try {
+              const details = await getJSON(CURRENT.detailsUrl);
+              CURRENT.details = details;
+              const city  = pick(details, ['city','City'], '');
+              const state = pick(details, ['state','State'], '');
+              const zip   = pick(details, ['zip','Zip','postalCode'], '');
+              const fromFound = found.address || CURRENT.address1 || '';
+              const clean = computeAddressLines(fromFound, city, state, zip);
+              CURRENT.address1 = clean.line1 || CURRENT.address1;
+              CURRENT.address2 = clean.line2 || '';
+              if (!CURRENT.address1) {
+                CURRENT.address1 = pick(details, ['address','Address'], CURRENT.address1);
+              }
+              renderCard();
+            } catch {
+              const raw = found.address || CURRENT.address1 || '';
+              const fallback = computeAddressLines(raw, '', '', '');
+              CURRENT.address1 = fallback.line1 || CURRENT.address1;
+              CURRENT.address2 = fallback.line2 || '';
+              renderCard();
+            }
+          } else {
+            const raw = found.address || CURRENT.address1 || '';
+            const fallback = computeAddressLines(raw, '', '', '');
+            CURRENT.address1 = fallback.line1 || CURRENT.address1;
+            CURRENT.address2 = fallback.line2 || '';
+            renderCard();
+          }
+        } else {
+          renderCard();
+        }
+      } catch {
+        renderCard();
+      }
+    }
+
+    // ----- Buttons -----
+    document.getElementById('backBtn').addEventListener('click', () => {
+      location.href = '/listings.html';
+    });
+
+    document.getElementById('callBtn').addEventListener('click', async () => {
+      if (!CURRENT.mls) {
+        alert('We could not identify this home. Please go back and select it again.');
+        return;
+      }
+      try {
+        const res = await fetch('/.netlify/functions/startVapiSession', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            propertyId: CURRENT.mls,
+            address: [CURRENT.address1, CURRENT.address2].filter(Boolean).join(' ')
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || 'Call failed');
+        alert('We are starting your call now. If it does not ring in a few seconds, please try again.');
+      } catch (err) {
+        alert(`Call error: ${err.message || err}`);
+      }
+    });
+
+    // ----- Chat button -> navigate to chat.html -----
+    document.getElementById('textBtn').addEventListener('click', () => {
+      if (!CURRENT.mls) {
+        alert('We could not identify this home. Please go back and select it again.');
+        return;
+      }
+      const pid = encodeURIComponent(CURRENT.mls || '');
+      const a1  = encodeURIComponent(CURRENT.address1 || '');
+      const a2  = encodeURIComponent(CURRENT.address2 || '');
+      location.href = `/chat.html?pid=${pid}&a1=${a1}&a2=${a2}`;
+    });
+
+    // Kick off
+    init();
+  </script>
+</body>
+</html>

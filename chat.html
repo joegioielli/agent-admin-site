@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#ff6600">
+  <link rel="manifest" href="/manifest.json">
+  <title>Chat about this home</title>
+  <style>
+    :root { --brand:#ff6600; }
+    html, body { height:100%; margin:0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: linear-gradient(to right, #000, #ff6600); color:#111; display:flex; flex-direction:column; }
+    header { background:#fff; padding:10px 12px; border-bottom:1px solid #eee; position:sticky; top:0; z-index:2; display:grid; grid-template-columns:auto 1fr auto; align-items:center; column-gap:10px; }
+    header a { text-decoration:none; background: var(--brand); color:#fff; padding:6px 10px; border-radius:8px; font-weight:700; border:1px solid #e05500; box-shadow:0 1px 2px rgba(0,0,0,0.15); transition: transform .2s ease, filter .15s ease, box-shadow .15s ease; }
+    header a:hover { transform: translateY(-1px); filter: brightness(1.05); box-shadow:0 2px 6px rgba(0,0,0,0.2); }
+    header a:active { transform: translateY(0); filter: brightness(0.98); }
+    .title { min-width:0; text-align:center; }
+    header .title .l1 { font-weight:800; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:1.25rem; }
+    header .title .l2 { color:#555; font-size:.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    #chat { flex:1; background:#f7f9fc; border-top:1px solid #f0f0f0; border-bottom:1px solid #f0f0f0; padding:12px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; }
+    .msg { max-width:80%; padding:10px 12px; border-radius:14px; line-height:1.4; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.06); word-wrap:break-word; }
+    .user { align-self:flex-end; background:#e6f4ea; }
+    .ai   { align-self:flex-start; background:#e8f0fe; }
+    #typing { font-size:.85rem; color:#666; padding:6px 12px; display:none; }
+
+    #ctaBar { background:#fff; padding:6px 8px; border-top:1px solid #eee; display:flex; justify-content:center; }
+    .cta-btn { background: var(--brand); color:#fff; border:none; border-radius:9999px; padding:6px 24px; font-size:.9rem; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.12); transition: transform .2s, filter .15s; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
+    .cta-btn:hover { transform: translateY(-1px); filter: brightness(1.05); }
+    .cta-btn:active { transform: translateY(0); filter: brightness(0.98); }
+    .cta-btn.disabled { opacity: .55; pointer-events: none; }
+
+    #inputBar { background:#fff; padding:8px; border-top:1px solid #eee; display:flex; gap:8px; position:sticky; bottom:0; z-index:2; }
+    #msgInput { flex:1; padding:12px; border:1px solid #ddd; border-radius:10px; font-size:1rem; }
+    #sendBtn, #voiceBtn { padding:12px 16px; border:none; border-radius:10px; font-size:1rem; cursor:pointer; transition: transform .2s, filter .15s; }
+    #sendBtn { background:#28a745; color:#fff; }
+    #sendBtn:hover { transform: translateY(-1px); filter: brightness(1.05); }
+    #sendBtn:active { transform: translateY(0); filter: brightness(0.98); }
+    #voiceBtn { background:#6c757d; color:#fff; font-size:1.1rem; min-width:48px; }
+    #voiceBtn:hover:not(.listening) { background:#5a6268; transform: translateY(-1px); }
+    #voiceBtn:active:not(.listening) { transform: translateY(0); }
+    #voiceBtn.listening { background:#dc3545; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.05);} }
+    .left-group { display:flex; align-items:center; gap:8px; }
+    .right-spacer { visibility:hidden; }
+
+    @keyframes pulseBtn { 0% { transform: scale(1); } 50% { transform: scale(1.04); } 100% { transform: scale(1); } }
+    @keyframes glowBtn { 0% { box-shadow: 0 0 0 rgba(255,102,0,0.00);} 50% { box-shadow: 0 0 18px rgba(255,102,0,0.50);} 100% { box-shadow: 0 0 0 rgba(255,102,0,0.00);} }
+    .cta-btn.attn { animation: glowBtn 1.8s ease-in-out 3, pulseBtn 1.8s ease-in-out 3; }
+
+    .quick-replies { margin-top:8px; display:flex; flex-wrap:wrap; gap:4px; }
+    .quick-reply { background:#d1e3ff; color:#1e40af; border:none; border-radius:20px; padding:6px 12px; font-size:.85rem; cursor:pointer; transition: all .2s; }
+    .quick-reply:hover { background:#b3d4ff; transform:scale(1.05); }
+    .quick-reply:active { transform:scale(0.98); }
+
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:9999}
+    .modal.open{display:flex}
+    .modal-card{position:relative;background:#fff;max-width:420px;width:92%;border-radius:12px;padding:20px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+    .actions{display:flex;gap:12px;margin-top:8px}
+    .btn{ padding:10px 14px; border:none; border-radius:10px; cursor:pointer; font-size:.95rem; transition: transform .2s, filter .15s; }
+    .btn:hover { transform: translateY(-1px); filter: brightness(1.05); }
+    .btn:active { transform: translateY(0); filter: brightness(0.98); }
+    .btn-call{background:#f97316;color:#fff}
+    .btn-email{background:#10b981;color:#fff}
+    .modal-close{position:absolute;top:6px;right:10px;background:transparent;border:none;font-size:20px;line-height:1;cursor:pointer}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="left-group">
+      <a id="backLink" href="/listings.html">← Back to homes</a>
+    </div>
+    <div class="title">
+      <span class="l1" id="addr1">Loading…</span>
+      <span class="l2" id="addr2"></span>
+    </div>
+    <div class="right-spacer" aria-hidden="true"></div>
+  </header>
+
+  <div id="chat"></div>
+  <div id="typing">AI is typing…</div>
+
+  <div id="ctaBar">
+    <button id="contactBtn" class="cta-btn disabled" type="button" aria-disabled="true">Contact Agent</button>
+  </div>
+
+  <div id="inputBar">
+    <input id="msgInput" placeholder="Ask about price, beds, schools, features…" />
+    <button id="voiceBtn" title="Voice input">🎤</button>
+    <button id="sendBtn">Send</button>
+  </div>
+
+  <div id="contactActions" class="modal" aria-hidden="true">
+    <div class="modal-card">
+      <button class="modal-close" id="contactActionsClose" aria-label="Close">×</button>
+      <h3 style="margin:0 0 6px">Contact Agent</h3>
+      <p style="margin:0 0 12px;color:#555">How would you like to reach the agent?</p>
+      <div class="actions">
+        <a id="callAgentAction" class="btn btn-call" href="#">📞 Call Agent</a>
+        <button id="emailAgentAction" class="btn btn-email" type="button">✉️ Send Message</button>
+      </div>
+      <div id="noPhoneMsg" style="display:none;margin-top:10px;color:#666">No direct phone on file for this listing — you can still send a message.</div>
+    </div>
+  </div>
+
+  <script>
+    const qs = new URLSearchParams(window.location.search);
+    const pid = (qs.get('pid') || '').trim();
+    if (!pid) {
+      window.location.href = '/listings.html';
+      throw new Error('No property selected');
+    }
+
+    const a1 = decodeURIComponent(qs.get('a1') || '');
+    const a2 = decodeURIComponent(qs.get('a2') || '');
+
+    const chatDiv   = document.getElementById('chat');
+    const input     = document.getElementById('msgInput');
+    const sendBtn   = document.getElementById('sendBtn');
+    const voiceBtn  = document.getElementById('voiceBtn');
+    const typingEl  = document.getElementById('typing');
+    const addr1El   = document.getElementById('addr1');
+    const addr2El   = document.getElementById('addr2');
+    const backLink  = document.getElementById('backLink');
+    const leftGroup = document.querySelector('.left-group');
+    const rightSpacer = document.querySelector('.right-spacer');
+    const contactBtn = document.getElementById('contactBtn');
+
+    const contactModal = document.getElementById('contactActions');
+    const callAction   = document.getElementById('callAgentAction');
+    const emailAction  = document.getElementById('emailAgentAction');
+    const closeModalBtn= document.getElementById('contactActionsClose');
+    const noPhoneMsg   = document.getElementById('noPhoneMsg');
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
+    function syncSpacer(){ if(!leftGroup||!rightSpacer) return; rightSpacer.style.width = leftGroup.offsetWidth + 'px'; }
+    window.addEventListener('resize', syncSpacer); setTimeout(syncSpacer, 0);
+
+    const DEBUG_CONTACT = false;
+    const debugContact = (...a) => { if (DEBUG_CONTACT) console.log('[ContactAgent]', ...a); };
+
+    addr1El.textContent = a1 || `MLS #${pid}`;
+    addr2El.textContent = a2 || '';
+    backLink.href = `/select.html?mls=${encodeURIComponent(pid)}&address=${encodeURIComponent([a1,a2].filter(Boolean).join(' '))}`;
+
+    function pick(obj, keys, fallback='') {
+      for (const k of keys) {
+        if (obj && obj[k] != null && String(obj[k]).trim?.() !== '') return obj[k];
+        if (obj && obj[k] != null && typeof obj[k] !== 'string') return obj[k];
+      }
+      return fallback;
+    }
+    function cleanPhone(p) {
+      const digits = String(p || '').replace(/[^0-9]/g, '');
+      if (digits.length === 11 && digits.startsWith('1')) return '+' + digits;
+      if (digits.length === 10) return '+1' + digits;
+      return digits.length >= 7 ? digits : '';
+    }
+    function normText(s){ return String(s||'').toLowerCase().replace(/[^\w\s]/g,' ').replace(/\s+/g,' ').trim(); }
+    function isYes(s){ s=normText(s); return ['y','yes','yeah','yep','sure','ok','okay','yup','affirmative','yes please'].includes(s); }
+    function isNo(s){ s=normText(s); return ['n','no','nope','nah','not really','im good','i am good','i\'m good','no thanks','no thank you','not now'].includes(s); }
+
+    function linkifyAI(text) {
+      let html = String(text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      html = html.replace(/https?:\/\/[^\s)]+/g, (m) => `<a href="${m}" target="_blank" rel="noopener">${m}</a>`);
+      html = html.replace(/(\+?1[-.\s]?)?(\(?\d{3}\)?)[-.\s]?\d{3}[-.\s]?\d{4}/g, (m) => {
+        const digits = m.replace(/[^0-9]/g,'');
+        const tel = digits.length === 11 && digits.startsWith('1') ? `+${digits}` : digits.length === 10 ? `+1${digits}` : digits;
+        return `<a href="tel:${tel}">${m}</a>`;
+      });
+      return html.replace(/\n/g,'<br>');
+    }
+
+    function detectIntent(s) {
+      const t = ' ' + normText(s) + ' ';
+      const has = kws => kws.some(k => t.includes(' ' + k + ' '));
+      if (has(['agent','realtor','broker','talk to agent','speak to agent','connect me','connect agent','call agent','human','contact me','contact agent'])) return 'agent';
+      if (has(['showing','tour','schedule','walkthrough','viewing','see it','book','set up a showing','set a showing'])) return 'showing';
+      return null;
+    }
+
+    // Voice input
+    let recognition;
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      voiceBtn.addEventListener('click', () => {
+        recognition.start();
+        voiceBtn.textContent = '🔴';
+        voiceBtn.classList.add('listening');
+      });
+
+      recognition.onresult = (e) => {
+        input.value = e.results[0][0].transcript;
+        voiceBtn.textContent = '🎤';
+        voiceBtn.classList.remove('listening');
+      };
+
+      recognition.onerror = recognition.onend = () => {
+        voiceBtn.textContent = '🎤';
+        voiceBtn.classList.remove('listening');
+      };
+    } else {
+      voiceBtn.style.display = 'none';
+    }
+
+    async function loadAgentPhone() {
+      debugContact('start', { pid });
+      try {
+        const res = await fetch('/.netlify/functions/listListings', { cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed to load listings');
+        const json = await res.json();
+        const items = Array.isArray(json) ? json : (json.items || json.listings || json.files || []);
+
+        const found = items.find(it => {
+          const cand = String(it.listingId || it.mls || it.id || '').trim();
+          return cand && cand === pid;
+        });
+
+        let phone = pick(found || {}, [
+          'AgentListPhone','listingAgentPhone','listing_agent_phone',
+          'agentPhone','agent_phone','ListAgentPhone','ListingAgentPhone',
+          'AgentPhone','AgentCell','Agent_Cell','LaPhone','La_Phone',
+          'ListAgentPreferredPhone','officePhone','OfficePhone'
+        ], '');
+
+        const detailsUrl = pick(found || {}, ['detailsUrl','details','detailsURL'], '');
+        if (!phone && detailsUrl) {
+          const dRes = await fetch(detailsUrl, { cache: 'no-store' });
+          if (dRes.ok) {
+            const details = await dRes.json();
+            phone = pick(details || {}, [
+              'AgentListPhone','listingAgentPhone','listing_agent_phone',
+              'agentPhone','agent_phone','ListAgentPhone','ListingAgentPhone',
+              'AgentDirect','AgentCell','Agent_Phone','AgentDirectPhone',
+              'LaPhone','La_Phone','ListAgentPreferredPhone','officePhone','OfficePhone'
+            ], '');
+            if (!phone && details && details.agent && typeof details.agent === 'object') {
+              phone = pick(details.agent, ['phone','cell','direct','mobile','Phone','Cell','Direct','Mobile'], '');
+            }
+          }
+        }
+
+        const cleaned = cleanPhone(phone);
+        if (cleaned) {
+          contactBtn.dataset.tel = 'tel:' + cleaned;
+          contactBtn.classList.remove('disabled');
+          contactBtn.removeAttribute('aria-disabled');
+          contactBtn.classList.add('attn');
+          setTimeout(() => contactBtn.classList.remove('attn'), 6000);
+        }
+      } catch (e) {
+        debugContact('error', e);
+      }
+    }
+
+    const KEY = `chat:${pid}`;
+    function loadHistory() { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } }
+    function saveHistory(arr){ try { localStorage.setItem(KEY, JSON.stringify(arr)); } catch {} }
+    const history = loadHistory();
+
+    function addMessage(sender, text = '') {
+      const div = document.createElement('div');
+      div.className = `msg ${sender === 'You' ? 'user' : 'ai'}`;
+      if (sender === 'You') {
+        div.textContent = text;
+      } else {
+        // AI: render rich text, but no quick-reply pills by default
+        div.innerHTML = linkifyAI(text);
+      }
+      chatDiv.appendChild(div);
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+      history.push({ t: Date.now(), who: sender, text });
+      saveHistory(history.slice(-50));
+      return div;
+    }
+
+    // non-streaming call that reads JSON and displays only reply
+    async function callChat(message) {
+      const recentHistory = history
+        .slice(-10)
+        .filter(m => m.who !== 'AI' || !String(m.text || '').includes('[Lead form shown]'));
+      const context = recentHistory.map(m => `${m.who}: ${m.text}`).join('\n').substring(0, 4000);
+
+      typingEl.style.display = 'block';
+
+      const res = await fetch('/.netlify/functions/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          propertyId: pid,
+          message,
+          address1: a1,
+          address2: a2,
+          history: context
+        })
+      });
+
+      // Handle non-200 gracefully
+      if (!res.ok) {
+        let msg = `Sorry — I hit an error (${res.status}).`;
+        try {
+          const maybe = await res.json();
+          if (maybe && maybe.reply) msg = String(maybe.reply);
+        } catch {}
+        throw new Error(msg);
+      }
+
+      const data = await res.json().catch(() => ({}));
+      typingEl.style.display = 'none';
+
+      const replyText =
+        (data && typeof data.reply === 'string' && data.reply.trim())
+          ? data.reply.trim()
+          : "Sorry — I’m not sure.";
+
+      // window.__lastChatMeta = data; // keep extras if needed later
+
+      return replyText;
+    }
+
+    // --- Nudges / intro ---
+    let leadOpen = false;
+    let nudge1Timer = null, nudge2Timer = null, nudgeCount = 0, lastPrompt = 'none';
+
+    function cancelAllNudges() {
+      if (nudge1Timer) clearTimeout(nudge1Timer);
+      if (nudge2Timer) clearTimeout(nudge2Timer);
+      nudge1Timer = null;
+      nudge2Timer = null;
+    }
+
+    function scheduleIdleNudges() {
+      cancelAllNudges();
+      if (nudgeCount >= 2) return;
+      nudge1Timer = setTimeout(() => {
+        addMessage('AI', "If you’d like, I can help you connect with an agent or talk about financing options.");
+        lastPrompt = 'nudge1';
+        nudgeCount++;
+      }, 45000);
+      nudge2Timer = setTimeout(() => {
+        if (lastPrompt === 'none') return;
+        addMessage('AI', "Still there? You can ask me about price, schools, showings, or tap Contact Agent anytime.");
+        lastPrompt = 'nudge2';
+        nudgeCount++;
+      }, 90000);
+    }
+
+    function startIntroIfFresh() {
+      if (!history.length) {
+        addMessage('AI', "Hi, I’m a real estate assistant for this property. Ask about price, schools, features, or schedule a showing.");
+        scheduleIdleNudges();
+      } else {
+        chatDiv.innerHTML = '';
+        history.forEach(m => addMessage(m.who, m.text));
+      }
+    }
+
+    async function sendMessage() {
+      const message = (input.value || '').trim();
+      if (!message) return;
+
+      if (lastPrompt === 'nudge1') {
+        if (isNo(message)) {
+          addMessage('You', message);
+          addMessage('AI', "No problem—would you like me to connect you with an agent or share our preferred lenders?");
+          lastPrompt='nudge2'; input.value=''; cancelAllNudges(); return;
+        }
+        if (isYes(message)) {
+          addMessage('You', message);
+          addMessage('AI', "Great—what would you like to know? I can help with price, schools, lenders, or scheduling a showing.");
+          lastPrompt='none'; input.value=''; cancelAllNudges(); scheduleIdleNudges(); return;
+        }
+      }
+      if (lastPrompt === 'nudge2') {
+        if (isNo(message)) {
+          addMessage('You', message);
+          addMessage('AI', "All good—if anything comes up, I'm here. You can also tap Contact Agent anytime.");
+          lastPrompt='none'; input.value=''; cancelAllNudges(); return;
+        }
+        if (isYes(message)) {
+          addMessage('You', message);
+          addMessage('AI', "Got it—what would you prefer: speak with an agent or learn about our preferred lenders?");
+          lastPrompt='none'; input.value=''; cancelAllNudges(); scheduleIdleNudges(); return;
+        }
+      }
+
+      const intent = detectIntent(message);
+      if (intent === 'agent' || intent === 'showing') {
+        addMessage('You', message);
+        openContactChooser();
+        lastPrompt='none'; input.value=''; cancelAllNudges(); scheduleIdleNudges();
+        return;
+      }
+
+      addMessage('You', message);
+      input.value = '';
+      cancelAllNudges();
+
+      try {
+        const reply = await callChat(message);
+        addMessage('AI', reply);
+      } catch (err) {
+        typingEl.style.display = 'none';
+        addMessage('AI', "Sorry — something went wrong. Please try again.");
+        console.error(err);
+      }
+
+      lastPrompt='none';
+      scheduleIdleNudges();
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }
+      else cancelAllNudges();
+    });
+    input.addEventListener('input', cancelAllNudges);
+
+    contactBtn.addEventListener('click', openContactChooser);
+
+    function openContactChooser() {
+      const telHref = contactBtn.dataset.tel || '';
+      const hasTel = /^tel:/.test(telHref);
+      if (hasTel) {
+        callAction.href = telHref;
+        callAction.style.display = '';
+        noPhoneMsg.style.display = 'none';
+      } else {
+        callAction.style.display = 'none';
+        noPhoneMsg.style.display = '';
+      }
+      contactModal.classList.add('open');
+      contactModal.setAttribute('aria-hidden','false');
+    }
+    function closeContactChooser() {
+      contactModal.classList.remove('open');
+      contactModal.setAttribute('aria-hidden','true');
+    }
+    closeModalBtn.addEventListener('click', closeContactChooser);
+    contactModal.addEventListener('click', (e) => { if (e.target === contactModal) closeContactChooser(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeContactChooser(); });
+    callAction.addEventListener('click', closeContactChooser);
+    emailAction.addEventListener('click', () => {
+      closeContactChooser();
+      addMessage('AI', "[Lead form shown]");
+    });
+
+    setTimeout(() => input.focus(), 300);
+    startIntroIfFresh();
+    loadAgentPhone();
+  </script>
+</body>
+</html>

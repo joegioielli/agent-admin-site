@@ -1,0 +1,9 @@
+{
+  "name": "netlify-functions",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "openai": "^4.52.10",
+    "@aws-sdk/client-s3": "^3.952.0"
+  }
+}

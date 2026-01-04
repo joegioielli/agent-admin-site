@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Smart Signs Dashboard – Agent Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    :root {
+      --bg-page: #f3f4f6;
+      --bg-card: #ffffff;
+      --border-subtle: #e5e7eb;
+      --text-main: #111827;
+      --text-muted: #6b7280;
+      --primary: #2563eb;
+      --primary-soft: linear-gradient(135deg, #2563eb, #4f46e5);
+      --radius-card: 14px;
+      --radius-pill: 999px;
+      --shadow-soft: 0 14px 30px rgba(15, 23, 42, 0.12);
+      --shadow-subtle: 0 6px 16px rgba(15, 23, 42, 0.06);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #e5edff 0, #f3f4f6 40%, #e5e7eb 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    .app-shell {
+      display: flex;
+      width: 100%;
+      max-width: 1200px;
+      margin: 24px auto;
+      padding: 0 16px;
+      gap: 20px;
+    }
+
+    /* SIDEBAR - IDENTICAL TO HOME.HTML */
+    .sidebar {
+      width: 240px;
+      background: radial-gradient(circle at top, #1f2937 0, #020617 55%);
+      border-radius: var(--radius-card);
+      padding: 16px 14px;
+      color: #e5e7eb;
+      box-shadow: var(--shadow-soft);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 8px 2px;
+    }
+
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 12px;
+      background: var(--primary-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #f9fafb;
+      font-weight: 800;
+      font-size: 18px;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.7);
+    }
+
+    .brand-text-title {
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .brand-text-sub {
+      font-size: 11px;
+      color: #9ca3af;
+    }
+
+    .sidebar-section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: #6b7280;
+      padding: 4px 8px;
+      margin-top: 4px;
+    }
+
+    .nav-list {
+      list-style: none;
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 9px;
+      border-radius: 10px;
+      color: #e5e7eb;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s ease, transform 0.12s ease, box-shadow 0.2s ease;
+    }
+
+    .nav-item:hover {
+      background: rgba(148, 163, 184, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .nav-item.active {
+      background: linear-gradient(135deg, #2563eb, #4f46e5);
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.6);
+    }
+
+    .nav-item-label {
+      flex: 1;
+    }
+
+    /* MAIN */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .main-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-radius: var(--radius-card);
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: var(--shadow-subtle);
+      backdrop-filter: blur(10px);
+    }
+
+    .main-header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .main-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .main-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .main-content {
+      flex: 1;
+      padding: 10px 2px 2px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-subtle);
+      padding: 24px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    /* STATS GRID */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--text-main);
+      margin-bottom: 4px;
+    }
+
+    .stat-positive .stat-number {
+      color: #10b981;
+    }
+
+    .stat-warning .stat-number {
+      color: #f59e0b;
+    }
+
+    .stat-attention .stat-number {
+      color: #ef4444;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* ACTIONS GRID */
+    .actions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .action-card {
+      padding: 24px;
+    }
+
+    .action-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .action-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .btn-action {
+      border-radius: 999px;
+      border: none;
+      padding: 12px 24px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--primary-soft);
+      color: #f9fafb;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-action:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
+    }
+
+    /* RECENT SIGNS */
+    .signs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+    }
+
+    .sign-card {
+      padding: 20px;
+      border-left: 4px solid #10b981;
+    }
+
+    .sign-attention {
+      border-left-color: #ef4444;
+    }
+
+    .sign-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .sign-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .sign-status {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+
+    .status-healthy {
+      background: rgba(16, 185, 129, 0.1);
+      color: #10b981;
+    }
+
+    .status-attention {
+      background: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
+    }
+
+    @media (max-width: 960px) {
+      .app-shell {
+        flex-direction: column;
+      }
+
+      .sidebar {
+        width: 100%;
+        flex-direction: row;
+        align-items: center;
+        overflow-x: auto;
+      }
+
+      .sidebar-section-title {
+        display: none;
+      }
+
+      .nav-list {
+        flex-direction: row;
+        flex-wrap: wrap;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app-shell">
+    <!-- SIDEBAR - UPDATED WITH SMART SIGNS -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">AA</div>
+        <div>
+          <div class="brand-text-title">AGENT ADMIN</div>
+          <div class="brand-text-sub">Home</div> <!-- Change per page: "Smart Signs", "Custom Forms", etc. -->
+        </div>
+      </div>
+
+      <div class="sidebar-section-title">Sections</div>
+      <ul class="nav-list">
+        <li class="nav-item" onclick="window.location.href='home.html'">
+          <span class="nav-item-label">Home</span>
+        </li>
+        <li class="nav-item" onclick="window.location.href='smart-signs-dash.html'">
+          <span class="nav-item-label">Smart Signs</span>
+        </li>
+        <li class="nav-item" onclick="window.location.href='qr-redirects.html'">
+          <span class="nav-item-label">QR Redirects</span>
+        </li>
+        <li class="nav-item" onclick="window.location.href='custom-forms-dash.html'">
+          <span class="nav-item-label">Custom Forms</span>
+        </li>
+        <li class="nav-item" onclick="window.location.href='contracts-dash.html'">
+          <span class="nav-item-label">Contracts</span>
+        </li>
+      </ul>
+    </aside>
+
+
+    <!-- MAIN CONTENT -->
+    <main class="main">
+      <header class="main-header">
+        <div class="main-header-left">
+          <div class="main-title">Smart Signs Dashboard</div>
+          <div class="main-subtitle">Overview of active signs and performance metrics</div>
+        </div>
+      </header>
+
+      <section class="main-content">
+        <!-- STATS -->
+        <div class="card">
+          <div class="stats-grid">
+            <div class="stat-item">
+              <div class="stat-number">12</div>
+              <div class="stat-label">Active Signs</div>
+            </div>
+            <div class="stat-item stat-positive">
+              <div class="stat-number">247</div>
+              <div class="stat-label">Scans This Week</div>
+            </div>
+            <div class="stat-item stat-positive">
+              <div class="stat-number">89%</div>
+              <div class="stat-label">Engagement Rate</div>
+            </div>
+            <div class="stat-item stat-attention">
+              <div class="stat-number">3</div>
+              <div class="stat-label">Needs Attention</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ACTIONS -->
+        <div class="card">
+          <div class="actions-grid">
+            <div class="action-card">
+              <div class="action-title">Upload New Sign</div>
+              <div class="action-desc">Add photos and details for a new listing sign</div>
+              <a href="smart-signs-upload.html" class="btn-action">Upload Sign</a>
+            </div>
+            <div class="action-card">
+              <div class="action-title">Manage Signs</div>
+              <div class="action-desc">Edit, update, or deactivate existing signs</div>
+              <a href="smart-signs-manage.html" class="btn-action">Manage Signs</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- RECENT ACTIVITY -->
+        <div class="card">
+          <div class="signs-grid">
+            <div class="sign-card">
+              <div class="sign-title">123 Main St - Smith Residence</div>
+              <div class="sign-meta">47 scans this week • Active</div>
+              <span class="sign-status status-healthy">✓ Healthy</span>
+            </div>
+            <div class="sign-card sign-attention">
+              <div class="sign-title">456 Oak Ave - Johnson Listing</div>
+              <div class="sign-meta">12 scans this week • Active</div>
+              <span class="sign-status status-attention">⚠ Needs Attention</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+
+</html>

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Custom Forms – Agent Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    /* YOUR EXACT SAME CSS FROM home.html/smart-signs-dash.html */
+    :root {
+      --bg-page: #f3f4f6;
+      --bg-card: #ffffff;
+      --border-subtle: #e5e7eb;
+      --text-main: #111827;
+      --text-muted: #6b7280;
+      --primary: #2563eb;
+      --primary-soft: linear-gradient(135deg, #2563eb, #4f46e5);
+      --radius-card: 14px;
+      --radius-pill: 999px;
+      --shadow-soft: 0 14px 30px rgba(15, 23, 42, 0.12);
+      --shadow-subtle: 0 6px 16px rgba(15, 23, 42, 0.06);
+    }
+    /* ... paste ALL your existing CSS here (sidebar, main, cards, etc.) ... */
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- SIDEBAR - Home active -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">AA</div>
+        <div>
+          <div class="brand-text-title">AGENT ADMIN</div>
+          <div class="brand-text-sub">Custom Forms</div>
+        </div>
+      </div>
+      <div class="sidebar-section-title">Sections</div>
+      <ul class="nav-list">
+        <li class="nav-item active" onclick="window.location.href='home.html'">
+          <span class="nav-item-label">Home</span>
+        </li>
+        <li class="nav-item" onclick="window.location.href='smart-signs-dash.html'">
+          <span class="nav-item-label">Smart Signs</span>
+        </li>
+        <li class="nav-item" onclick="window.location.href='qr-redirects.html'">
+          <span class="nav-item-label">QR Redirects</span>
+        </li>
+      </ul>
+    </aside>
+
+    <main class="main">
+      <header class="main-header">
+        <div class="main-header-left">
+          <div class="main-title">Custom Forms</div>
+          <div class="main-subtitle">Create, manage, and embed forms for lead capture</div>
+        </div>
+      </header>
+
+      <section class="main-content">
+        <div class="card">
+          <div class="stats-grid">
+            <div class="stat-item">
+              <div class="stat-number">4</div>
+              <div class="stat-label">Active Forms</div>
+            </div>
+            <div class="stat-item stat-positive">
+              <div class="stat-number">127</div>
+              <div class="stat-label">Submissions</div>
+            </div>
+            <div class="stat-item stat-positive">
+              <div class="stat-number">82%</div>
+              <div class="stat-label">Completion Rate</div>
+            </div>
+            <div class="stat-item stat-attention">
+              <div class="stat-number">1</div>
+              <div class="stat-label">Needs Review</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="actions-grid">
+            <div class="action-card">
+              <div class="action-title">Create New Form</div>
+              <div class="action-desc">Build a new lead capture form</div>
+              <a href="#" class="btn-action">+ New Form</a>
+            </div>
+            <div class="action-card">
+              <div class="action-title">Form Templates</div>
+              <div class="action-desc">Buyer inquiry, seller contact, etc.</div>
+              <a href="#" class="btn-action">Browse Templates</a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

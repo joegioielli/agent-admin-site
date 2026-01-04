@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Agent Admin – Home</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    :root {
+      --bg-page: #f3f4f6;
+      --bg-card: #ffffff;
+      --border-subtle: #e5e7eb;
+      --text-main: #111827;
+      --text-muted: #6b7280;
+      --primary: #2563eb;
+      --primary-soft: linear-gradient(135deg, #2563eb, #4f46e5);
+      --radius-card: 14px;
+      --radius-pill: 999px;
+      --shadow-soft: 0 14px 30px rgba(15, 23, 42, 0.12);
+      --shadow-subtle: 0 6px 16px rgba(15, 23, 42, 0.06);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #e5edff 0, #f3f4f6 40%, #e5e7eb 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    .app-shell {
+      display: flex;
+      width: 100%;
+      max-width: 1200px;
+      margin: 24px auto;
+      padding: 0 16px;
+      gap: 20px;
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 240px;
+      background: radial-gradient(circle at top, #1f2937 0, #020617 55%);
+      border-radius: var(--radius-card);
+      padding: 16px 14px;
+      color: #e5e7eb;
+      box-shadow: var(--shadow-soft);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 8px 2px;
+    }
+
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 12px;
+      background: var(--primary-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #f9fafb;
+      font-weight: 800;
+      font-size: 18px;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.7);
+    }
+
+    .brand-text-title {
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .brand-text-sub {
+      font-size: 11px;
+      color: #9ca3af;
+    }
+
+    .sidebar-section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: #6b7280;
+      padding: 4px 8px;
+      margin-top: 4px;
+    }
+
+    .nav-list {
+      list-style: none;
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 9px;
+      border-radius: 10px;
+      color: #e5e7eb;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s ease, transform 0.12s ease, box-shadow 0.2s ease;
+    }
+
+    .nav-item:hover {
+      background: rgba(148, 163, 184, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .nav-item.active {
+      background: linear-gradient(135deg, #2563eb, #4f46e5);
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.6);
+    }
+
+    .nav-item-label { flex: 1; }
+
+    @media (max-width: 960px) {
+      .app-shell { flex-direction: column; }
+      .sidebar {
+        width: 100%;
+        flex-direction: row;
+        align-items: center;
+        overflow-x: auto;
+      }
+      .sidebar-section-title { display: none; }
+      .nav-list {
+        flex-direction: row;
+        flex-wrap: wrap;
+      }
+    }
+
+    /* MAIN */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .main-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-radius: var(--radius-card);
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: var(--shadow-subtle);
+      backdrop-filter: blur(10px);
+    }
+
+    .main-header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .main-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .main-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .main-content {
+      flex: 1;
+      padding: 10px 2px 2px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-subtle);
+      padding: 14px 16px;
+      border: 1px solid var(--border-subtle);
+      margin-bottom: 4px;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .card-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Layout: profile + tools */
+    .top-grid {
+      display: grid;
+      grid-template-columns: 0.9fr 1.6fr;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    @media (max-width: 900px) {
+      .top-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .profile-row p {
+      margin: 3px 0;
+      font-size: 13px;
+    }
+
+    .badge-plan {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #4338ca;
+      font-size: 11px;
+      padding: 3px 8px;
+      margin-top: 4px;
+    }
+
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .tool-card {
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      background: #ffffff;
+      padding: 10px 11px;
+      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .tool-name {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .tool-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .btn-tool {
+      margin-top: 4px;
+      align-self: flex-start;
+      border-radius: 999px;
+      border: none;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      background: #2563eb;
+      color: #f9fafb;
+      transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .btn-tool:hover {
+      background: #1d4ed8;
+      box-shadow: 0 8px 16px rgba(37, 99, 235, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .btn-tool:not(:disabled):hover {
+      background: #1d4ed8;
+      box-shadow: 0 8px 16px rgba(37, 99, 235, 0.4);
+      transform: translateY(-1px);
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- SIDEBAR - UPDATED WITH SMART SIGNS -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">AA</div>
+        <div>
+          <div class="brand-text-title">AGENT ADMIN</div>
+          <div class="brand-text-sub">Home</div>
+        </div>
+      </div>
+
+      <div class="sidebar-section-title">Sections</div>
+      <ul class="nav-list">
+        <li class="nav-item active">
+          <span class="nav-item-label">Home</span>
+        </li>
+        <li class="nav-item" onclick="window.location.href='smart-signs-dash.html'">
+          <span class="nav-item-label">Smart Signs</span>
+        </li>
+        <li class="nav-item" onclick="window.location.href='qr-redirects.html'">
+          <span class="nav-item-label">QR Redirects</span>
+        </li>
+        <li class="nav-item" onclick="window.location.href='custom-forms-dash.html'">
+          <span class="nav-item-label">Custom Forms</span>
+        </li>
+        <li class="nav-item" onclick="window.location.href='contracts-dash.html'">
+         <span class="nav-item-label">Contracts</span>
+        </li>
+      </ul>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+      <header class="main-header">
+        <div class="main-header-left">
+          <div class="main-title">Welcome back, Demo User</div>
+          <div class="main-subtitle">Choose a tool below to get started.</div>
+        </div>
+      </header>
+
+      <section class="main-content">
+        <div class="top-grid">
+          <!-- PROFILE / ACCOUNT -->
+          <div class="card">
+            <div class="card-title">Profile & Account</div>
+            <div class="card-subtitle">Basic information for this login.</div>
+            <div class="profile-row" style="margin-top:8px;">
+              <p><strong>Name:</strong> Demo User</p>
+              <p><strong>Email:</strong> demo@example.com</p>
+              <p><strong>Company:</strong> Demo Company</p>
+              <div class="badge-plan">Plan: Growth (example)</div>
+            </div>
+          </div>
+
+          <!-- TOOLS -->
+          <div class="card">
+            <div class="card-title">Your tools</div>
+            <div class="card-subtitle">Modules available to this account.</div>
+
+            <div class="tools-grid">
+              <!-- QR Redirects -->
+              <div class="tool-card">
+                <div class="tool-name">QR Redirects</div>
+                <div class="tool-desc">Create and manage QR codes with redirect links and analytics.</div>
+                <a href="qr-redirects.html" class="btn-tool">Open QR Redirects →</a>
+              </div>
+
+              <!-- Smart Signs - NOW LIVE -->
+              <div class="tool-card">
+                <div class="tool-name">Smart Signs</div>
+                <div class="tool-desc">Dynamic signage linked to real-time content and analytics.</div>
+                <a href="smart-signs-dash.html" class="btn-tool">Open Smart Signs →</a>
+              </div>
+
+              <!-- Custom Forms -->
+              <div class="tool-card">
+                <div class="tool-name">Custom Forms</div>
+                <div class="tool-desc">Collect structured data from your visitors</div>
+                <a href="custom-forms-dash.html" class="btn-tool">Open Custom Forms →</a>
+              </div>
+
+              <!-- CRM -->
+              <div class="tool-card">
+                <div class="tool-name">CRM</div>
+                <div class="tool-desc">Lightweight contact and lead tracking (placeholder).</div>
+                <button class="btn-tool" disabled style="opacity:0.6; cursor:not-allowed;">
+                  Coming soon
+                </button>
+              </div>
+
+              <!-- Contracts -->
+              <div class="tool-card">
+                <div class="tool-name">Contracts</div>
+                <div class="tool-desc">Manage templates and e-signatures</div>
+                <a href="contracts-dash.html" class="btn-tool">Open Contracts →</a>
+              </div>
+
+              <!-- AI Support -->
+              <div class="tool-card">
+                <div class="tool-name">AI Support</div>
+                <div class="tool-desc">AI-powered assistant for your customers (placeholder).</div>
+                <button class="btn-tool" disabled style="opacity:0.6; cursor:not-allowed;">
+                  Coming soon
+                </button>
+              </div>
+
+              <!-- CTC Support -->
+              <div class="tool-card">
+                <div class="tool-name">CTC Support</div>
+                <div class="tool-desc">Click-to-call and support routing (placeholder).</div>
+                <button class="btn-tool" disabled style="opacity:0.6; cursor:not-allowed;">
+                  Coming soon
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Redirect Admin</title>
+  <style>
+    :root {
+      --bg1:#0b0b0f; 
+      --card:#ffffff; 
+      --text:#111;
+      --accent:#ff6a00;
+      --danger:#c62828;
+      --radius:14px;
+    }
+    body {
+      margin:0; font-family:system-ui; background:var(--bg1); color:#fff;
+      display:flex; flex-direction:column; min-height:100vh; padding:20px;
+    }
+    h1 { margin:0 0 20px; font-size:22px; }
+    .grid {
+      display:grid;
+      gap:16px;
+      grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+    }
+    .card {
+      background:var(--card); color:var(--text);
+      border-radius:var(--radius);
+      padding:14px; box-shadow:0 3px 10px rgba(0,0,0,.3);
+      display:flex; flex-direction:column; gap:10px;
+    }
+    .card .actions {
+      display:flex; gap:8px;
+    }
+    button {
+      border:none; padding:8px 12px; border-radius:8px; font-size:14px;
+      cursor:pointer; transition:opacity .15s;
+    }
+    button:hover { opacity:.85; }
+    .btn-add {
+      background:var(--accent); color:#fff; width:100%;
+      font-weight:600; border-radius:var(--radius);
+    }
+    .btn-edit { background:#eee; }
+    .btn-qrlink { background:var(--accent); color:#fff; }
+    .btn-delete { background:var(--danger); color:#fff; }
+    #pinOverlay {
+      position:fixed; inset:0; background:rgba(0,0,0,.85);
+      display:flex; align-items:center; justify-content:center;
+    }
+    #pinBox {
+      background:#111; padding:30px; border-radius:var(--radius);
+      display:flex; flex-direction:column; gap:12px;
+      width:260px; text-align:center;
+    }
+    input { padding:8px; border-radius:6px; border:none; font-size:16px; }
+  </style>
+</head>
+<body>
+  <h1>Redirect Manager</h1>
+  <div id="grid" class="grid"></div>
+  <button class="btn-add" onclick="addNew()">+ Add Redirect</button>
+
+  <!-- PIN Overlay -->
+  <div id="pinOverlay">
+    <div id="pinBox">
+      <h3>Enter Admin PIN</h3>
+      <input type="password" id="pinInput" placeholder="PIN">
+      <button onclick="submitPin()">Unlock</button>
+    </div>
+  </div>
+
+<script>
+const API_GET = '/.netlify/functions/getRedirects';
+const API_UPDATE = '/.netlify/functions/updateRedirects';
+let redirects = [];
+let PIN = localStorage.getItem('ADMIN_PIN') || '';
+
+async function load() {
+  const res = await fetch(API_GET,{headers:{'x-admin-pin':PIN}});
+  if (!res.ok) return showPin();
+  redirects = await res.json();
+  render();
+  document.getElementById('pinOverlay').style.display='none';
+}
+
+function showPin(){ document.getElementById('pinOverlay').style.display='flex'; }
+function submitPin(){
+  PIN = document.getElementById('pinInput').value;
+  localStorage.setItem('ADMIN_PIN',PIN);
+  load();
+}
+
+function render(){
+  const grid=document.getElementById('grid');
+  grid.innerHTML='';
+  redirects.forEach((r,i)=>{
+    const el=document.createElement('div');
+    el.className='card';
+    el.innerHTML=`
+      <strong>${r.label}</strong>
+      <div style="font-size:12px;overflow-wrap:anywhere;">${r.url}</div>
+      <div class="actions">
+        <button class="btn-qrlink" onclick="copyQR('${r.id}')">QR Link</button>
+        <button class="btn-edit" onclick="editR(${i})">Edit</button>
+        <button class="btn-delete" onclick="delR(${i})">Remove</button>
+      </div>
+    `;
+    grid.appendChild(el);
+  });
+}
+
+function copyQR(id){
+  const link = window.location.origin + '/' + id;
+  navigator.clipboard.writeText(link);
+  alert("Copied:\n"+link);
+}
+
+function saveAll(){ 
+  fetch(API_UPDATE,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-admin-pin':PIN},
+    body:JSON.stringify(redirects)
+  }).then(()=>load());
+}
+
+function addNew(){
+  const label = prompt("Enter name:");
+  if(!label) return;
+  const id = prompt("Enter short id (URL path):");
+  if(!id) return;
+  const url = prompt("Enter destination URL:");
+  if(!url) return;
+  redirects.push({id,label,url});
+  saveAll();
+}
+
+function editR(i){
+  const r=redirects[i];
+  const label = prompt("Name:", r.label);
+  if(!label) return;
+  const id = prompt("Short ID:", r.id);
+  if(!id) return;
+  const url = prompt("URL:", r.url);
+  if(!url) return;
+  redirects[i]={id,label,url};
+  saveAll();
+}
+
+function delR(i){
+  if(confirm("Delete this redirect?")){
+    redirects.splice(i,1);
+    saveAll();
+  }
+}
+
+load();
+</script>
+</body>
+</html>

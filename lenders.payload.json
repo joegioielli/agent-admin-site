@@ -1,0 +1,34 @@
+{
+  "revision": "2",
+  "lenders": [
+    {
+      "company": "Summit Home Loans",
+      "repName": "Jamie Lee",
+      "phone": "(615) 555-2121",
+      "url": "https://summithomeloans.com/apply",
+      "active": true,
+      "order": 1,
+      "lenderId": "summit-home-loans-jamie-lee"
+    },
+    {
+      "company": "Volunteer Mortgage Group",
+      "repName": "Chris Patel",
+      "phone": "(615) 555-3434",
+      "url": "https://volunteermortgage.com/",
+      "active": true,
+      "order": 2,
+      "lenderId": "volunteer-mortgage-group-chris-patel"
+    }
+  ],
+  "assign": {
+    "byPropertyId": {
+      "2990843": [
+        {
+          "id": "summit-home-loans-jamie-lee",
+          "program": "VA zero down",
+          "programUrl": "https://summithomeloans.com/va"
+        }
+      ]
+    }
+  }
+}

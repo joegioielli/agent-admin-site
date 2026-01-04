@@ -1,0 +1,27 @@
+[functions]
+directory = "functions"
+
+# KILL ALL QR CACHE
+[[headers]]
+  for = "/qr/*"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate, max-age=0"
+    Netlify-CDN-Cache-Control = "no-cache"
+    Pragma = "no-cache"
+    Expires = "0"
+    Vary = "*"
+
+[[redirects]]
+  from = "/api/getredirects/:code"
+  to = "/.netlify/functions/getredirects?code=:code"  # ← FIXED!
+  status = 200
+
+[[redirects]]
+  from = "/qr/:code"
+  to = "/.netlify/functions/getredirects?code=:code"  # ← FIXED!
+  status = 200
+
+[[redirects]]
+  from = "/r/:code"
+  to = "/.netlify/functions/getredirects?code=:code"  # ← FIXED!
+  status = 200

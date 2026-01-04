@@ -1,0 +1,9 @@
+{
+  "name": "Property Chat",
+  "short_name": "Chat",
+  "start_url": "/chat.html",
+  "display": "standalone",
+  "background_color": "#000",
+  "theme_color": "#ff6600",
+  "icons": [{"src": "https://placehold.co/192x192/ff6600/white?text=💬", "sizes": "192x192", "type": "image/png"}]
+}

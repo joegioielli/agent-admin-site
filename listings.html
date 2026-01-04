@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Choose a Home</title>
+  <style>
+    body {
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      color: #1a1a1a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      padding: 24px 16px;
+      text-align: center;
+      margin: 0;
+      min-height: 100vh;
+    }
+    h1 { 
+      font-size: 2.2rem; 
+      font-weight: 800;
+      margin: 0 0 12px;
+      background: linear-gradient(135deg, #111, #333);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    h2 { 
+      font-weight: 500; 
+      margin: 0 0 28px; 
+      font-size: 1.1rem; 
+      color: #666;
+    }
+
+    .listing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .listing-card {
+      background: #fff;
+      color: #111;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      cursor: pointer;
+      transition: all .25s ease;
+      display: flex;
+      flex-direction: column;
+      outline: 2px solid transparent;
+      position: relative;
+    }
+    .listing-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, #ff6600, #e55a00);
+      opacity: 0;
+      transition: opacity .25s ease;
+      z-index: 0;
+    }
+    .listing-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+      outline-color: rgba(255,102,0,0.3);
+    }
+    .listing-card:hover::before {
+      opacity: 0.08;
+    }
+    .listing-card:active {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    }
+
+    .listing-card > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .listing-card img {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+      display: block;
+    }
+
+    .mls-line {
+      font-weight: 700;
+      color: #333;
+      font-size: 0.85rem;
+      padding: 12px 14px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .address {
+      padding: 12px 14px 16px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+    }
+    .addr1 {
+      font-weight: 700;
+      font-size: 1rem;
+      color: #111;
+      line-height: 1.3;
+    }
+    .addr2 {
+      font-weight: 500;
+      font-size: 0.9rem;
+      color: #666;
+    }
+
+    @media (max-width: 500px) {
+      body { padding: 20px 12px; }
+      h1 { font-size: 1.8rem; }
+      h2 { font-size: 1rem; }
+      .listing-grid { gap: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Choose a home</h1>
+  <h2>Tap the photo of the home you're interested in.</h2>
+
+  <div id="listings" class="listing-grid">Loading properties…</div>
+
+  <script>
+    function joinCityStateZip(city, state, zip) {
+      const parts = [];
+      if (city && state) parts.push(`${city}, ${state}`);
+      else if (city) parts.push(city);
+      else if (state) parts.push(state);
+      if (zip) parts.push(zip);
+      return parts.join(' ');
+    }
+
+    function pick(obj, keys, fallback = '') {
+      for (const k of keys) {
+        if (obj && obj[k] != null && String(obj[k]).trim?.() !== '') return obj[k];
+        if (obj && obj[k] != null && typeof obj[k] !== 'string') return obj[k];
+      }
+      return fallback;
+    }
+
+    async function loadListings() {
+      const container = document.getElementById('listings');
+      container.textContent = 'Loading properties…';
+
+      try {
+        const res = await fetch('/.netlify/functions/listListings', { cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed to load listings');
+
+        const json = await res.json();
+        // Accept both shapes: array OR wrapped object { items: [] } / { files: [] } / { listings: [] }
+        const items = Array.isArray(json) ? json : (json.items || json.files || json.listings || []);
+
+        if (!items.length) {
+          container.textContent = 'No properties found.';
+          return;
+        }
+
+        // Sort newest first by lastModified (if present)
+        items.sort((a, b) => {
+          const ad = a.lastModified ? Date.parse(a.lastModified) : 0;
+          const bd = b.lastModified ? Date.parse(b.lastModified) : 0;
+          if (ad !== bd) return bd - ad;
+          return String(b.key || '').localeCompare(String(a.key || ''));
+        });
+
+        container.innerHTML = '';
+        for (const it of items) {
+          const mls   = it.listingId || it.mls || it.slug || '';
+          const addr1 = it.address || 'Address unavailable';
+          const photo = it.photoUrl || it.primaryPhotoUrl || 'https://placehold.co/400x300?text=No+Photo';
+
+          const card = document.createElement('div');
+          card.className = 'listing-card';
+          card.dataset.mls = mls;
+
+          const imgEl = document.createElement('img');
+          imgEl.src = photo;
+          imgEl.alt = addr1;
+          imgEl.onerror = () => {
+            imgEl.src = 'https://placehold.co/400x300?text=No+Photo';
+          };
+
+          const mlsEl = document.createElement('div');
+          mlsEl.className = 'mls-line';
+          mlsEl.textContent = mls ? `MLS #${mls}` : 'MLS #—';
+
+          const addressWrap = document.createElement('div');
+          addressWrap.className = 'address';
+
+          const addr1El = document.createElement('div');
+          addr1El.className = 'addr1';
+          addr1El.textContent = addr1;
+
+          const addr2El = document.createElement('div');
+          addr2El.className = 'addr2';
+          addr2El.textContent = ''; // will fill from details.json if available
+
+          addressWrap.append(addr1El, addr2El);
+
+          // Click: store selection and redirect to select.html
+          card.onclick = () => {
+            if (!mls) return; // guard against missing MLS
+            const line2 = addr2El.textContent || '';
+            const fullAddr = line2 ? `${addr1} ${line2}` : addr1;
+            try {
+              localStorage.setItem('selectedListingId', mls);
+            } catch {}
+            const params = new URLSearchParams({ mls, address: fullAddr });
+            window.location.href = `/select.html?${params.toString()}`;
+          };
+
+          card.append(imgEl, mlsEl, addressWrap);
+          container.appendChild(card);
+
+          // Enrich city/state/zip if we have a signed detailsUrl
+          if (it.detailsUrl) {
+            try {
+              const detRes = await fetch(it.detailsUrl, { cache: 'no-store' });
+              if (detRes.ok) {
+                const details = await detRes.json();
+                const city  = pick(details, ['city', 'City'], '');
+                const state = pick(details, ['state', 'State'], '');
+                const zip   = pick(details, ['zip', 'Zip', 'postalCode'], '');
+                const line2 = joinCityStateZip(city, state, zip);
+                if (line2) addr2El.textContent = line2;
+              }
+            } catch {
+              // ignore enrichment errors
+            }
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        container.textContent = 'Error loading listings.';
+      }
+    }
+
+    loadListings();
+  </script>
+</body>
+</html>

@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Agent Admin – Analytics by Link</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root {
+      --bg-page: #f3f4f6;
+      --bg-card: #ffffff;
+      --border-subtle: #e5e7eb;
+      --text-main: #111827;
+      --text-muted: #6b7280;
+      --primary: #2563eb;
+      --primary-soft: linear-gradient(135deg, #2563eb, #4f46e5);
+      --radius-card: 14px;
+      --radius-pill: 999px;
+      --shadow-soft: 0 14px 30px rgba(15, 23, 42, 0.12);
+      --shadow-subtle: 0 6px 16px rgba(15, 23, 42, 0.06);
+      --accent-soft: #eef2ff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #e5edff 0, #f3f4f6 40%, #e5e7eb 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    .app-shell {
+      display: flex;
+      width: 100%;
+      max-width: 1200px;
+      margin: 24px auto;
+      padding: 0 16px;
+      gap: 20px;
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 240px;
+      background: radial-gradient(circle at top, #1f2937 0, #020617 55%);
+      border-radius: var(--radius-card);
+      padding: 16px 14px;
+      color: #e5e7eb;
+      box-shadow: var(--shadow-soft);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 8px 2px;
+    }
+
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 12px;
+      background: var(--primary-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #f9fafb;
+      font-weight: 800;
+      font-size: 18px;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.7);
+    }
+
+    .brand-text-title {
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .brand-text-sub {
+      font-size: 11px;
+      color: #9ca3af;
+    }
+
+    .sidebar-section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: #6b7280;
+      padding: 4px 8px;
+      margin-top: 4px;
+    }
+
+    .nav-list {
+      list-style: none;
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 9px;
+      border-radius: 10px;
+      color: #e5e7eb;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s ease, transform 0.12s ease, box-shadow 0.2s ease;
+    }
+
+    .nav-item:hover {
+      background: rgba(148, 163, 184, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .nav-item.active {
+      background: linear-gradient(135deg, #2563eb, #4f46e5);
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.6);
+    }
+
+    .nav-item-label { flex: 1; }
+
+    @media (max-width: 960px) {
+      .app-shell { flex-direction: column; }
+      .sidebar {
+        width: 100%;
+        flex-direction: row;
+        align-items: center;
+        overflow-x: auto;
+      }
+      .sidebar-section-title { display: none; }
+      .nav-list {
+        flex-direction: row;
+        flex-wrap: wrap;
+      }
+    }
+
+    /* MAIN */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .main-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-radius: var(--radius-card);
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: var(--shadow-subtle);
+      backdrop-filter: blur(10px);
+    }
+
+    .main-header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .main-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .main-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .main-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      border: none;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: var(--radius-pill);
+      padding: 7px 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.2s ease, transform 0.12s ease, box-shadow 0.2s ease;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid rgba(148, 163, 184, 0.5);
+    }
+
+    .btn-ghost:hover {
+      background: rgba(243, 244, 246, 0.9);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary {
+      color: #f9fafb;
+      background-image: var(--primary-soft);
+      box-shadow: 0 8px 18px rgba(37, 99, 235, 0.55);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 22px rgba(37, 99, 235, 0.7);
+    }
+
+    .btn-outline-small {
+      border-radius: var(--radius-pill);
+      border: 1px solid #d1d5db;
+      background: #f9fafb;
+      color: #374151;
+      font-size: 11px;
+      padding: 4px 9px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+
+    .btn-outline-small:hover {
+      background: #eef2ff;
+    }
+
+    .main-content {
+      flex: 1;
+      padding: 10px 2px 2px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-subtle);
+      padding: 14px 16px;
+      border: 1px solid var(--border-subtle);
+      margin-bottom: 4px;
+    }
+
+    .card-header-inline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      gap: 8px;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .card-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .card-actions-inline {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .stat-row p {
+      margin: 3px 0;
+      font-size: 13px;
+    }
+
+    .stat-label {
+      font-weight: 600;
+    }
+
+    .top-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 1.4fr;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    @media (max-width: 900px) {
+      .top-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card canvas {
+      max-height: 190px;
+    }
+
+    .chart-footer {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .chart-controls {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 7px 9px;
+      border: 1px solid #e5e7eb;
+    }
+
+    th {
+      background: #f9fafb;
+      text-align: left;
+      font-size: 12px;
+      color: #4b5563;
+    }
+
+    tbody tr:nth-child(odd) {
+      background: #f9fafb;
+    }
+
+    tbody tr:hover {
+      background: var(--accent-soft);
+    }
+
+    .empty-row td {
+      text-align:center;
+      padding:18px;
+      color:#6b7280;
+      font-size:13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">AA</div>
+        <div>
+          <div class="brand-text-title">AGENT ADMIN</div>
+          <div class="brand-text-sub">Analytics</div>
+        </div>
+      </div>
+
+      <div class="sidebar-section-title">Sections</div>
+      <ul class="nav-list">
+        <!-- Link to main QR Redirect page -->
+        <li class="nav-item" onclick="window.location.href='qr-redirects.html'">
+          <span class="nav-item-label">QR Redirects</span>
+        </li>
+        <li class="nav-item active">
+          <span class="nav-item-label">Link Analytics</span>
+        </li>
+      </ul>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+      <header class="main-header">
+        <div class="main-header-left">
+          <div id="nameTitle" class="main-title">Link Analytics</div>
+          <div class="main-subtitle" id="nameSubtitle">Per-link performance overview.</div>
+        </div>
+        <div class="main-header-actions">
+          <a href="analytics.html" class="btn btn-ghost">← Main Analytics</a>
+          <!-- Top-right button to same QR Redirect page -->
+          <a href="qr-redirects.html" class="btn btn-primary">QR Redirects</a>
+        </div>
+      </header>
+
+      <section class="main-content">
+        <!-- TOP GRID: SUMMARY + DAILY -->
+        <div class="top-grid">
+          <!-- SUMMARY -->
+          <div class="card">
+            <div class="card-header-inline">
+              <div>
+                <div class="card-title">Summary</div>
+                <div class="card-subtitle" id="linkUrlSubtitle"></div>
+              </div>
+              <div class="card-actions-inline">
+                <button id="openLinkBtn" class="btn-outline-small" style="display:none;">
+                  Open link
+                </button>
+                <button id="copyLinkBtn" class="btn-outline-small" style="display:none;">
+                  Copy link
+                </button>
+              </div>
+            </div>
+            <div class="stat-row">
+              <p><span class="stat-label">Total Hits:</span> <span id="totalHits">0</span></p>
+              <p><span class="stat-label">Unique Users (IP):</span> <span id="uniqueIPs">0</span></p>
+              <p><span class="stat-label">Latest Hit:</span> <span id="latestHit">None</span></p>
+            </div>
+          </div>
+
+          <!-- DAILY ACTIVITY -->
+          <div class="card">
+            <div class="card-header-inline">
+              <div>
+                <div class="card-title">Daily Activity</div>
+                <div class="card-subtitle">Scans over time for this link.</div>
+              </div>
+              <div class="chart-controls">
+                Range: <strong id="chartRangeLabel">All time</strong>
+              </div>
+            </div>
+            <canvas id="chartDaily"></canvas>
+            <div class="chart-footer">
+              Only days with at least one scan are shown.
+            </div>
+          </div>
+        </div>
+
+        <!-- RECENT SCANS -->
+        <div class="card">
+          <div class="card-header-inline">
+            <div>
+              <div class="card-title">Recent Scans</div>
+              <div class="card-subtitle">Most recent visits, with rough device type.</div>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>IP</th>
+                <th>Device Type</th>
+              </tr>
+            </thead>
+            <tbody id="recentTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    function getDeviceType(ua = "") {
+      if (!ua) return "Unknown";
+      ua = ua.toLowerCase();
+
+      if (ua.includes("iphone")) return "iPhone";
+      if (ua.includes("ipad")) return "iPad";
+      if (ua.includes("android")) return "Android Phone";
+      if (ua.includes("windows")) return "Windows PC";
+      if (ua.includes("macintosh") || ua.includes("mac os x")) return "Mac Desktop";
+      if (ua.includes("linux")) return "Linux Device";
+      if (ua.includes("tablet")) return "Tablet";
+      if (ua.includes("smart-tv") || ua.includes("android tv")) return "Smart TV";
+
+      return "Other Device";
+    }
+
+    function renderRecentScans(logs) {
+      const tbody = document.getElementById("recentTableBody");
+      tbody.innerHTML = "";
+
+      if (!logs || logs.length === 0) {
+        const tr = document.createElement("tr");
+        tr.className = "empty-row";
+        tr.innerHTML = `
+          <td colspan="3">
+            No recent scans
+          </td>
+        `;
+        tbody.appendChild(tr);
+        return;
+      }
+
+      logs.forEach(log => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${new Date(log.ts).toLocaleString()}</td>
+          <td>${log.ip || "?"}</td>
+          <td>${getDeviceType(log.userAgent)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function copyToClipboard(text) {
+      if (!navigator.clipboard) {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try { document.execCommand("copy"); } catch (e) {}
+        document.body.removeChild(textarea);
+        return;
+      }
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
+
+    async function loadNameAnalytics() {
+      const params = new URLSearchParams(window.location.search);
+      const name = params.get("name");
+
+      document.getElementById("nameTitle").textContent = "Analytics: " + name;
+      document.getElementById("nameSubtitle").textContent = "Performance for /r/" + name;
+
+      const res = await fetch(`/.netlify/functions/getAnalytics`);
+      const data = await res.json();
+
+      console.log('Full data response:', data);
+console.log('Has retentionNote?', !!data.retentionNote);
+
+      const logsForSlug = (data.logs || []).filter(l => l.slug === name);
+
+      document.getElementById("totalHits").textContent = logsForSlug.length;
+      document.getElementById("uniqueIPs").textContent =
+        new Set(logsForSlug.map(l => l.ip)).size;
+
+      const openLinkBtn = document.getElementById("openLinkBtn");
+      const copyLinkBtn = document.getElementById("copyLinkBtn");
+      let linkUrl = "";
+
+      if (logsForSlug.length > 0) {
+        const latest = logsForSlug.reduce((a, b) => (a.ts > b.ts ? a : b));
+        document.getElementById("latestHit").textContent =
+          new Date(latest.ts).toLocaleString();
+        if (latest.url) {
+          linkUrl = latest.url;
+          document.getElementById("linkUrlSubtitle").textContent = latest.url;
+          openLinkBtn.style.display = "inline-flex";
+          copyLinkBtn.style.display = "inline-flex";
+        } else {
+          document.getElementById("linkUrlSubtitle").textContent = "";
+        }
+      } else {
+        document.getElementById("latestHit").textContent = "None";
+        document.getElementById("linkUrlSubtitle").textContent = "";
+      }
+
+      if (linkUrl) {
+        openLinkBtn.onclick = () => window.open(linkUrl, "_blank");
+        copyLinkBtn.onclick = () => copyToClipboard(linkUrl);
+      }
+
+      const dayCounts = {};
+      logsForSlug.forEach(log => {
+        const day = new Date(log.ts).toISOString().substring(0, 10);
+        dayCounts[day] = (dayCounts[day] || 0) + 1;
+      });
+
+      const days = Object.keys(dayCounts).sort();
+      const counts = days.map(d => dayCounts[d]);
+
+      const chartRangeLabel = document.getElementById("chartRangeLabel");
+      if (days.length > 1) {
+        const first = new Date(days[0]);
+        const last = new Date(days[days.length - 1]);
+        const diffMs = last - first;
+        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1;
+        chartRangeLabel.textContent = diffDays + " days span";
+      } else if (days.length === 1) {
+        chartRangeLabel.textContent = "Single day";
+      } else {
+        chartRangeLabel.textContent = "No data yet";
+      }
+
+      const ctx = document.getElementById("chartDaily");
+      if (ctx) {
+        new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: days,
+            datasets: [{
+              label: "Hits per Day",
+              data: counts,
+              backgroundColor: "rgba(37, 99, 235, 0.35)",
+              borderColor: "rgba(37, 99, 235, 0.9)",
+              borderWidth: 1,
+              borderRadius: 4,
+            }]
+          },
+          options: {
+            responsive: true,
+            aspectRatio: 2.2,
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: { font: { size: 11 } }
+              },
+              y: {
+                beginAtZero: true,
+                grid: { color: "rgba(209, 213, 219, 0.5)" },
+                ticks: { font: { size: 11 }, precision: 0 }
+              }
+            },
+            plugins: {
+              legend: { display: false }
+            }
+          }
+        });
+      }
+  // 🔥 DISPLAY RETENTION
+      renderRecentScans(logsForSlug);
+    }
+
+    loadNameAnalytics();
+  </script>
+</body>
+</html>

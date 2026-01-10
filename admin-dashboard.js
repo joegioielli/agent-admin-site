@@ -1273,18 +1273,21 @@ function updateAllDom() {
 /* ---------------- Events ---------------- */
 
 document.addEventListener("click", async (e) => {
-  if (e.target.closest(SELECTORS.saveBtn)) {
-    const card = e.target.closest(SELECTORS.card);
-    if (!card) return;
-    const slug = card.dataset.slug;
-    const input = card.querySelector(SELECTORS.dateInput);
-    const item = state.items.get(slug);
-    if (!input || !item) return;
-    const ymd = parseLooseDate(input.value);
-    if (!ymd) {
-      toast("Invalid date. Pick a date from the calendar.", "error");
-      return;
-    }
+  if (e.target.closest(SELECTORS.btnEditListing)) {
+  const card = e.target.closest(SELECTORS.card);
+  if (!card) return;
+  const slug = card.dataset.slug;
+  state.currentSlug = slug;
+  try {
+    await openListingEditor(slug, state);
+  } catch (err) {
+    console.error('openListingEditor failed', err);
+    toast('Problem loading listing details. Some fields may be missing.', 'error');
+  }
+  showModal(SELECTORS.listingModal);
+  return;
+}
+
     const iso = ymdToISO(ymd.y, ymd.m, ymd.d);
     item.activeDate = iso;
     updateDomForCard(card);

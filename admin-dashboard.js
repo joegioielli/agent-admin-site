@@ -18,7 +18,7 @@ const SELECTORS = {
   domOut: ".js-daysOnMarket",
   saveBtn: ".js-saveActiveDate",
   btnEditListing: ".js-editListing",
-  headerEditLenders: "#btnEditLenders",
+  headerEditLenders: ".btnEditLenders",
 
   // Modals & fields
   listingModal: "#editModal",
@@ -1305,18 +1305,19 @@ document.addEventListener("click", async (e) => {
     if (!card) return;
     const slug = card.dataset.slug;
     state.currentSlug = slug;
-    try {
-      await openListingEditor(slug, state);
-    } catch (err) {
-      console.error("openListingEditor failed", err);
-      toast("Problem loading listing details. Some fields may be missing.", "error");
-    }
+    await openListingEditor(slug, state);
     showModal(SELECTORS.listingModal);
     return;
   }
 
-  // ... keep the rest (btnModalSave, btnModalCancel, lenders, etc.) unchanged
+  // Edit Lenders
+  if (e.target.closest(SELECTORS.headerEditLenders)) {
+    showModal(SELECTORS.lendersModal);
+
+    return;
+  }
 });
+
 
 
 /* ---- Populate Edit Listing ---- */
@@ -1649,6 +1650,52 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
+// Main dashboard click handler
+document.addEventListener("click", async (e) => {
+  // Save Active Date
+  if (e.target.closest(SELECTORS.saveBtn)) {
+    const card = e.target.closest(SELECTORS.card);
+    if (!card) return;
+    const slug = card.dataset.slug;
+    const input = card.querySelector(SELECTORS.dateInput);
+    const item = state.items.get(slug);
+    if (!input || !item) return;
+    const ymd = parseLooseDate(input.value);
+    if (!ymd) {
+      toast("Invalid date. Pick a date from the calendar.", "error");
+      return;
+    }
+    const iso = ymdToISO(ymd.y, ymd.m, ymd.d);
+    item.activeDate = iso;
+    updateDomForCard(card);
+    try {
+      await saveActiveDate(slug, iso);
+      toast(`Saved Active Date for ${slug} → ${input.value || iso}`);
+    } catch (err) {
+      console.error(err);
+      toast("Save failed. Check logs.", "error");
+    }
+    return;
+  }
+
+  // Edit Listing
+  if (e.target.closest(SELECTORS.btnEditListing)) {
+    const card = e.target.closest(SELECTORS.card);
+    if (!card) return;
+    const slug = card.dataset.slug;
+    state.currentSlug = slug;
+    await openListingEditor(slug, state);
+    showModal(SELECTORS.listingModal);
+    return;
+  }
+
+  // Edit Lenders
+  if (e.target.closest(SELECTORS.headerEditLenders)) {
+    showModal(SELECTORS.lendersModal);
+    return;
+  }
+});
 
 /* DELETE LISTING - DEBUG */
 document.addEventListener("click", async e => {

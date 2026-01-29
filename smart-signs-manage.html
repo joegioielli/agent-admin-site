@@ -346,8 +346,32 @@
       border: 1px dashed #ddd;
     }
 
+    /* MODAL FIX - ADD THIS */
+    .dash-root .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+      background: rgba(0, 0, 0, 0.5);
+      align-items: center;
+      justify-content: center;
+    }
+
+    .dash-root .modal.show {
+      display: flex;
+    }
+
+    .dash-root .modal[aria-hidden="true"] {
+      display: none;
+    }
+
+    .dash-root .modal:not([aria-hidden="true"]) {
+      display: flex;
+    }
+
     /* ... rest of your existing .dash-root styles remain unchanged ... */
     .dash-root input[type="search"] {
+
       padding: 10px 12px;
       border-radius: 10px;
       border: 0;
@@ -499,7 +523,7 @@
               <span class="pill" id="summaryPill">Central • Day 0 DOM</span>
               <div class="spacer"></div>
 
-             <button class="btnEditLenders btn secondary" type="button">🏦 Edit Lenders</button>
+              <button class="btnEditLenders btn secondary" type="button">🏦 Edit Lenders</button>
               <!-- FIXED: Also changed this one to Dashboard -->
               <a href="smart-signs-upload.html" class="btn secondary">← To Uploads</a>
               <input id="q" type="search" placeholder="Search address or MLS…" />

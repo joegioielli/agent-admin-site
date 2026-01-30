@@ -90,6 +90,17 @@ function resolveModal(elOrSel) {
 function openModal(elOrSel) {
   const m = resolveModal(elOrSel);
   if (!m) return;
+   // FIX MODAL CSS - dashboard override
+  m.style.cssText = `
+    display: flex !important;
+    position: fixed !important;
+    top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+    background: rgba(0,0,0,0.5) !important;
+    z-index: 9999 !important;
+    align-items: center !important;
+    justify-content: center !important;
+  `;
+  
   m.classList.add("show");
   m.removeAttribute("aria-hidden");
   m.removeAttribute("inert");

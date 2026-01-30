@@ -1322,11 +1322,10 @@ document.addEventListener("click", async (e) => {
   }
 
   // Edit Lenders
-  if (e.target.closest(SELECTORS.headerEditLenders)) {
-    showModal(SELECTORS.lendersModal);
-
-    return;
-  }
+  if (e.target.closest(".btnEditLenders")) {  // ← hardcoded
+  showModal("#lendersModal");
+  return;
+}
 });
 
 
@@ -1702,10 +1701,10 @@ document.addEventListener("click", async (e) => {
   }
 
   // Edit Lenders
-  if (e.target.closest(SELECTORS.headerEditLenders)) {
-    showModal(SELECTORS.lendersModal);
-    return;
-  }
+  if (e.target.closest(".btnEditLenders")) {  // ← hardcoded
+  showModal("#lendersModal");
+  return;
+}
 });
 
 /* DELETE LISTING - DEBUG */

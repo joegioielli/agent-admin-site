@@ -1115,8 +1115,7 @@ function updateAllDom() {
 function updateLendersMeta() {
   const el = document.querySelector(SELECTORS.lendersMeta);
   if (!el) return;
-  const count = state.lenders.length;
-  el.textContent = `${count} lender${count === 1 ? "" : "s"}${state.lendersRevision ? ` • rev ${state.lendersRevision}` : " • no rev"}`;
+  const count = state.lenders
 }
 
 function renderLendersList() {

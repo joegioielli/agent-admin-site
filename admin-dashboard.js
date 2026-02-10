@@ -111,11 +111,14 @@ function openModal(elOrSel) {
 function closeModal(elOrSel) {
   const m = resolveModal(elOrSel);
   if (!m) return;
-
+  
+  // Fix ARIA warning: Blur focused Save button first
+  document.activeElement?.blur();
+  
   m.classList.remove("show");
   m.setAttribute("aria-hidden", "true");
   m.setAttribute("inert", "");
-
+  
   document.body.classList.remove("modal-open");
 }
 

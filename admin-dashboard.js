@@ -1170,6 +1170,8 @@ function renderLendersList() {
       updateLenderSelectOptions();
       updateLendersMeta();
       reflectSelectedLenderChip();
+      saveLenders().catch(console.error);
+      toast("Lender deleted and saved.");
     });
   });
 }

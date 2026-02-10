@@ -1,475 +1,374 @@
 <!DOCTYPE html>
-<html lang="en" data-version="2025-11-08-adv-toggle+offer-noKey">
-
+<html lang="en" data-version="2025-11-08-adv-toggle+offer-noKey+modals-restored">
 <head>
   <meta charset="UTF-8" />
   <title>Agent Admin – Smart Signs Manage Listings</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 
   <style>
-    :root {
-      --bg-page: #f3f4f6;
-      --bg-card: #ffffff;
-      --border-subtle: #e5e7eb;
-      --text-main: #111827;
-      --text-muted: #6b7280;
-      --primary: #2563eb;
-      --primary-soft: linear-gradient(135deg, #2563eb, #4f46e5);
-      --radius-card: 14px;
-      --radius-pill: 999px;
-      --shadow-soft: 0 14px 30px rgba(15, 23, 42, 0.12);
-      --shadow-subtle: 0 6px 16px rgba(15, 23, 42, 0.06);
+    :root{
+      --bg-page:#f3f4f6;
+      --bg-card:#ffffff;
+      --border-subtle:#e5e7eb;
+      --text-main:#111827;
+      --text-muted:#6b7280;
+      --primary:#2563eb;
+      --primary-soft:linear-gradient(135deg,#2563eb,#4f46e5);
+      --radius-card:14px;
+      --radius-pill:999px;
+      --shadow-soft:0 14px 30px rgba(15,23,42,.12);
+      --shadow-subtle:0 6px 16px rgba(15,23,42,.06);
 
       /* Legacy admin dashboard vars */
-      --bg1: #0b0b0f;
-      --bg2: #ff6a00;
-      --card: #ffffff;
-      --text: #111;
-      --muted: #666;
-      --radius: 14px;
-      --accent: #0b62ff;
-      --danger: #c62828;
-      --soft: #f5f7fb;
+      --bg1:#0b0b0f;
+      --bg2:#ff6a00;
+      --card:#ffffff;
+      --text:#111;
+      --muted:#666;
+      --radius:14px;
+      --accent:#0b62ff;
+      --danger:#c62828;
+      --soft:#f5f7fb;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
+    *{ box-sizing:border-box; margin:0; padding:0; }
+
+    body{
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:radial-gradient(circle at top,#e5edff 0,#f3f4f6 40%,#e5e7eb 100%);
+      color:var(--text-main);
+      min-height:100vh;
+      display:flex;
+    }
+    body.modal-open{ overflow:hidden; }
+
+    .app-shell{
+      display:flex;
+      width:100%;
+      max-width:1200px;
+      margin:24px auto;
+      padding:0 16px;
+      gap:20px;
     }
 
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: radial-gradient(circle at top, #e5edff 0, #f3f4f6 40%, #e5e7eb 100%);
-      color: var(--text-main);
-      min-height: 100vh;
-      display: flex;
+    /* SIDEBAR */
+    .sidebar{
+      width:240px;
+      background:radial-gradient(circle at top,#1f2937 0,#020617 55%);
+      border-radius:var(--radius-card);
+      padding:16px 14px;
+      color:#e5e7eb;
+      box-shadow:var(--shadow-soft);
+      display:flex;
+      flex-direction:column;
+      gap:14px;
     }
 
-    body.modal-open {
-      overflow: hidden;
+    .brand{ display:flex; align-items:center; gap:10px; padding:8px 8px 2px; }
+    .brand-logo{
+      width:32px; height:32px; border-radius:12px; background:var(--primary-soft);
+      display:flex; align-items:center; justify-content:center;
+      color:#f9fafb; font-weight:800; font-size:18px;
+      box-shadow:0 10px 24px rgba(37,99,235,.7);
+    }
+    .brand-text-title{ font-weight:700; letter-spacing:.08em; font-size:12px; text-transform:uppercase; }
+    .brand-text-sub{ font-size:11px; color:#9ca3af; }
+
+    .sidebar-section-title{
+      font-size:11px; text-transform:uppercase; letter-spacing:.16em;
+      color:#6b7280; padding:4px 8px; margin-top:4px;
     }
 
-    .app-shell {
-      display: flex;
-      width: 100%;
-      max-width: 1200px;
-      margin: 24px auto;
-      padding: 0 16px;
-      gap: 20px;
+    .nav-list{ list-style:none; padding:4px; display:flex; flex-direction:column; gap:4px; }
+    .nav-item{
+      display:flex; align-items:center; gap:10px;
+      padding:7px 9px; border-radius:10px; color:#e5e7eb;
+      cursor:pointer; font-size:13px;
+      transition:background .2s ease, transform .12s ease, box-shadow .2s ease;
     }
-
-    /* SIDEBAR - FIXED TO MATCH OTHER PAGES */
-    .sidebar {
-      width: 240px;
-      background: radial-gradient(circle at top, #1f2937 0, #020617 55%);
-      border-radius: var(--radius-card);
-      padding: 16px 14px;
-      color: #e5e7eb;
-      box-shadow: var(--shadow-soft);
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
+    .nav-item:hover{ background:rgba(148,163,184,.2); transform:translateY(-1px); }
+    .nav-item.active{
+      background:linear-gradient(135deg,#2563eb,#4f46e5);
+      box-shadow:0 8px 20px rgba(37,99,235,.6);
     }
+    .nav-item-label{ flex:1; }
 
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 8px 2px;
-    }
-
-    .brand-logo {
-      width: 32px;
-      height: 32px;
-      border-radius: 12px;
-      background: var(--primary-soft);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #f9fafb;
-      font-weight: 800;
-      font-size: 18px;
-      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.7);
-    }
-
-    .brand-text-title {
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      font-size: 12px;
-      text-transform: uppercase;
-    }
-
-    .brand-text-sub {
-      font-size: 11px;
-      color: #9ca3af;
-    }
-
-    .sidebar-section-title {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-      color: #6b7280;
-      padding: 4px 8px;
-      margin-top: 4px;
-    }
-
-    .nav-list {
-      list-style: none;
-      padding: 4px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .nav-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 7px 9px;
-      border-radius: 10px;
-      color: #e5e7eb;
-      cursor: pointer;
-      font-size: 13px;
-      transition: background 0.2s ease, transform 0.12s ease, box-shadow 0.2s ease;
-    }
-
-    .nav-item:hover {
-      background: rgba(148, 163, 184, 0.2);
-      transform: translateY(-1px);
-    }
-
-    .nav-item.active {
-      background: linear-gradient(135deg, #2563eb, #4f46e5);
-      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.6);
-    }
-
-    .nav-item-label {
-      flex: 1;
-    }
-
-    @media (max-width: 960px) {
-      .app-shell {
-        flex-direction: column;
+    @media (max-width:960px){
+      .app-shell{ flex-direction:column; }
+      .sidebar{
+        width:100%;
+        flex-direction:row;
+        align-items:center;
+        overflow-x:auto;
       }
-
-      .sidebar {
-        width: 100%;
-        flex-direction: row;
-        align-items: center;
-        overflow-x: auto;
-      }
-
-      .sidebar-section-title {
-        display: none;
-      }
-
-      .nav-list {
-        flex-direction: row;
-        flex-wrap: wrap;
-      }
+      .sidebar-section-title{ display:none; }
+      .nav-list{ flex-direction:row; flex-wrap:wrap; }
     }
 
     /* MAIN */
-    .main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
+    .main{
+      flex:1;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
     }
 
-    .main-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 16px;
-      border-radius: var(--radius-card);
-      background: rgba(255, 255, 255, 0.9);
-      box-shadow: var(--shadow-subtle);
-      backdrop-filter: blur(10px);
+    .main-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:10px 16px;
+      border-radius:var(--radius-card);
+      background:rgba(255,255,255,.9);
+      box-shadow:var(--shadow-subtle);
+      backdrop-filter:blur(10px);
+    }
+    .main-header-left{ display:flex; flex-direction:column; gap:3px; }
+    .main-title{ font-size:18px; font-weight:700; letter-spacing:.04em; }
+    .main-subtitle{ font-size:12px; color:var(--text-muted); }
+    .main-header-actions{ display:flex; align-items:center; gap:8px; }
+
+    .btn{
+      border:none;
+      cursor:pointer;
+      font-size:12px;
+      font-weight:600;
+      border-radius:var(--radius-pill);
+      padding:7px 12px;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      transition:background .2s ease, transform .12s ease, box-shadow .2s ease;
+      text-decoration:none;
+      white-space:nowrap;
+    }
+    .btn-ghost{
+      background:transparent;
+      color:var(--text-muted);
+      border:1px solid rgba(148,163,184,.5);
+    }
+    .btn-ghost:hover{ background:rgba(243,244,246,.9); transform:translateY(-1px); }
+
+    .btn-primary{
+      color:#f9fafb;
+      background-image:var(--primary-soft);
+      box-shadow:0 8px 18px rgba(37,99,235,.55);
+    }
+    .btn-primary:hover{ transform:translateY(-1px); box-shadow:0 12px 22px rgba(37,99,235,.7); }
+
+    .main-content{
+      flex:1;
+      padding:10px 2px 2px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
     }
 
-    .main-header-left {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
+    .card{
+      background:var(--bg-card);
+      border-radius:var(--radius-card);
+      box-shadow:var(--shadow-subtle);
+      padding:14px 16px;
+      border:1px solid var(--border-subtle);
+      margin-bottom:4px;
+    }
+    .card-title{ font-size:16px; font-weight:600; margin-bottom:4px; }
+    .card-subtitle{ font-size:13px; color:var(--text-muted); margin-bottom:10px; }
+
+    footer{
+      text-align:center;
+      font-size:12px;
+      color:#6b7280;
+      padding:10px 2px 4px;
     }
 
-    .main-title {
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
+    /* DASH ROOT */
+    .dash-root header{
+      padding:14px 18px;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+    .dash-root .title{ font-weight:800; letter-spacing:.3px; }
+    .dash-root .spacer{ flex:1; }
+
+    .dash-root .btn{
+      appearance:none;
+      border-radius:999px;
+      padding:8px 14px;
+      cursor:pointer;
+      background:var(--accent);
+      color:#fff;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      box-shadow:0 6px 18px rgba(0,0,0,.18);
+      transition:transform .08s ease-in-out, box-shadow .12s ease-in-out, background-color .12s ease-in-out;
+      border:0;
+      font-size:12px;
+    }
+    .dash-root .btn:hover{ transform:translateY(-1px); box-shadow:0 10px 22px rgba(0,0,0,.22); }
+    .dash-root .btn.secondary{ background:#f3f4f6; color:#111827; }
+    .dash-root .btn.danger{ background:#ffecec; color:var(--danger); border:1px solid rgba(198,40,40,.25); box-shadow:none; }
+    .dash-root .btn.ghost{ background:transparent; color:#111; border:1px dashed #ddd; }
+
+    .dash-root input[type="search"]{
+      padding:10px 12px;
+      border-radius:10px;
+      border:0;
+      outline:none;
+      width:min(320px,60vw);
+      box-shadow:inset 0 0 0 1px rgba(0,0,0,.1), 0 3px 12px rgba(0,0,0,.12);
     }
 
-    .main-subtitle {
-      font-size: 12px;
-      color: var(--text-muted);
+    .dash-root main{ padding:10px 18px 26px; }
+    .dash-root #listingsGrid{ display:grid; gap:16px; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
+
+    .dash-root .card-inner{
+      background:var(--card);
+      color:var(--text);
+      border-radius:var(--radius);
+      overflow:hidden;
+      box-shadow:0 10px 30px rgba(0,0,0,.18);
+      display:flex;
+      flex-direction:column;
+      position:relative;
+    }
+    .dash-root .thumb{ width:100%; height:200px; object-fit:cover; background:#eee; display:block; }
+    .dash-root .content{ padding:12px 14px; display:flex; flex-direction:column; gap:8px; }
+    .dash-root .price{ font-weight:800; font-size:18px; }
+    .dash-root .addr{ color:#222; line-height:1.25; }
+    .dash-root .mls{ color:#666; font-size:12px; }
+    .dash-root .meta{ display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+    .dash-root .actions{ display:flex; gap:8px; margin-top:4px; flex-wrap:wrap; }
+    .dash-root .actions.actions--date input[type="date"]{ padding:6px 8px; border:1px solid #ddd; border-radius:10px; }
+    .dash-root .actions.actions--date button{ padding:7px 10px; border-radius:999px; border:0; cursor:pointer; background:#111827; color:#fff; font-size:12px; }
+
+    /* MODALS */
+    .dash-root .modal{
+      display:none;
+      position:fixed;
+      inset:0;
+      z-index:9999;
+      background:rgba(0,0,0,.5);
+      align-items:center;
+      justify-content:center;
+      padding:16px;
+    }
+    .dash-root .modal.show{ display:flex; }
+    .dash-root .modal[aria-hidden="true"]{ display:none; }
+    .dash-root .modal:not([aria-hidden="true"]){ display:flex; }
+
+    .dash-root .modal-card{
+      background:#fff;
+      border-radius:14px;
+      padding:16px;
+      width:min(980px, 94vw);
+      max-height:86vh;
+      overflow:auto;
+      box-shadow:0 20px 60px rgba(0,0,0,.35);
+      outline:none;
+    }
+    .dash-root .modal-head{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:12px;
+    }
+    .dash-root .modal-title{ font-weight:800; font-size:16px; }
+    .dash-root .modal-subtitle{ font-size:12px; color:#666; margin-top:2px; }
+
+    .dash-root .modal-grid{
+      display:grid;
+      grid-template-columns:repeat(12,1fr);
+      gap:12px;
+    }
+    .dash-root .f{ display:flex; flex-direction:column; gap:6px; }
+    .dash-root .f label{ font-size:12px; color:#374151; }
+    .dash-root .f input,
+    .dash-root .f textarea,
+    .dash-root .f select{
+      padding:10px 10px;
+      border-radius:12px;
+      border:1px solid #e5e7eb;
+      outline:none;
+      font-size:13px;
+      background:#fff;
+    }
+    .dash-root .f textarea{ min-height:90px; resize:vertical; }
+    .dash-root .col-12{ grid-column:span 12; }
+    .dash-root .col-8{ grid-column:span 8; }
+    .dash-root .col-6{ grid-column:span 6; }
+    .dash-root .col-4{ grid-column:span 4; }
+    .dash-root .col-3{ grid-column:span 3; }
+
+    .dash-root .modal-actions{
+      display:flex;
+      gap:10px;
+      justify-content:flex-end;
+      margin-top:14px;
+      flex-wrap:wrap;
     }
 
-    .main-header-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    /* Lenders rows */
+    .dash-root .lender-row{
+      border:1px solid #eee;
+      border-radius:12px;
+      padding:12px;
+      margin-bottom:10px;
+      background:#fff;
     }
+    .dash-root .lender-grid{ display:grid; grid-template-columns:repeat(12,1fr); gap:10px; }
+    .dash-root .lender-actions{ display:flex; justify-content:flex-end; margin-top:10px; }
+    .dash-root .lender-drag{ user-select:none; opacity:.5; }
 
-    .btn {
-      border: none;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 600;
-      border-radius: var(--radius-pill);
-      padding: 7px 12px;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: background 0.2s ease, transform 0.12s ease, box-shadow 0.2s ease;
-      text-decoration: none;
-      white-space: nowrap;
+    /* Advanced Fields rows */
+    .dash-root .adv-row{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      margin-bottom:10px;
     }
-
-    .btn-ghost {
-      background: transparent;
-      color: var(--text-muted);
-      border: 1px solid rgba(148, 163, 184, 0.5);
+    .dash-root .adv-row input{
+      padding:10px 10px;
+      border-radius:12px;
+      border:1px solid #e5e7eb;
+      font-size:13px;
+      width:100%;
     }
+    .dash-root .adv-key{ flex:0 0 32%; }
+    .dash-root .adv-val{ flex:1; }
 
-    .btn-ghost:hover {
-      background: rgba(243, 244, 246, 0.9);
-      transform: translateY(-1px);
+    /* Toast */
+    #globalToast{
+      position:fixed;
+      right:16px;
+      bottom:16px;
+      padding:10px 12px;
+      border-radius:12px;
+      background:#111827;
+      color:#fff;
+      opacity:0;
+      pointer-events:none;
+      transition:opacity .2s ease;
+      z-index:10000;
+      max-width:min(520px, 92vw);
+      font-size:13px;
     }
-
-    .btn-primary {
-      color: #f9fafb;
-      background-image: var(--primary-soft);
-      box-shadow: 0 8px 18px rgba(37, 99, 235, 0.55);
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 12px 22px rgba(37, 99, 235, 0.7);
-    }
-
-    .main-content {
-      flex: 1;
-      padding: 10px 2px 2px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .card {
-      background: var(--bg-card);
-      border-radius: var(--radius-card);
-      box-shadow: var(--shadow-subtle);
-      padding: 14px 16px;
-      border: 1px solid var(--border-subtle);
-      margin-bottom: 4px;
-    }
-
-    .card-title {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-
-    .card-subtitle {
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-bottom: 10px;
-    }
-
-    footer {
-      text-align: center;
-      font-size: 12px;
-      color: #6b7280;
-      padding: 10px 2px 4px;
-    }
-
-    /* ORIGINAL DASHBOARD STYLES (scoped inside .dash-root) */
-    .dash-root header {
-      padding: 14px 18px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .dash-root .title {
-      font-weight: 800;
-      letter-spacing: .3px;
-    }
-
-    .dash-root .spacer {
-      flex: 1;
-    }
-
-    .dash-root .btn {
-      appearance: none;
-      border-radius: 999px;
-      padding: 8px 14px;
-      cursor: pointer;
-      background: var(--accent);
-      color: #ffffff;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
-      transition:
-        transform .08s ease-in-out,
-        box-shadow .12s ease-in-out,
-        background-color .12s ease-in-out;
-      border: 0;
-      font-size: 12px;
-    }
-
-    .dash-root .btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 10px 22px rgba(0, 0, 0, .22);
-    }
-
-    .dash-root .btn.secondary {
-      background: #f3f4f6;
-      color: #111827;
-    }
-
-    .dash-root .btn.danger {
-      background: #ffecec;
-      color: var(--danger);
-      border: 1px solid rgba(198, 40, 40, .25);
-      box-shadow: none;
-    }
-
-    .dash-root .btn.ghost {
-      background: transparent;
-      color: #111;
-      border: 1px dashed #ddd;
-    }
-
-    /* MODAL FIX - ADD THIS */
-    .dash-root .modal {
-      display: none;
-      position: fixed;
-      inset: 0;
-      z-index: 999;
-      background: rgba(0, 0, 0, 0.5);
-      align-items: center;
-      justify-content: center;
-    }
-
-    .dash-root .modal.show {
-      display: flex;
-    }
-
-    .dash-root .modal[aria-hidden="true"] {
-      display: none;
-    }
-
-    .dash-root .modal:not([aria-hidden="true"]) {
-      display: flex;
-    }
-
-    /* ... rest of your existing .dash-root styles remain unchanged ... */
-    .dash-root input[type="search"] {
-
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 0;
-      outline: none;
-      width: min(320px, 60vw);
-      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .1), 0 3px 12px rgba(0, 0, 0, .12);
-    }
-
-    .dash-root main {
-      padding: 10px 18px 26px;
-    }
-
-    .dash-root #listingsGrid {
-      display: grid;
-      gap: 16px;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    }
-
-    .dash-root .card-inner {
-      background: var(--card);
-      color: var(--text);
-      border-radius: var(--radius);
-      overflow: hidden;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
-      display: flex;
-      flex-direction: column;
-      position: relative;
-    }
-
-    .dash-root .thumb {
-      width: 100%;
-      height: 200px;
-      object-fit: cover;
-      background: #eee;
-      display: block;
-    }
-
-    .dash-root .badge {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      font-size: 18px;
-      background: #fff;
-      border-radius: 10px;
-      padding: 2px 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
-    }
-
-    .dash-root .content {
-      padding: 12px 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .dash-root .price {
-      font-weight: 800;
-      font-size: 18px;
-    }
-
-    .dash-root .addr {
-      color: #222;
-      line-height: 1.25;
-    }
-
-    .dash-root .mls {
-      color: #666;
-      font-size: 12px;
-    }
-
-    .dash-root .meta {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .dash-root .actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 4px;
-      flex-wrap: wrap;
-    }
-
-    /* ... rest of your existing styles (modals, forms, etc.) remain exactly the same ... */
   </style>
 </head>
 
 <body>
   <div class="app-shell">
-    <!-- SIDEBAR - FIXED: Smart Signs ACTIVE, 3 main items only -->
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-logo">AA</div>
         <div>
           <div class="brand-text-title">AGENT ADMIN</div>
-          <div class="brand-text-sub">Home</div> <!-- Change per page: "Smart Signs", "Custom Forms", etc. -->
+          <div class="brand-text-sub">Home</div>
         </div>
       </div>
 
@@ -493,18 +392,13 @@
       </ul>
     </aside>
 
-
-    <!-- MAIN -->
     <main class="main">
       <header class="main-header">
         <div class="main-header-left">
           <div class="main-title">Smart Signs – Manage Listings</div>
-          <div class="main-subtitle">
-            View and edit listing details, lenders, and advanced fields for Smart Signs.
-          </div>
+          <div class="main-subtitle">View and edit listing details, lenders, and advanced fields for Smart Signs.</div>
         </div>
         <div class="main-header-actions">
-          <!-- FIXED: "To Dashboard" linking to smart-signs-dash.html -->
           <a href="smart-signs-dash.html" class="btn btn-primary">← To Dashboard</a>
         </div>
       </header>
@@ -512,11 +406,8 @@
       <section class="main-content">
         <div class="card">
           <div class="card-title">Listings</div>
-          <div class="card-subtitle">
-            Search, edit, and manage all listings imported via MLS for Smart Signs.
-          </div>
+          <div class="card-subtitle">Search, edit, and manage all listings imported via MLS for Smart Signs.</div>
 
-          <!-- Original dashboard content - UNCHANGED -->
           <div class="dash-root">
             <header>
               <div class="title">Manage Listings</div>
@@ -524,7 +415,6 @@
               <div class="spacer"></div>
 
               <button class="btnEditLenders btn secondary" type="button">🏦 Edit Lenders</button>
-              <!-- FIXED: Also changed this one to Dashboard -->
               <a href="smart-signs-upload.html" class="btn secondary">← To Uploads</a>
               <input id="q" type="search" placeholder="Search address or MLS…" />
               <button id="refreshBtn" class="btn primary" type="button">Refresh</button>
@@ -536,31 +426,164 @@
               </div>
             </main>
 
-            <footer>Private media uses presigned URLs. Page refresh (button or tab focus) pulls fresh links on demand.
-            </footer>
+            <footer>Private media uses presigned URLs. Page refresh (button or tab focus) pulls fresh links on demand.</footer>
 
-            <!-- ALL MODALS AND FORMS - UNCHANGED -->
-            <!-- Edit Listing Modal -->
+            <!-- EDIT LISTING MODAL (RESTORED minimal but compatible with admin-dashboard.js) -->
             <div id="editModal" class="modal" aria-hidden="true" inert>
-              <!-- ... your existing modal content unchanged ... -->
+              <div class="modal-card" tabindex="-1">
+                <div class="modal-head">
+                  <div>
+                    <div class="modal-title">Edit Listing</div>
+                    <div class="modal-subtitle" id="f-dom-display">Days on Market: —</div>
+                  </div>
+                  <button id="btnCloseX" type="button" class="btn secondary">✕ Close</button>
+                </div>
+
+                <form id="editForm">
+                  <div class="modal-grid">
+                    <div class="f col-4">
+                      <label>MLS #</label>
+                      <input id="f-mls" type="text" placeholder="MLS">
+                    </div>
+                    <div class="f col-8">
+                      <label>Address</label>
+                      <input id="f-address" type="text" placeholder="123 Main St">
+                    </div>
+
+                    <div class="f col-4">
+                      <label>City</label>
+                      <input id="f-city" type="text" placeholder="City">
+                    </div>
+                    <div class="f col-4">
+                      <label>State</label>
+                      <input id="f-state" type="text" placeholder="TN">
+                    </div>
+                    <div class="f col-4">
+                      <label>Zip</label>
+                      <input id="f-zip" type="text" placeholder="37040">
+                    </div>
+
+                    <div class="f col-3">
+                      <label>Price</label>
+                      <input id="f-price" type="text" placeholder="350000">
+                    </div>
+                    <div class="f col-3">
+                      <label>Beds</label>
+                      <input id="f-beds" type="text" placeholder="3">
+                    </div>
+                    <div class="f col-3">
+                      <label>Baths</label>
+                      <input id="f-baths" type="text" placeholder="2">
+                    </div>
+                    <div class="f col-3">
+                      <label>Sq Ft</label>
+                      <input id="f-sqft" type="text" placeholder="1800">
+                    </div>
+
+                    <div class="f col-3">
+                      <label>Year Built</label>
+                      <input id="f-year" type="text" placeholder="2005">
+                    </div>
+                    <div class="f col-3">
+                      <label>Status</label>
+                      <input id="f-status" type="text" placeholder="Active">
+                    </div>
+                    <div class="f col-3">
+                      <label>Active Date</label>
+                      <input id="f-activeDate" type="date">
+                    </div>
+                    <div class="f col-3">
+                      <label>Timezone</label>
+                      <input id="f-timezone" type="text" value="America/Chicago">
+                    </div>
+
+                    <div class="f col-12">
+                      <label>Photo (URL or key)</label>
+                      <input id="f-photo" type="text" placeholder="https://...">
+                    </div>
+
+                    <div class="f col-12" id="f-photo-preview-wrap" style="display:none;">
+                      <label>Preview</label>
+                      <img id="f-photo-preview" alt="" style="width:100%;max-height:320px;object-fit:cover;border-radius:12px;border:1px solid #eee;">
+                      <div id="f-photo-hint" class="mls" style="display:none;">Paste a full http(s) URL for preview.</div>
+                    </div>
+
+                    <div class="f col-6">
+                      <label>Public Remarks</label>
+                      <textarea id="f-desc" placeholder="Public remarks..."></textarea>
+                    </div>
+                    <div class="f col-6">
+                      <label>Agent Notes</label>
+                      <textarea id="f-notes" placeholder="Agent notes..."></textarea>
+                    </div>
+
+                    <div class="f col-6">
+                      <label>Preferred Lender</label>
+                      <select id="f-lender"></select>
+                      <div id="f-lender-chip" style="display:none; margin-top:6px; font-size:12px; background:#f3f4f6; padding:6px 10px; border-radius:999px; display:inline-flex; gap:8px; align-items:center;">
+                        <span id="f-lender-chip-text"></span>
+                      </div>
+                      <button id="btnManageLendersInline" type="button" class="btn secondary" style="margin-top:8px;">Manage Lenders</button>
+                    </div>
+
+                    <div class="f col-6">
+                      <label>Lender Offer (optional)</label>
+                      <textarea id="f-lender-offer" placeholder="Offer details shown for this listing..."></textarea>
+                    </div>
+
+                    <div class="f col-12">
+                      <label style="display:flex; align-items:center; gap:8px;">
+                        <input id="chkShowAdminFields" type="checkbox" />
+                        Show Admin Fields (advanced)
+                      </label>
+                    </div>
+
+                    <div class="f col-12">
+                      <label>Advanced Fields</label>
+                      <div id="advList"></div>
+                      <button id="btnAddField" type="button" class="btn secondary">+ Add Field</button>
+                    </div>
+                  </div>
+
+                  <div class="modal-actions">
+                    <button id="btnDelete" type="button" class="btn danger">Delete Listing</button>
+                    <div style="flex:1;"></div>
+                    <button id="btnCancel" type="button" class="btn secondary">Cancel</button>
+                    <button id="btnSave" type="button" class="btn">Save Listing</button>
+                  </div>
+                </form>
+              </div>
             </div>
 
-            <!-- Lenders Modal -->
+            <!-- LENDERS MODAL (RESTORED + compatible IDs) -->
             <div id="lendersModal" class="modal" aria-hidden="true" inert>
-              <!-- ... your existing modal content unchanged ... -->
+              <div class="modal-card" tabindex="-1">
+                <div class="modal-head">
+                  <div>
+                    <div class="modal-title">Edit Lenders</div>
+                    <div id="lendersMeta" class="modal-subtitle"></div>
+                  </div>
+                  <button id="btnCloseLenders" type="button" class="btn secondary">✕ Close</button>
+                </div>
+
+                <div id="lendersList"></div>
+
+                <div class="modal-actions">
+                  <button id="btnAddLender" type="button" class="btn secondary">+ Add Lender</button>
+                  <button id="btnSaveLenders" type="button" class="btn">Save Lenders</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <footer>Listing data and overrides are stored in S3. Changes here update the Smart Signs experience for buyers.
-        </footer>
+        <footer>Listing data and overrides are stored in S3. Changes here update the Smart Signs experience for buyers.</footer>
       </section>
     </main>
   </div>
 
   <div id="globalToast" role="status" aria-live="polite"></div>
 
-  <!-- Dashboard logic (relative path) -->
   <script src="admin-dashboard.js?v=2025-11-08-2" defer></script>
 
   <!-- Helper: Show Admin Fields toggle only -->
@@ -584,6 +607,42 @@
       }
     });
   </script>
-</body>
 
+  <!-- Minimal modal close wiring (in case your JS didn't include close buttons) -->
+  <script>
+    document.addEventListener("click", (e) => {
+      if (e.target.closest("#btnCloseLenders")) {
+        window.hideModal?.("#lendersModal");
+      }
+      if (e.target.closest("#btnCloseX") || e.target.closest("#btnCancel")) {
+        window.hideModal?.("#editModal");
+      }
+      if (e.target.closest("#btnManageLendersInline")) {
+        window.showModal?.("#lendersModal");
+      }
+      if (e.target.closest("#btnAddField")) {
+        // admin-dashboard.js also binds this, but harmless if duplicated
+        window.addAdvancedRow?.();
+      }
+    });
+
+    // Close on backdrop click
+    document.addEventListener("click", (e) => {
+      const modal = e.target.classList?.contains("modal") ? e.target : null;
+      if (!modal) return;
+      // click directly on overlay, not inside card
+      if (e.target === modal) {
+        window.hideModal?.("#lendersModal");
+        window.hideModal?.("#editModal");
+      }
+    });
+
+    // Escape closes
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      window.hideModal?.("#lendersModal");
+      window.hideModal?.("#editModal");
+    });
+  </script>
+</body>
 </html>

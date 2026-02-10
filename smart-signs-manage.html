@@ -358,8 +358,38 @@
       max-width:min(520px, 92vw);
       font-size:13px;
     }
+
+    /* Lenders modal: keep header/footer visible, list scrolls */
+    #lendersModal .modal-card {
+      display: flex;
+      flex-direction: column;
+    }
+    #lendersModal .modal-head {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #fff;
+      padding-bottom: 8px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    #lendersModal #lendersList {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding-bottom: 8px;
+    }
+    #lendersModal .modal-actions {
+      flex: 0 0 auto;
+      position: sticky;
+      bottom: 0;
+      z-index: 1;
+      background: #fff;
+      padding-top: 8px;
+      border-top: 1px solid #e5e7eb;
+    }
   </style>
 </head>
+
 
 <body>
   <div class="app-shell">

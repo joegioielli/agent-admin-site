@@ -1407,7 +1407,7 @@ document.addEventListener("DOMContentLoaded", init);
 document.addEventListener("click", async (e) => {
   // Close buttons (if you have them in modal markup)
   if (e.target.closest(SELECTORS.closeListingX) || e.target.closest(SELECTORS.btnModalCancel)) {
-    closeModal(SELECTORS.listingModal);
+    safeCloseModal(SELECTORS.listingModal);
     return;
   }
   if (e.target.closest(SELECTORS.closeLendersX)) {
@@ -1535,5 +1535,166 @@ document.addEventListener("click", async (e) => {
       toast(`❌ ${err.message}`, "error");
     }
     return;
+  }
+});
+
+/* =========================
+   UI WIRING PATCH (2026-02-09)
+   ========================= */
+
+function $(sel) { return document.querySelector(sel); }
+
+function safeOpenModal(sel) {
+  if (typeof window.showModal === "function") return window.showModal(sel);
+
+  const m = $(sel);
+  if (!m) return;
+  m.classList.add("show");
+  m.setAttribute("aria-hidden", "false");
+  m.removeAttribute("inert");
+  document.body.classList.add("modal-open");
+}
+
+function safeCloseModal(sel) {
+  if (typeof window.hideModal === "function") return window.hideModal(sel);
+
+  const m = $(sel);
+  if (!m) return;
+  m.classList.remove("show");
+  m.setAttribute("aria-hidden", "true");
+  m.setAttribute("inert", "");
+  document.body.classList.remove("modal-open");
+}
+
+function bindStaticButtonsOnce() {
+  // Top header button: Edit Lenders
+  const editLendersBtn = $(".btnEditLenders");
+  if (editLendersBtn && !editLendersBtn.dataset.bound) {
+    editLendersBtn.dataset.bound = "1";
+    editLendersBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      try { await loadLenders?.(); } catch {}
+      safeOpenModal("#lendersModal");
+    });
+  }
+
+  // Lenders modal buttons
+  const closeLenders = $("#btnCloseLenders");
+  if (closeLenders && !closeLenders.dataset.bound) {
+    closeLenders.dataset.bound = "1";
+    closeLenders.addEventListener("click", (e) => {
+      e.preventDefault();
+      safeCloseModal("#lendersModal");
+    });
+  }
+
+  const addLender = $("#btnAddLender");
+  if (addLender && !addLender.dataset.bound) {
+    addLender.dataset.bound = "1";
+    addLender.addEventListener("click", (e) => {
+      e.preventDefault();
+      try {
+        const idx = addLenderRow();
+        renderLendersList();
+        updateLendersMeta();
+        updateLenderSelectOptions();
+        const row = document.querySelector(`.lender-row[data-index="${idx}"]`);
+        row?.querySelector("input")?.focus();
+      } catch (err) {
+        console.error(err);
+        toast?.("Add lender failed", "error");
+      }
+    });
+  }
+
+  const saveLendersBtn = $("#btnSaveLenders");
+  if (saveLendersBtn && !saveLendersBtn.dataset.bound) {
+    saveLendersBtn.dataset.bound = "1";
+    saveLendersBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      await saveLenders();
+    });
+  }
+
+  // Listing modal buttons
+  const closeX = $("#btnCloseX");
+  if (closeX && !closeX.dataset.bound) {
+    closeX.dataset.bound = "1";
+    closeX.addEventListener("click", (e) => {
+      e.preventDefault();
+      safeCloseModal("#editModal");
+    });
+  }
+
+  const cancelBtn = $("#btnCancel");
+  if (cancelBtn && !cancelBtn.dataset.bound) {
+    cancelBtn.dataset.bound = "1";
+    cancelBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      safeCloseModal("#editModal");
+    });
+  }
+
+  const saveBtn = $("#btnSave");
+  if (saveBtn && !saveBtn.dataset.bound) {
+    saveBtn.dataset.bound = "1";
+    saveBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const slug = state?.currentSlug;
+      if (!slug) return toast?.("No listing selected", "error");
+      try {
+        await saveFullEdit(slug);
+        safeCloseModal("#editModal");
+      } catch (err) {
+        console.error(err);
+        toast?.(err?.message || "Save failed", "error");
+      }
+    });
+  }
+
+  const manageInline = $("#btnManageLendersInline");
+  if (manageInline && !manageInline.dataset.bound) {
+    manageInline.dataset.bound = "1";
+    manageInline.addEventListener("click", async (e) => {
+      e.preventDefault();
+      try { await loadLenders?.(); } catch {}
+      safeOpenModal("#lendersModal");
+    });
+  }
+
+  // Advanced fields add button
+  const addFieldBtn = $("#btnAddField");
+  if (addFieldBtn && !addFieldBtn.dataset.bound) {
+    addFieldBtn.dataset.bound = "1";
+    addFieldBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      try { addAdvancedRow(); } catch {}
+    });
+  }
+}
+
+/* Add these ONCE (not inside bindStaticButtonsOnce) */
+
+// Close modals on backdrop click
+document.addEventListener("click", (e) => {
+  const overlay = e.target?.classList?.contains("modal") ? e.target : null;
+  if (!overlay) return;
+  if (overlay.id === "lendersModal") safeCloseModal("#lendersModal");
+  if (overlay.id === "editModal") safeCloseModal("#editModal");
+});
+
+// Escape closes
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  safeCloseModal("#lendersModal");
+  safeCloseModal("#editModal");
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+  bindStaticButtonsOnce();
+  const grid = document.querySelector("#listingsGrid");
+  if (grid) {
+    const mo = new MutationObserver(() => bindStaticButtonsOnce());
+    mo.observe(grid, { childList: true, subtree: true });
   }
 });

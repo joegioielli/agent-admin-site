@@ -1148,10 +1148,6 @@ function renderLendersList() {
               <label>NMLS</label>
               <input class="ln-nmls" value="${escapeHtml(l.nmls || l.nmlsId || "")}">
             </div>
-            <div class="f col-12">
-              <label class="mls">Selected value in the listing uses a stable internal ID.</label>
-            </div>
-          </div>
           <div class="lender-actions">
             <button class="btn danger ln-remove" type="button">Remove</button>
           </div>

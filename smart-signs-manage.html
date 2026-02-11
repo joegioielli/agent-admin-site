@@ -267,9 +267,11 @@
       padding:16px;
       width:min(980px, 94vw);
       max-height:86vh;
-      overflow:auto;
+      overflow:hidden; /* changed: outer card doesn’t scroll, inner does */
       box-shadow:0 20px 60px rgba(0,0,0,.35);
       outline:none;
+      display:flex;
+      flex-direction:column;
     }
     .dash-root .modal-head{
       display:flex;
@@ -277,6 +279,7 @@
       justify-content:space-between;
       gap:12px;
       margin-bottom:12px;
+      flex:0 0 auto;
     }
     .dash-root .modal-title{ font-weight:800; font-size:16px; }
     .dash-root .modal-subtitle{ font-size:12px; color:#666; margin-top:2px; }
@@ -308,9 +311,8 @@
     .dash-root .modal-actions{
       display:flex;
       gap:10px;
-      justify-content:flex-end;
-      margin-top:14px;
       flex-wrap:wrap;
+      justify-content:flex-end;
     }
 
     /* Lenders rows */
@@ -378,47 +380,38 @@
       overflow-y: auto;
       padding-bottom: 8px;
     }
-     #lendersModal .modal-actions {
-    flex: 0 0 auto;
-    position: sticky;
-    bottom: 0;
-    z-index: 1;
-    background: #fff;
-    padding-top: 8px;
-    border-top: 1px solid #e5e7eb;
-  }
+    #lendersModal .modal-actions {
+      flex: 0 0 auto;
+      position: sticky;
+      bottom: 0;
+      z-index: 1;
+      background: #fff;
+      padding-top: 8px;
+      border-top: 1px solid #e5e7eb;
+    }
 
-/* STICKY BUTTONS - BOTH MODALS */
-.editModal .modal-actions,
-#lendersModal .modal-actions,
-.modal-actions {
-  position: sticky !important;
-  bottom: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  background: white !important;
-  padding: 1rem 2rem !important;
-  border-top: 2px solid #e5e7eb !important;
-  box-shadow: 0 -4px 12px rgba(0,0,0,0.1) !important;
-  z-index: 100 !important;
-  margin: 0 !important;
-}
+    /* Edit Listing modal: scrollable body + sticky button bar */
+    #editModal .modal-body {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 0 4px 1.5rem 4px;
+    }
 
-.modal-card {
-  display: flex !important;
-  flex-direction: column !important;
-}
-
-.modal-grid,
-form {
-  flex: 1 !important;
-  overflow-y: auto !important;
-  padding-bottom: 2rem !important;
-}
-
+    #editModal .modal-buttons {
+      flex: 0 0 auto;
+      position: sticky;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #fff;
+      padding-top: 8px;
+      padding-bottom: 8px;
+      margin-top: 8px;
+      border-top: 1px solid #e5e7eb;
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+    }
   </style>
 </head>
-
 
 <body>
   <div class="app-shell">
@@ -487,7 +480,7 @@ form {
 
             <footer>Private media uses presigned URLs. Page refresh (button or tab focus) pulls fresh links on demand.</footer>
 
-            <!-- EDIT LISTING MODAL (RESTORED minimal but compatible with admin-dashboard.js) -->
+            <!-- EDIT LISTING MODAL (updated layout) -->
             <div id="editModal" class="modal" aria-hidden="true" inert>
               <div class="modal-card" tabindex="-1">
                 <div class="modal-head">
@@ -498,119 +491,125 @@ form {
                   <button id="btnCloseX" type="button" class="btn secondary">✕ Close</button>
                 </div>
 
-                <form id="editForm">
-                  <div class="modal-grid">
-                    <div class="f col-4">
-                      <label>MLS #</label>
-                      <input id="f-mls" type="text" placeholder="MLS">
-                    </div>
-                    <div class="f col-8">
-                      <label>Address</label>
-                      <input id="f-address" type="text" placeholder="123 Main St">
-                    </div>
-
-                    <div class="f col-4">
-                      <label>City</label>
-                      <input id="f-city" type="text" placeholder="City">
-                    </div>
-                    <div class="f col-4">
-                      <label>State</label>
-                      <input id="f-state" type="text" placeholder="TN">
-                    </div>
-                    <div class="f col-4">
-                      <label>Zip</label>
-                      <input id="f-zip" type="text" placeholder="37040">
-                    </div>
-
-                    <div class="f col-3">
-                      <label>Price</label>
-                      <input id="f-price" type="text" placeholder="350000">
-                    </div>
-                    <div class="f col-3">
-                      <label>Beds</label>
-                      <input id="f-beds" type="text" placeholder="3">
-                    </div>
-                    <div class="f col-3">
-                      <label>Baths</label>
-                      <input id="f-baths" type="text" placeholder="2">
-                    </div>
-                    <div class="f col-3">
-                      <label>Sq Ft</label>
-                      <input id="f-sqft" type="text" placeholder="1800">
-                    </div>
-
-                    <div class="f col-3">
-                      <label>Year Built</label>
-                      <input id="f-year" type="text" placeholder="2005">
-                    </div>
-                    <div class="f col-3">
-                      <label>Status</label>
-                      <input id="f-status" type="text" placeholder="Active">
-                    </div>
-                    <div class="f col-3">
-                      <label>Active Date</label>
-                      <input id="f-activeDate" type="date">
-                    </div>
-                    <div class="f col-3">
-                      <label>Timezone</label>
-                      <input id="f-timezone" type="text" value="America/Chicago">
-                    </div>
-
-                    <div class="f col-12">
-                      <label>Photo (URL or key)</label>
-                      <input id="f-photo" type="text" placeholder="https://...">
-                    </div>
-
-                    <div class="f col-12" id="f-photo-preview-wrap" style="display:none;">
-                      <label>Preview</label>
-                      <img id="f-photo-preview" alt="" style="width:100%;max-height:320px;object-fit:cover;border-radius:12px;border:1px solid #eee;">
-                      <div id="f-photo-hint" class="mls" style="display:none;">Paste a full http(s) URL for preview.</div>
-                    </div>
-
-                    <div class="f col-6">
-                      <label>Public Remarks</label>
-                      <textarea id="f-desc" placeholder="Public remarks..."></textarea>
-                    </div>
-                    <div class="f col-6">
-                      <label>Agent Notes</label>
-                      <textarea id="f-notes" placeholder="Agent notes..."></textarea>
-                    </div>
-
-                    <div class="f col-6">
-                      <label>Preferred Lender</label>
-                      <select id="f-lender"></select>
-                      <div id="f-lender-chip" style="display:none; margin-top:6px; font-size:12px; background:#f3f4f6; padding:6px 10px; border-radius:999px; display:inline-flex; gap:8px; align-items:center;">
-                        <span id="f-lender-chip-text"></span>
+                <!-- Scrollable body -->
+                <div class="modal-body">
+                  <form id="editForm">
+                    <div class="modal-grid">
+                      <div class="f col-4">
+                        <label>MLS #</label>
+                        <input id="f-mls" type="text" placeholder="MLS">
                       </div>
-                      <button id="btnManageLendersInline" type="button" class="btn secondary" style="margin-top:8px;">Manage Lenders</button>
-                    </div>
+                      <div class="f col-8">
+                        <label>Address</label>
+                        <input id="f-address" type="text" placeholder="123 Main St">
+                      </div>
 
-                    <div class="f col-6">
-                      <label>Lender Offer (optional)</label>
-                      <textarea id="f-lender-offer" placeholder="Offer details shown for this listing..."></textarea>
-                    </div>
+                      <div class="f col-4">
+                        <label>City</label>
+                        <input id="f-city" type="text" placeholder="City">
+                      </div>
+                      <div class="f col-4">
+                        <label>State</label>
+                        <input id="f-state" type="text" placeholder="TN">
+                      </div>
+                      <div class="f col-4">
+                        <label>Zip</label>
+                        <input id="f-zip" type="text" placeholder="37040">
+                      </div>
 
-                    <div class="f col-12">
-                      <label style="display:flex; align-items:center; gap:8px;">
-                        <input id="chkShowAdminFields" type="checkbox" />
-                        Show Admin Fields (advanced)
-                      </label>
-                    </div>
+                      <div class="f col-3">
+                        <label>Price</label>
+                        <input id="f-price" type="text" placeholder="350000">
+                      </div>
+                      <div class="f col-3">
+                        <label>Beds</label>
+                        <input id="f-beds" type="text" placeholder="3">
+                      </div>
+                      <div class="f col-3">
+                        <label>Baths</label>
+                        <input id="f-baths" type="text" placeholder="2">
+                      </div>
+                      <div class="f col-3">
+                        <label>Sq Ft</label>
+                        <input id="f-sqft" type="text" placeholder="1800">
+                      </div>
 
-                    <div class="f col-12">
-                      <label>Advanced Fields</label>
-                      <div id="advList"></div>
-                      <button id="btnAddField" type="button" class="btn secondary">+ Add Field</button>
-                    </div>
-                  </div>
+                      <div class="f col-3">
+                        <label>Year Built</label>
+                        <input id="f-year" type="text" placeholder="2005">
+                      </div>
+                      <div class="f col-3">
+                        <label>Status</label>
+                        <input id="f-status" type="text" placeholder="Active">
+                      </div>
+                      <div class="f col-3">
+                        <label>Active Date</label>
+                        <input id="f-activeDate" type="date">
+                      </div>
+                      <div class="f col-3">
+                        <label>Timezone</label>
+                        <input id="f-timezone" type="text" value="America/Chicago">
+                      </div>
 
+                      <div class="f col-12">
+                        <label>Photo (URL or key)</label>
+                        <input id="f-photo" type="text" placeholder="https://...">
+                      </div>
+
+                      <div class="f col-12" id="f-photo-preview-wrap" style="display:none;">
+                        <label>Preview</label>
+                        <img id="f-photo-preview" alt="" style="width:100%;max-height:320px;object-fit:cover;border-radius:12px;border:1px solid #eee;">
+                        <div id="f-photo-hint" class="mls" style="display:none;">Paste a full http(s) URL for preview.</div>
+                      </div>
+
+                      <div class="f col-6">
+                        <label>Public Remarks</label>
+                        <textarea id="f-desc" placeholder="Public remarks..."></textarea>
+                      </div>
+                      <div class="f col-6">
+                        <label>Agent Notes</label>
+                        <textarea id="f-notes" placeholder="Agent notes..."></textarea>
+                      </div>
+
+                      <div class="f col-6">
+                        <label>Preferred Lender</label>
+                        <select id="f-lender"></select>
+                        <div id="f-lender-chip" style="display:none; margin-top:6px; font-size:12px; background:#f3f4f6; padding:6px 10px; border-radius:999px; display:inline-flex; gap:8px; align-items:center;">
+                          <span id="f-lender-chip-text"></span>
+                        </div>
+                        <button id="btnManageLendersInline" type="button" class="btn secondary" style="margin-top:8px;">Manage Lenders</button>
+                      </div>
+
+                      <div class="f col-6">
+                        <label>Lender Offer (optional)</label>
+                        <textarea id="f-lender-offer" placeholder="Offer details shown for this listing..."></textarea>
+                      </div>
+
+                      <div class="f col-12">
+                        <label style="display:flex; align-items:center; gap:8px;">
+                          <input id="chkShowAdminFields" type="checkbox" />
+                          Show Admin Fields (advanced)
+                        </label>
+                      </div>
+
+                      <div class="f col-12">
+                        <label>Advanced Fields</label>
+                        <div id="advList"></div>
+                        <button id="btnAddField" type="button" class="btn secondary">+ Add Field</button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+
+                <!-- Sticky bottom buttons -->
+                <div class="modal-buttons">
                   <div class="modal-actions">
                     <button id="btnDelete" type="button" class="btn danger">Delete Listing</button>
                     <div style="flex:1;"></div>
                     <button id="btnCancel" type="button" class="btn secondary">Cancel</button>
                     <button id="btnSave" type="button" class="btn">Save Listing</button>
                   </div>
-                </form>
+                </div>
               </div>
             </div>
 
@@ -689,7 +688,6 @@ form {
     document.addEventListener("click", (e) => {
       const modal = e.target.classList?.contains("modal") ? e.target : null;
       if (!modal) return;
-      // click directly on overlay, not inside card
       if (e.target === modal) {
         window.hideModal?.("#lendersModal");
         window.hideModal?.("#editModal");

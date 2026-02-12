@@ -1727,26 +1727,9 @@ async function init() {
 document.addEventListener("DOMContentLoaded", init);
 
 
-/* ---------------- SINGLE click handler (IMPORTANT) ---------------- */
+/* ---------------- Events ---------------- */
 
 document.addEventListener("click", async (e) => {
-  // Close buttons (if you have them in modal markup)
-  if (e.target.closest(SELECTORS.closeListingX) || e.target.closest(SELECTORS.btnModalCancel)) {
-    safeCloseModal(SELECTORS.listingModal);
-    return;
-  }
-  if (e.target.closest(SELECTORS.closeLendersX)) {
-    closeModal(SELECTORS.lendersModal);
-    return;
-  }
-
-  // Open lenders modal (header button)
-  if (e.target.closest(SELECTORS.btnEditLenders)) {
-    e.preventDefault();
-    openModal(SELECTORS.lendersModal);
-    return;
-  }
-
   // Save Active Date
   if (e.target.closest(SELECTORS.saveBtn)) {
     const card = e.target.closest(SELECTORS.card);
@@ -1755,7 +1738,6 @@ document.addEventListener("click", async (e) => {
     const input = card.querySelector(SELECTORS.dateInput);
     const item = state.items.get(slug);
     if (!input || !item) return;
-
     const ymd = parseLooseDate(input.value);
     if (!ymd) {
       toast("Invalid date. Pick a date from the calendar.", "error");
@@ -1764,7 +1746,6 @@ document.addEventListener("click", async (e) => {
     const iso = ymdToISO(ymd.y, ymd.m, ymd.d);
     item.activeDate = iso;
     updateDomForCard(card);
-
     try {
       await saveActiveDate(slug, iso);
       toast(`Saved Active Date for ${slug} → ${input.value || iso}`);
@@ -1775,251 +1756,222 @@ document.addEventListener("click", async (e) => {
     return;
   }
 
-  // Edit Listing (per card button)
+  // Edit Listing
   if (e.target.closest(SELECTORS.btnEditListing)) {
     const card = e.target.closest(SELECTORS.card);
     if (!card) return;
     const slug = card.dataset.slug;
     state.currentSlug = slug;
     await openListingEditor(slug, state);
-    openModal(SELECTORS.listingModal);
+    showModal(SELECTORS.listingModal);
     return;
   }
 
-  // Save lenders (button in lenders modal)
-  if (e.target.closest(SELECTORS.btnSaveLenders)) {
-    e.preventDefault();
-    await saveLenders();
+  // Edit Lenders
+  if (e.target.closest(SELECTORS.btnEditLenders)) {
+    showModal("#lendersModal");
+    return;
+  }
+});
+
+/* DELETE LISTING */
+
+document.addEventListener("click", async (e) => {
+  if (e.target.id !== "btnDelete") return;
+
+  const slug = state.currentSlug;
+  console.log("🗑️ DELETE CLICKED", { slug });
+
+  if (!slug) {
+    console.error("NO SLUG!");
+    toast("No listing selected", "error");
     return;
   }
 
-  // Add lender row
-  if (e.target.closest(SELECTORS.btnAddLender)) {
-    e.preventDefault();
-    addLenderRow();
-    renderLendersList();
-    updateLenderSelectOptions();
-    updateLendersMeta();
-    reflectSelectedLenderChip();
-    return;
-  }
+  if (!confirm(`Delete "${slug}" permanently?`)) return;
 
-  // Add advanced field row
-  if (e.target.closest(SELECTORS.btnAddField)) {
-    e.preventDefault();
-    addAdvancedRow();
-    return;
-  }
+  try {
+    console.log("📤 SENDING POST to", ENDPOINTS.update);
+    const res = await fetch(ENDPOINTS.update, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, delete: true }),
+    });
 
-  // Save listing modal (if your modal uses #btnSave)
-  if (e.target.closest(SELECTORS.btnModalSave)) {
-    e.preventDefault();
-    const slug = state.currentSlug;
-    if (!slug) {
-      toast("No listing selected", "error");
-      return;
+    console.log("📥 RESPONSE", res.status, res.statusText);
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error("❌ FULL ERROR:", errText);
+      throw new Error(`${res.status}: ${errText}`);
     }
-    try {
-      await saveFullEdit(slug);
-      closeModal(SELECTORS.listingModal);
-    } catch (err) {
-      console.error(err);
-      toast("Save listing failed", "error");
-    }
+
+    console.log("✅ SUCCESS");
+    toast("✅ Deleted");
+    state.items.delete(slug);
+    document
+      .querySelector(`[data-slug="${CSS.escape(slug)}"]`)
+      ?.remove();
+    closeModal(SELECTORS.listingModal);
+  } catch (e2) {
+    console.error("💥 DELETE FAILED:", e2);
+    toast(`❌ ${e2.message}`, "error");
+  }
+});
+
+/* ---- Populate Edit Listing ---- */
+
+async function openListingEditor(slug, S) {
+  const item = S.items.get(slug);
+  if (!item) {
+    toast("Listing not found", "error");
     return;
   }
 
-  // Delete listing (if you have #btnDelete)
-  if (e.target.closest(SELECTORS.btnDelete)) {
-    const slug = state.currentSlug;
-    console.log("🗑️ DELETE CLICKED", { slug });
-    if (!slug) {
-      toast("No listing selected", "error");
-      return;
+  if (!S.details.has(slug)) {
+    const url = item.detailsUrl;
+    if (url) {
+      try {
+        const r = await fetch(url, { cache: "no-store" });
+        const json = r.ok ? await r.json() : {};
+        S.details.set(slug, json);
+      } catch {
+        S.details.set(slug, {});
+      }
+    } else {
+      S.details.set(slug, {});
     }
-    if (!confirm(`Delete "${slug}" permanently?`)) return;
+  }
+  const det = S.details.get(slug);
 
-    try {
-      const res = await fetch(ENDPOINTS.update, {
+  let overrides = S.overrides.get(slug) || {};
+  try {
+    const listingId = listingIdFrom(item, slug);
+    if (listingId) {
+      const r = await fetch(ENDPOINTS.update, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug, delete: true }),
+        body: JSON.stringify({ listingId }),
       });
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "");
-        throw new Error(`${res.status}: ${errText}`);
+      if (r.ok) {
+        const j = await r.json().catch(() => ({}));
+        if (j && typeof j.overrides === "object") overrides = j.overrides;
       }
-
-      toast("✅ Deleted");
-      state.items.delete(slug);
-      document.querySelector(`[data-slug="${CSS.escape(slug)}"]`)?.remove();
-      closeModal(SELECTORS.listingModal);
-    } catch (err) {
-      console.error("💥 DELETE FAILED:", err);
-      toast(`❌ ${err.message}`, "error");
     }
-    return;
+  } catch (e) {
+    console.warn("Overrides fetch skipped", e);
   }
-});
+  state.overrides.set(slug, overrides);
 
-/* =========================
-   UI WIRING PATCH (2026-02-09)
-   ========================= */
+  const flatDet = deepFlatten(det || {});
+  const src = [overrides, det, flatDet, item];
 
-function $(sel) { return document.querySelector(sel); }
+  const mls = pickSmart(src, ALIASES.mls, "mls");
+  const addr = pickSmart(src, ALIASES.address, "address");
+  const city = pickSmart(src, ALIASES.city, "city");
+  const st = pickSmart(src, ALIASES.state, "state");
+  const zip = pickSmart(src, ALIASES.zip, "zip", false);
 
-function safeOpenModal(sel) {
-  if (typeof window.showModal === "function") return window.showModal(sel);
+  setValue(SELECTORS.fMLS, mls || "");
+  setValue(SELECTORS.fAddress, addr || "");
+  setValue(SELECTORS.fCity, city || "");
+  setValue(SELECTORS.fState, st || "");
+  setValue(SELECTORS.fZip, zip || "");
 
-  const m = $(sel);
-  if (!m) return;
-  m.classList.add("show");
-  m.setAttribute("aria-hidden", "false");
-  m.removeAttribute("inert");
-  document.body.classList.add("modal-open");
-}
+  const price = pickSmart(src, ALIASES.price, "price", true);
+  const beds = pickSmart(src, ALIASES.beds, "beds", true);
+  const baths = pickSmart(src, ALIASES.baths, "baths", true);
+  const sqft = pickSmart(src, ALIASES.sqft, "sqft", true);
+  const year = pickSmart(src, ALIASES.year, "year", true);
 
-function safeCloseModal(sel) {
-  if (typeof window.hideModal === "function") return window.hideModal(sel);
+  setValue(SELECTORS.fPrice, price ?? "");
+  setValue(SELECTORS.fBeds, beds ?? "");
+  setValue(SELECTORS.fBaths, baths ?? "");
+  setValue(SELECTORS.fSqft, sqft ?? "");
+  setValue(SELECTORS.fYear, year ?? "");
 
-  const m = $(sel);
-  if (!m) return;
-  m.classList.remove("show");
-  m.setAttribute("aria-hidden", "true");
-  m.setAttribute("inert", "");
-  document.body.classList.remove("modal-open");
-}
+  const status = pickSmart(src, ALIASES.status, "status");
+  setValue(SELECTORS.fStatus, status || "");
 
-function bindStaticButtonsOnce() {
-  // Top header button: Edit Lenders
-  const editLendersBtn = $(".btnEditLenders");
-  if (editLendersBtn && !editLendersBtn.dataset.bound) {
-    editLendersBtn.dataset.bound = "1";
-    editLendersBtn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      try { await loadLenders?.(); } catch {}
-      safeOpenModal("#lendersModal");
-    });
+  const activeRaw =
+    pickSmart(src, ALIASES.activeDate, "activeDate") || item.activeDate;
+  const activeYMD = parseLooseDate(activeRaw);
+  setValue(
+    SELECTORS.fActiveDate,
+    activeYMD ? ymdToISO(activeYMD.y, activeYMD.m, activeYMD.d) : ""
+  );
+
+  const tz =
+    pickSmart(src, ALIASES.timezone, "timezone") ||
+    item.timezone ||
+    TZ;
+  setValue(SELECTORS.fTimezone, tz);
+
+  const desc = pickSmart(src, ALIASES.desc, "desc");
+  const notes = pickSmart(src, ALIASES.notes, "notes");
+  setValue(SELECTORS.fDesc, desc || "");
+  setValue(SELECTORS.fNotes, notes || "");
+
+  const photo = pickSmart(src, ALIASES.photo, "photo");
+  setValue(SELECTORS.fPhoto, photo || "");
+  const wrap = document.querySelector(SELECTORS.fPhotoPreviewWrap);
+  const imgEl = document.querySelector(SELECTORS.fPhotoPreview);
+  const hintEl = document.querySelector(SELECTORS.fPhotoHint);
+  if (wrap && imgEl) {
+    const previewUrl = previewUrlFrom(photo || "", item);
+    if (previewUrl) {
+      wrap.style.display = "block";
+      imgEl.src = previewUrl;
+      if (hintEl) hintEl.style.display = "none";
+    } else {
+      wrap.style.display = "none";
+    }
   }
 
-  // Lenders modal buttons
-  const closeLenders = $("#btnCloseLenders");
-  if (closeLenders && !closeLenders.dataset.bound) {
-    closeLenders.dataset.bound = "1";
-    closeLenders.addEventListener("click", (e) => {
-      e.preventDefault();
-      safeCloseModal("#lendersModal");
-    });
-  }
-
-  const addLender = $("#btnAddLender");
-  if (addLender && !addLender.dataset.bound) {
-    addLender.dataset.bound = "1";
-    addLender.addEventListener("click", (e) => {
-      e.preventDefault();
-      try {
-        const idx = addLenderRow();
-        renderLendersList();
-        updateLendersMeta();
-        updateLenderSelectOptions();
-        const row = document.querySelector(`.lender-row[data-index="${idx}"]`);
-        row?.querySelector("input")?.focus();
-      } catch (err) {
-        console.error(err);
-        toast?.("Add lender failed", "error");
+  const fDomDisplay = document.querySelector(SELECTORS.fDomDisplay);
+  if (fDomDisplay) {
+    const activeISO =
+      activeYMD && ymdToISO(activeYMD.y, activeYMD.m, activeYMD.d);
+    if (activeISO) {
+      const aYMD = parseLooseDate(activeISO);
+      if (aYMD) {
+        const t = todayYMDInTZ(tz || TZ);
+        const dom = daysBetweenTZ(
+          t.y,
+          t.m,
+          t.d,
+          aYMD.y,
+          aYMD.m,
+          aYMD.d,
+          tz || TZ
+        );
+        fDomDisplay.textContent = `Days on Market: ${dom}`;
+      } else {
+        fDomDisplay.textContent = "Days on Market: —";
       }
-    });
+    } else {
+      fDomDisplay.textContent = "Days on Market: —";
+    }
   }
 
-  const saveLendersBtn = $("#btnSaveLenders");
-  if (saveLendersBtn && !saveLendersBtn.dataset.bound) {
-    saveLendersBtn.dataset.bound = "1";
-    saveLendersBtn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      await saveLenders();
-    });
-  }
+  renderAdvancedFieldsFromSource([overrides, det, item]);
+  updateLenderSelectOptions();
+  reflectSelectedLenderChip();
+}
 
-  // Listing modal buttons
-  const closeX = $("#btnCloseX");
-  if (closeX && !closeX.dataset.bound) {
-    closeX.dataset.bound = "1";
-    closeX.addEventListener("click", (e) => {
-      e.preventDefault();
-      safeCloseModal("#editModal");
-    });
-  }
+/* ---------------- Init ---------------- */
 
-  const cancelBtn = $("#btnCancel");
-  if (cancelBtn && !cancelBtn.dataset.bound) {
-    cancelBtn.dataset.bound = "1";
-    cancelBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      safeCloseModal("#editModal");
-    });
-  }
-
-  const saveBtn = $("#btnSave");
-  if (saveBtn && !saveBtn.dataset.bound) {
-    saveBtn.dataset.bound = "1";
-    saveBtn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      const slug = state?.currentSlug;
-      if (!slug) return toast?.("No listing selected", "error");
-      try {
-        await saveFullEdit(slug);
-        safeCloseModal("#editModal");
-      } catch (err) {
-        console.error(err);
-        toast?.(err?.message || "Save failed", "error");
-      }
-    });
-  }
-
-  const manageInline = $("#btnManageLendersInline");
-  if (manageInline && !manageInline.dataset.bound) {
-    manageInline.dataset.bound = "1";
-    manageInline.addEventListener("click", async (e) => {
-      e.preventDefault();
-      try { await loadLenders?.(); } catch {}
-      safeOpenModal("#lendersModal");
-    });
-  }
-
-  // Advanced fields add button
-  const addFieldBtn = $("#btnAddField");
-  if (addFieldBtn && !addFieldBtn.dataset.bound) {
-    addFieldBtn.dataset.bound = "1";
-    addFieldBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      try { addAdvancedRow(); } catch {}
-    });
+async function init() {
+  try {
+    const listings = await fetchListings();
+    renderListingsIntoGrid(listings);
+    await loadLenders();
+    console.log("State items", state.items.size);
+  } catch (e) {
+    console.error(e);
+    toast("Failed to load dashboard", "error");
   }
 }
 
-/* Add these ONCE (not inside bindStaticButtonsOnce) */
+document.addEventListener("DOMContentLoaded", init);
 
-// Close modals on backdrop click
-document.addEventListener("click", (e) => {
-  const overlay = e.target?.classList?.contains("modal") ? e.target : null;
-  if (!overlay) return;
-  if (overlay.id === "lendersModal") safeCloseModal("#lendersModal");
-  if (overlay.id === "editModal") safeCloseModal("#editModal");
-});
-
-// Escape closes
-document.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape") return;
-  safeCloseModal("#lendersModal");
-  safeCloseModal("#editModal");
-});
-
-document.addEventListener("DOMContentLoaded", () => {
-  bindStaticButtonsOnce();
-  const grid = document.querySelector("#listingsGrid");
-  if (grid) {
-    const mo = new MutationObserver(() => bindStaticButtonsOnce());
-    mo.observe(grid, { childList: true, subtree: true });
-  }
-});

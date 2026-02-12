@@ -1725,6 +1725,19 @@ async function collectLendersFromDOM() {
   });
 }
 
+// NEW: helper used by the Add Lender button
+function addLenderRow() {
+  state.lenders.push({
+    id: "",
+    name: "",
+    company: "",
+    email: "",
+    phone: "",
+    nmls: "",
+    offer: "",
+  });
+}
+
 function updateLenderSelectOptions() {
   const sel = document.querySelector(SELECTORS.fLenderSelect);
   if (!sel) return;

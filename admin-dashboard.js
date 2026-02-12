@@ -1164,8 +1164,26 @@ function ensureLenderId(l) {
 }
 
 async function loadLenders() {
-  t
+  try {
+    const r = await fetch(ENDPOINTS.lenders, { cache: "no-store" });
+    if (!r.ok) throw new Error(`lenders GET ${r.status}`);
+    const data = await r.json();
+    state.lenders = Array.isArray(data?.lenders)
+      ? data.lenders.map(ensureLenderId)
+      : [];
+    state.lendersRevision = data?.revision ?? null;
+    updateLendersMeta();
+    renderLendersList();
+    updateLenderSelectOptions();
+  } catch (e) {
+    console.error(e);
+    toast("Failed to load lenders", "error");
+    state.lenders = state.lenders || [];
+    renderLendersList();
+    updateLenderSelectOptions();
+  }
 }
+
 
 async function saveLenders() {
   try {

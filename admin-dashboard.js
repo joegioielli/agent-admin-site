@@ -990,10 +990,6 @@ async function saveFullEdit(slug) {
 
     primaryPhoto: v.photo,
     photo: v.photo,
-
-    preferredLenderId: v.lenderId || "",
-    preferredLender: v.lenderId || "",
-    preferredLenderOffer: v.lenderOffer || "",
   };
 
   const presentSources = [

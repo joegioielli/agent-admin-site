@@ -1035,9 +1035,6 @@ async function saveFullEdit(slug) {
     if (isHttpUrl(v.photo)) updated.photoUrl = v.photo;
     else if (!updated.photoUrl) updated.photoUrl = item?.photoUrl || "";
   }
-  updated.preferredLenderId = v.lenderId || updated.preferredLenderId || "";
-  updated.preferredLenderOffer =
-    v.lenderOffer || updated.preferredLenderOffer || "";
 
   state.items.set(slug, updated);
   state.overrides.set(slug, {

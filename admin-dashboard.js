@@ -1015,6 +1015,13 @@ async function saveFullEdit(slug) {
     throw new Error(`updateListing failed ${res.status} ${t}`);
   }
 
+  // NEW: per-property lender sync
+  try {
+    await upsertPerPropertyLender(listingId, v.lenderId, v.lenderOffer);
+  } catch (e) {
+    console.warn("Per-property lender sync failed", e);
+  }
+
   const saved = await res.json().catch(() => ({}));
   if (saved && saved.overrides) {
     state.overrides.set(slug, saved.overrides);
@@ -1074,6 +1081,7 @@ async function saveFullEdit(slug) {
   reflectSelectedLenderChip();
   toast("Listing saved");
 }
+
 
 /* ---- Per-property lender sync ---- */
 

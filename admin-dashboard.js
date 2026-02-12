@@ -1935,6 +1935,27 @@ async function openListingEditor(slug, S) {
         const j = await r.json().catch(() => ({}));
         if (j && typeof j.overrides === "object") overrides = j.overrides;
       }
+
+      // NEW: per‑property lender loader
+      try {
+        const lr = await fetch(
+          `${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`,
+          { cache: "no-store" }
+        );
+        if (lr.ok) {
+          const ldata = await lr.json().catch(() => ({}));
+          const lender = ldata.lender;
+          const offer = ldata.offer?.details || "";
+          const sel = document.querySelector(SELECTORS.fLenderSelect);
+          const offerEl = document.querySelector(SELECTORS.fLenderOffer);
+
+          // adjust this to whatever you store as lenderId (id, email, slug, etc.)
+          if (sel && lender?.id) sel.value = lender.id;
+          if (offerEl) offerEl.value = offer;
+        }
+      } catch (e2) {
+        console.warn("Per-property lender fetch failed", e2);
+      }
     }
   } catch (e) {
     console.warn("Overrides fetch skipped", e);

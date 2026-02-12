@@ -1120,10 +1120,10 @@ async function upsertPerPropertyLender(listingId, lenderId, offerStr) {
   }
 
   const body = {
-   revision: revision === null ? undefined : revision,
-   lender: lenderObj || undefined,
-   lenderId: lenderId || undefined,   // ← add this line
-   offer: hasAnything ? { details: String(offerStr || "") } : undefined,
+  revision: revision === null ? undefined : revision,
+  lender: lenderObj || undefined,
+  lenderId: lenderId || undefined,
+  offer: hasAnything ? { details: String(offerStr || "") } : undefined,
 };
 
   if (!hasAnything) {
@@ -1181,7 +1181,9 @@ async function saveLenders() {
       body: JSON.stringify(body),
     });
     if (!r.ok) {
-      const t = await r.tex// NEW: per‑property lender loader
+      const t = await r.tex
+      
+      // NEW: per‑property lender loader
 try {
   const lr = await fetch(
     `${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`,
@@ -1519,22 +1521,43 @@ async function openListingEditor(slug, S) {
   const det = S.details.get(slug);
 
   let overrides = S.overrides.get(slug) || {};
-  try {
-    const listingId = listingIdFrom(item, slug);
-    if (listingId) {
-      const r = await fetch(ENDPOINTS.update, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ listingId }),
-      });
-      if (r.ok) {
-        const j = await r.json().catch(() => ({}));
-        if (j && typeof j.overrides === "object") overrides = j.overrides;
-      }
+try {
+  const listingId = listingIdFrom(item, slug);
+  if (listingId) {
+    const r = await fetch(ENDPOINTS.update, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ listingId }),
+    });
+    if (r.ok) {
+      const j = await r.json().catch(() => ({}));
+      if (j && typeof j.overrides === "object") overrides = j.overrides;
     }
-  } catch (e) {
-    console.warn("Overrides fetch skipped", e);
+
+    // NEW: per‑property lender loader
+    try {
+      const lr = await fetch(
+        `${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`,
+        { cache: "no-store" }
+      );
+      if (lr.ok) {
+        const ldata = await lr.json().catch(() => ({}));
+        const lenderId = ldata.lenderId || "";
+        const offer = ldata.offer?.details || "";
+        const sel = document.querySelector(SELECTORS.fLenderSelect);
+        const offerEl = document.querySelector(SELECTORS.fLenderOffer);
+
+        if (sel && lenderId) sel.value = lenderId;
+        if (offerEl) offerEl.value = offer;
+      }
+    } catch (e2) {
+      console.warn("Per-property lender fetch failed", e2);
+    }
   }
+} catch (e) {
+  console.warn("Overrides fetch skipped", e);
+}
+
   state.overrides.set(slug, overrides);
 
   const flatDet = deepFlatten(det || {});

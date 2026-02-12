@@ -1380,6 +1380,70 @@ document.addEventListener("click", async (e) => {
   }
 });
 
+// Modal‑level buttons (save listing, save lenders, add lender, add field)
+document.addEventListener("click", async (e) => {
+  // Save listing modal
+  if (e.target.closest(SELECTORS.btnModalSave)) {
+    e.preventDefault();
+    const slug = state.currentSlug;
+    if (!slug) {
+      toast("No listing selected", "error");
+      return;
+    }
+    try {
+      await saveFullEdit(slug);
+      closeModal(SELECTORS.listingModal);
+    } catch (err) {
+      console.error(err);
+      toast("Save listing failed", "error");
+    }
+    return;
+  }
+
+  // Save lenders (button in lenders modal)
+  if (e.target.closest(SELECTORS.btnSaveLenders)) {
+    e.preventDefault();
+    await saveLenders();
+    return;
+  }
+
+  // Add lender row
+  if (e.target.closest(SELECTORS.btnAddLender)) {
+    e.preventDefault();
+    try {
+      await collectLendersFromDOM();   // preserve existing rows
+    } catch {}
+    addLenderRow();
+    renderLendersList();
+    updateLendersMeta();
+    updateLenderSelectOptions();
+    reflectSelectedLenderChip();
+    return;
+  }
+
+  // Add advanced field row
+  if (e.target.closest(SELECTORS.btnAddField)) {
+    e.preventDefault();
+    addAdvancedRow();
+    return;
+  }
+
+  // Close buttons in modals
+  if (
+    e.target.closest(SELECTORS.closeListingX) ||
+    e.target.closest(SELECTORS.btnModalCancel)
+  ) {
+    e.preventDefault();
+    closeModal(SELECTORS.listingModal);
+    return;
+  }
+  if (e.target.closest(SELECTORS.closeLendersX)) {
+    e.preventDefault();
+    closeModal(SELECTORS.lendersModal);
+    return;
+  }
+});
+
 /* DELETE LISTING */
 
 document.addEventListener("click", async (e) => {

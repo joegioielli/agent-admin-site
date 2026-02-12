@@ -1120,10 +1120,11 @@ async function upsertPerPropertyLender(listingId, lenderId, offerStr) {
   }
 
   const body = {
-    revision: revision === null ? undefined : revision,
-    lender: lenderObj || undefined,
-    offer: hasAnything ? { details: String(offerStr || "") } : undefined,
-  };
+   revision: revision === null ? undefined : revision,
+   lender: lenderObj || undefined,
+   lenderId: lenderId || undefined,   // ← add this line
+   offer: hasAnything ? { details: String(offerStr || "") } : undefined,
+};
 
   if (!hasAnything) {
     body.lender = null;
@@ -1163,24 +1164,7 @@ function ensureLenderId(l) {
 }
 
 async function loadLenders() {
-  try {
-    const r = await fetch(ENDPOINTS.lenders, { cache: "no-store" });
-    if (!r.ok) throw new Error(`lenders GET ${r.status}`);
-    const data = await r.json();
-    state.lenders = Array.isArray(data?.lenders)
-      ? data.lenders.map(ensureLenderId)
-      : [];
-    state.lendersRevision = data?.revision ?? null;
-    updateLendersMeta();
-    renderLendersList();
-    updateLenderSelectOptions();
-  } catch (e) {
-    console.error(e);
-    toast("Failed to load lenders", "error");
-    state.lenders = state.lenders || [];
-    renderLendersList();
-    updateLenderSelectOptions();
-  }
+  t
 }
 
 async function saveLenders() {
@@ -1197,7 +1181,26 @@ async function saveLenders() {
       body: JSON.stringify(body),
     });
     if (!r.ok) {
-      const t = await r.text().catch(() => "");
+      const t = await r.tex// NEW: per‑property lender loader
+try {
+  const lr = await fetch(
+    `${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`,
+    { cache: "no-store" }
+  );
+  if (lr.ok) {
+    const ldata = await lr.json().catch(() => ({}));
+    const lenderId = ldata.lenderId || "";
+    const offer = ldata.offer?.details || "";
+    const sel = document.querySelector(SELECTORS.fLenderSelect);
+    const offerEl = document.querySelector(SELECTORS.fLenderOffer);
+
+    if (sel && lenderId) sel.value = lenderId;
+    if (offerEl) offerEl.value = offer;
+  }
+} catch (e2) {
+  console.warn("Per-property lender fetch failed", e2);
+}
+t().catch(() => "");
       throw new Error(`lenders PUT ${r.status} ${t}`);
     }
     const data = await r.json().catch(() => ({}));

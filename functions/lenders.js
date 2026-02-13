@@ -49,6 +49,7 @@ function readJSON(event) {
 /**
  * Accepts:
  *  {
+ *    lenderId?: string,
  *    lender?: { name, phone?, nmls?, email?, link? },
  *    offer?:  string | { title?, details?, expiresOn? },
  *    revision?: string
@@ -93,7 +94,12 @@ function validatePerPropertyPayload(payload) {
   }
 
   const revision = payload.revision ? String(payload.revision) : null;
-  return { ok: true, lender, offer, revision };
+  const lenderId =
+    payload.lenderId && typeof payload.lenderId === 'string'
+      ? payload.lenderId
+      : null;
+
+  return { ok: true, lender, offer, revision, lenderId };
 }
 
 /* ------------------------ Handler ------------------------ */
@@ -135,6 +141,7 @@ const handler = async (event) => {
         // Per-listing doc
         return json({
           propertyId,
+          lenderId: data?.lenderId || null,
           lender: data?.lender || null,
           offer: data?.offer || null,
           updatedAt: data?.updatedAt || null,
@@ -194,6 +201,8 @@ const handler = async (event) => {
 
     const key = `${propertyId}.json`;
     const payload = {
+      propertyId,
+      lenderId: parsed.lenderId || null,
       lender: parsed.lender ?? null,
       offer: parsed.offer ?? null,
       updatedAt: new Date().toISOString(),

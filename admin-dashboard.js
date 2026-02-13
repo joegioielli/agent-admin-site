@@ -1961,26 +1961,34 @@ async function openListingEditor(slug, S) {
         if (j && typeof j.overrides === "object") overrides = j.overrides;
       }
 
-      // NEW: per‑property lender loader
-      try {
-        const lr = await fetch(
-          `${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`,
-          { cache: "no-store" }
-        );
-        if (lr.ok) {
-          const ldata = await lr.json().catch(() => ({}));
-          const lender = ldata.lender;
-          const offer = ldata.offer?.details || "";
-          const sel = document.querySelector(SELECTORS.fLenderSelect);
-          const offerEl = document.querySelector(SELECTORS.fLenderOffer);
+      // NEW per-property lender loader
+try {
+  const lr = await fetch(
+    `${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`,
+    { cache: "no-store" }
+  );
+  if (lr.ok) {
+    const ldata = await lr.json().catch(() => null);
 
-          // adjust this to whatever you store as lenderId (id, email, slug, etc.)
-          if (sel && lender?.id) sel.value = lender.id;
-          if (offerEl) offerEl.value = offer;
-        }
-      } catch (e2) {
-        console.warn("Per-property lender fetch failed", e2);
-      }
+    const lenderId = ldata?.lenderId || null;
+    const offer = ldata?.offer?.details || "";
+    const sel = document.querySelector(SELECTORS.fLenderSelect);
+    const offerEl = document.querySelector(SELECTORS.fLenderOffer);
+
+    if (sel && lenderId) {
+      sel.value = lenderId;
+    }
+    if (offerEl) {
+      offerEl.value = offer || "";
+    }
+
+    // keep UI chip in sync with the select
+    reflectSelectedLenderChip();
+  }
+} catch (e2) {
+  console.warn("Per-property lender fetch failed", e2);
+}
+
     }
   } catch (e) {
     console.warn("Overrides fetch skipped", e);

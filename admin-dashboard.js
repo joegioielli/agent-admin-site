@@ -1184,7 +1184,6 @@ async function loadLenders() {
   }
 }
 
-
 async function saveLenders() {
   try {
     await collectLendersFromDOM();
@@ -1199,28 +1198,7 @@ async function saveLenders() {
       body: JSON.stringify(body),
     });
     if (!r.ok) {
-      const t = await r.tex
-      
-      // NEW: per‑property lender loader
-try {
-  const lr = await fetch(
-    `${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`,
-    { cache: "no-store" }
-  );
-  if (lr.ok) {
-    const ldata = await lr.json().catch(() => ({}));
-    const lenderId = ldata.lenderId || "";
-    const offer = ldata.offer?.details || "";
-    const sel = document.querySelector(SELECTORS.fLenderSelect);
-    const offerEl = document.querySelector(SELECTORS.fLenderOffer);
-
-    if (sel && lenderId) sel.value = lenderId;
-    if (offerEl) offerEl.value = offer;
-  }
-} catch (e2) {
-  console.warn("Per-property lender fetch failed", e2);
-}
-t().catch(() => "");
+      const t = await r.text().catch(() => "");
       throw new Error(`lenders PUT ${r.status} ${t}`);
     }
     const data = await r.json().catch(() => ({}));
@@ -1234,6 +1212,7 @@ t().catch(() => "");
     toast("Save lenders failed", "error");
   }
 }
+
 
 /* ---------------- Rendering cards ---------------- */
 

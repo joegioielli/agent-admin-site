@@ -1533,20 +1533,29 @@ try {
 
     // NEW per-property lender loader
 try {
-  const lr = await fetch(
-    ENDPOINTS.lenders + '?propertyId=' + encodeURIComponent(listingId),
-    { cache: 'no-store' }
-  );
-  if (lr.ok) {
-    const ldata = await lr.json().catch(() => null);
+  const listingId = listingIdFrom(item, slug);
+  if (listingId) {
+    const lr = await fetch(
+      `${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`,
+      { cache: 'no-store' }
+    );
+    if (lr.ok) {
+      const ldata = await lr.json().catch(() => null);
 
-    const lenderId = ldata?.lenderId || null;
-    const offer = ldata?.offer?.details || '';
-    const sel = document.querySelector(SELECTORS.fLenderSelect);
-    const offerEl = document.querySelector(SELECTORS.fLenderOffer);
+      const lenderId = ldata?.lenderId || null;
+      const offer = ldata?.offer?.details || '';
+      const sel = document.querySelector(SELECTORS.fLenderSelect);
+      const offerEl = document.querySelector(SELECTORS.fLenderOffer);
 
-    if (sel && lenderId) sel.value = lenderId;
-    if (offerEl) offerEl.value = offer || '';
+      // Always reset to "None" for this listing first
+      if (sel) sel.value = '';
+
+      // Only apply a lender if this listing actually has one
+      if (sel && lenderId) sel.value = lenderId;
+      if (offerEl) offerEl.value = offer || '';
+
+      reflectSelectedLenderChip();
+    }
   }
 } catch (e2) {
   console.warn('Per-property lender fetch failed', e2);

@@ -2,6 +2,7 @@
 // cards • editor • lenders • Advanced Fields • per-listing lender offer
 // KEYLESS Deterministic alias strategy (Bedrooms - TotalBedrooms, Sq Ft - SqFtTotal)
 // stop writing bedrooms / squareFeet
+// ✅ NO OVERRIDES: writes ONLY details.json via updateListing { details, replaceDetails:true }
 
 const TZ = "America/Chicago";
 
@@ -77,9 +78,8 @@ const SELECTORS = {
 };
 
 const state = {
-  items: new Map(),      // slug -> listing object (cards)
-  details: new Map(),    // slug -> details.json
-  overrides: new Map(),  // slug -> overrides.json
+  items: new Map(),   // slug -> listing object (cards)
+  details: new Map(), // slug -> details.json
   currentSlug: null,
   lenders: [],
   lendersRevision: null,
@@ -167,12 +167,14 @@ function dateAtMidnightTZ(y, m, d, tz = TZ) {
     minute: "2-digit",
     second: "2-digit",
   }).formatToParts(approx);
+
   const yy = parts.find((p) => p.type === "year")?.value;
   const mm = parts.find((p) => p.type === "month")?.value;
   const dd = parts.find((p) => p.type === "day")?.value;
   const hh = parts.find((p) => p.type === "hour")?.value;
   const mi = parts.find((p) => p.type === "minute")?.value;
   const ss = parts.find((p) => p.type === "second")?.value;
+
   const tzRenderedAsUTC = Date.UTC(
     Number(yy),
     Number(mm) - 1,
@@ -229,11 +231,8 @@ function ymdToISO(y, m, d) {
 function setValue(sel, val) {
   const el = document.querySelector(sel);
   if (!el) return;
-  if (["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) {
-    el.value = val ?? "";
-  } else {
-    el.textContent = val ?? "";
-  }
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) el.value = val ?? "";
+  else el.textContent = val ?? "";
 }
 
 function escapeHtml(s) {
@@ -318,9 +317,7 @@ function pickSmart(objList, aliasKeys, fuzzyGroup = null, numeric = false) {
   for (const src of objList) {
     for (const k of aliasKeys) {
       const v = src?.[k];
-      if (v != null && String(v).trim() !== "") {
-        return numeric ? numberFrom(v) : v;
-      }
+      if (v != null && String(v).trim() !== "") return numeric ? numberFrom(v) : v;
     }
   }
 
@@ -329,9 +326,7 @@ function pickSmart(objList, aliasKeys, fuzzyGroup = null, numeric = false) {
     for (const f of flats) {
       for (const [k, v] of Object.entries(f)) {
         if (FUZZY[fuzzyGroup].some((rx) => rx.test(k))) {
-          if (v != null && String(v).trim() !== "") {
-            return numeric ? numberFrom(v) : v;
-          }
+          if (v != null && String(v).trim() !== "") return numeric ? numberFrom(v) : v;
         }
       }
     }
@@ -354,9 +349,7 @@ function pickSmart(objList, aliasKeys, fuzzyGroup = null, numeric = false) {
 /* ---- Photo preview helper ---- */
 
 function previewUrlFrom(photoKeyOrUrl, item) {
-  if (typeof photoKeyOrUrl === "string" && /^https?:\/\//i.test(photoKeyOrUrl)) {
-    return photoKeyOrUrl;
-  }
+  if (typeof photoKeyOrUrl === "string" && /^https?:\/\//i.test(photoKeyOrUrl)) return photoKeyOrUrl;
   if (item && typeof item.photoUrl === "string") return item.photoUrl;
   return null;
 }
@@ -422,8 +415,7 @@ async function saveActiveDate(slug, isoDate) {
     if (domEl) domEl.textContent = String(dom);
   }
 }
-
-/* ---------------- Advanced fields (unchanged from your logic) ---------------- */
+/* ---------------- Advanced fields (unchanged logic, but NO details.* saved) ---------------- */
 
 const CANON_HIDE = new Set([
   "mls","listingid","address","streetaddress","city","state","province","zip","zipcode","postalcode",
@@ -509,15 +501,11 @@ function pickBestAliasValueForGroup(obj, group) {
   const pri = GROUP_ALIAS_PRIORITY[group];
   if (pri) {
     for (const k of pri) {
-      if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== "") {
-        return obj[k];
-      }
+      if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== "") return obj[k];
     }
   }
   for (const [k, v] of Object.entries(obj)) {
-    if (keyBelongsToGroup(k, group) && v != null && String(v).trim() !== "") {
-      return v;
-    }
+    if (keyBelongsToGroup(k, group) && v != null && String(v).trim() !== "") return v;
   }
   return undefined;
 }
@@ -531,7 +519,7 @@ function adoptCoreFromExtras(coreValues, extras) {
     const cand = pickBestAliasValueForGroup(extras, g);
     if (cand === undefined) continue;
 
-    // ✅ Form wins: only fill if the form/core value is currently blank
+    // Form wins: only fill if the form/core value is currently blank
     if (!isBlank(coreValues[g])) continue;
 
     if (["price", "beds", "baths", "sqft", "year", "zip"].includes(g)) {
@@ -547,7 +535,7 @@ function mirrorAliasesIntoExtras(extras, coreValues, presentSources) {
   const presentFlat = Object.assign({}, ...presentSources.map((o) => deepFlatten(o || {})), extras);
 
   for (const [k] of Object.entries(presentFlat)) {
-    if (String(k).startsWith("details.")) continue; // ✅ skip details.* keys
+    if (String(k).startsWith("details.")) continue;
 
     for (const g of Object.keys(GROUP_CANON)) {
       if (!keyBelongsToGroup(k, g)) continue;
@@ -559,6 +547,7 @@ function mirrorAliasesIntoExtras(extras, coreValues, presentSources) {
     }
   }
 
+  // deterministic canonical aliases
   if (coreValues.beds !== undefined) {
     extras.TotalBedrooms = coreValues.beds;
     delete extras.bedrooms;
@@ -568,7 +557,6 @@ function mirrorAliasesIntoExtras(extras, coreValues, presentSources) {
     delete extras.squareFeet;
   }
 }
-
 
 function stripDetailsPrefix(key) {
   return String(key).startsWith("details.") ? key.slice("details.".length) : key;
@@ -670,10 +658,12 @@ function collectAdvancedFieldsToObject() {
   if (!list) return {};
   const obj = {};
   list.querySelectorAll(".adv-row").forEach((r) => {
-    let k = r.querySelector(".adv-key")?.value?.trim();
+    const k = r.querySelector(".adv-key")?.value?.trim();
     const v = r.querySelector(".adv-val")?.value?.trim();
     if (!k) return;
-    if (k.startsWith("details.")) return; // ✅ do not allow details.* to be saved into overrides
+
+    // ✅ never save details.* keys
+    if (k.startsWith("details.")) return;
 
     if (!v) { obj[k] = ""; return; }
 
@@ -688,21 +678,22 @@ function collectAdvancedFieldsToObject() {
   return obj;
 }
 
-/* --------- Two-way sync helpers --------- */
+/* --------- Form collector --------- */
 
 function collectFormValues() {
   const get = (sel) => document.querySelector(sel)?.value ?? "";
 
   const price = toNumberOrNull(get(SELECTORS.fPrice));
-  const beds = toNumberOrNull(get(SELECTORS.fBeds));
+  const beds  = toNumberOrNull(get(SELECTORS.fBeds));
   const baths = toNumberOrNull(get(SELECTORS.fBaths));
-  const sqft = toNumberOrNull(get(SELECTORS.fSqft));
-  const year = toNumberOrNull(get(SELECTORS.fYear));
+  const sqft  = toNumberOrNull(get(SELECTORS.fSqft));
+  const year  = toNumberOrNull(get(SELECTORS.fYear));
+
   const status = get(SELECTORS.fStatus) || "";
-  const desc = get(SELECTORS.fDesc) || "";
-  const notes = get(SELECTORS.fNotes) || "";
-  const photo = get(SELECTORS.fPhoto) || "";
-  const tz = get(SELECTORS.fTimezone) || TZ;
+  const desc   = get(SELECTORS.fDesc) || "";
+  const notes  = get(SELECTORS.fNotes) || "";
+  const photo  = get(SELECTORS.fPhoto) || "";
+  const tz     = get(SELECTORS.fTimezone) || TZ;
 
   const lenderId = get(SELECTORS.fLenderSelect) || "";
   const lenderOfferEl = document.querySelector(SELECTORS.fLenderOffer);
@@ -713,10 +704,10 @@ function collectFormValues() {
   const activeDate = adYMD ? ymdToISO(adYMD.y, adYMD.m, adYMD.d) : "";
 
   const address = get(SELECTORS.fAddress) || "";
-  const city = get(SELECTORS.fCity) || "";
-  const stateV = get(SELECTORS.fState) || "";
-  const zip = get(SELECTORS.fZip) || "";
-  const mls = get(SELECTORS.fMLS) || "";
+  const city    = get(SELECTORS.fCity) || "";
+  const stateV  = get(SELECTORS.fState) || "";
+  const zip     = get(SELECTORS.fZip) || "";
+  const mls     = get(SELECTORS.fMLS) || "";
 
   return {
     mls,
@@ -739,8 +730,7 @@ function collectFormValues() {
     activeDate,
   };
 }
-
-/* ---------------- Full editor save ---------------- */
+/* ---------------- Full editor save (DETAILS ONLY) ---------------- */
 
 async function saveFullEdit(slug) {
   const item = state.items.get(slug);
@@ -749,26 +739,43 @@ async function saveFullEdit(slug) {
 
   const v = collectFormValues();
   const extras = collectAdvancedFieldsToObject();
+
+  // fill blank core values from extras if needed
   adoptCoreFromExtras(v, extras);
 
-  const overridesBase = {
+  const presentSources = [
+    state.details.get(slug) || {},
+    item || {},
+  ];
+
+  // mirror canonical values into existing alias keys in extras
+  mirrorAliasesIntoExtras(extras, v, presentSources);
+
+  // hard-block problem keys
+  delete extras.bedrooms;
+  delete extras.squareFeet;
+  for (const k of Object.keys(extras)) {
+    if (k.startsWith("details.")) delete extras[k];
+  }
+
+  // ✅ DETAILS PATCH (what gets saved to details.json)
+  const detailsPatch = {
+    ...extras,
+
     address: v.address,
     city: v.city,
     state: v.state,
     zip: v.zip,
+
     listPrice: v.price,
     price: v.price,
 
     TotalBedrooms: v.beds,
-    beds: v.beds,
-
     totalBaths: v.baths,
-    baths: v.baths,
 
     SqFtTotal: v.sqft,
-    sqft: v.sqft,
-
     yearBuilt: v.year,
+
     status: v.status,
     activeDate: v.activeDate,
     timezone: v.timezone,
@@ -781,44 +788,22 @@ async function saveFullEdit(slug) {
     photo: v.photo,
   };
 
-  const presentSources = [
-    state.details.get(slug) || {},
-    state.overrides.get(slug) || {},
-    item || {},
-  ];
-  mirrorAliasesIntoExtras(extras, v, presentSources);
-
-  delete extras.bedrooms;
-  delete extras.squareFeet;
-
-  for (const k of Object.keys(extras)) {
-   if (k.startsWith("details.")) delete extras[k];
-  }
- 
-  const overrides = { ...extras, ...overridesBase };
-
-  console.log("==== SAVE DEBUG ====");
-console.log("Slug:", listingId);
-
-const keys = Object.keys(overrides);
-console.log("Total override keys:", keys.length);
-
-console.log("Has details.* keys:",
-  keys.some(k => k.startsWith("details."))
-);
-
-console.log("Has bedrooms key:", keys.includes("bedrooms"));
-console.log("Has squareFeet key:", keys.includes("squareFeet"));
-
-console.log("Override keys list:", keys);
-console.log("Full overrides object:", overrides);
-console.log("====================");
-
+  // Debug (safe + consistent)
+  console.log("==== SAVE DEBUG (DETAILS) ====");
+  console.log("Slug/listingId:", listingId);
+  const keys = Object.keys(detailsPatch);
+  console.log("Total keys:", keys.length);
+  console.log("Has details.* keys:", keys.some((k) => k.startsWith("details.")));
+  console.log("Has bedrooms key:", keys.includes("bedrooms"));
+  console.log("Has squareFeet key:", keys.includes("squareFeet"));
+  console.log("Keys:", keys);
+  console.log("detailsPatch:", detailsPatch);
+  console.log("==============================");
 
   const res = await callUpdate({
     slug: String(listingId),
-    overrides,
-    replace: true,
+    details: detailsPatch,
+    replaceDetails: true,
   });
 
   if (!res.ok) {
@@ -834,12 +819,21 @@ console.log("====================");
   }
 
   const saved = await res.json().catch(() => ({}));
-  if (saved?.overrides) state.overrides.set(slug, saved.overrides);
 
+  // Keep details cache in sync
+  if (saved?.details && typeof saved.details === "object") {
+    state.details.set(slug, saved.details);
+  } else {
+    // fallback: merge what we *think* we saved
+    state.details.set(slug, { ...(state.details.get(slug) || {}), ...detailsPatch });
+  }
+
+  // Update local card item cache
   const updated = { ...(item || {}) };
   if (v.address) updated.address = v.address;
   if (v.price != null) updated.price = v.price;
   if (v.activeDate !== undefined) updated.activeDate = v.activeDate;
+  if (v.timezone) updated.timezone = v.timezone;
 
   if (v.photo) {
     if (isHttpUrl(v.photo)) updated.photoUrl = v.photo;
@@ -847,7 +841,6 @@ console.log("====================");
   }
 
   state.items.set(slug, updated);
-  state.overrides.set(slug, { ...(state.overrides.get(slug) || {}), ...overrides });
 
   // Update card UI
   const card = document.querySelector(`[data-slug="${CSS.escape(slug)}"]`);
@@ -858,11 +851,7 @@ console.log("====================");
     const priceEl = card.querySelector(".price");
     if (priceEl && v.price != null) {
       priceEl.textContent = v.price
-        ? new Intl.NumberFormat("en-US", {
-            style: "currency",
-            currency: "USD",
-            maximumFractionDigits: 0,
-          }).format(v.price)
+        ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(v.price)
         : "";
     }
 
@@ -935,7 +924,7 @@ async function upsertPerPropertyLender(listingId, lenderId, offerStr) {
   }
 }
 
-/* ---- Lenders UI helpers ---- */
+/* ---- Lenders UI helpers (unchanged) ---- */
 
 function genLenderId(seed) {
   const base = seed.trim().toLowerCase().replace(/[^\w]+/g, "-").replace(/--+/g, "-");
@@ -1087,11 +1076,8 @@ function updateLenderSelectOptions() {
       })
       .join("");
 
-  if (current && Array.from(sel.options).some((o) => o.value === current)) {
-    sel.value = current;
-  } else {
-    sel.value = "";
-  }
+  if (current && Array.from(sel.options).some((o) => o.value === current)) sel.value = current;
+  else sel.value = "";
 }
 
 function reflectSelectedLenderChip() {
@@ -1204,7 +1190,7 @@ function updateAllDom() {
   document.querySelectorAll(SELECTORS.card).forEach(updateDomForCard);
 }
 
-/* ---- Populate Edit Listing (ONLY ONE) ---- */
+/* ---- Populate Edit Listing (DETAILS ONLY) ---- */
 
 async function openListingEditor(slug, S) {
   const item = S.items.get(slug);
@@ -1229,27 +1215,7 @@ async function openListingEditor(slug, S) {
       S.details.set(slug, {});
     }
   }
-  const det = S.details.get(slug);
-
-  // overrides
-  let overrides = S.overrides.get(slug) || {};
-  try {
-    const listingId = listingIdFrom(item, slug);
-    if (listingId) {
-      const r = await fetch(ENDPOINTS.update, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ listingId }),
-      });
-      if (r.ok) {
-        const j = await r.json().catch(() => ({}));
-        if (j && typeof j.overrides === "object") overrides = j.overrides;
-      }
-    }
-  } catch (e) {
-    console.warn("Overrides fetch skipped", e);
-  }
-  state.overrides.set(slug, overrides);
+  const det = S.details.get(slug) || {};
 
   // ✅ Per-property lender loader (RESET FIRST — prevents carrying last listing)
   try {
@@ -1272,13 +1238,10 @@ async function openListingEditor(slug, S) {
 
         updateLenderSelectOptions();
 
-        if (sel && lenderId && Array.from(sel.options).some(o => o.value === lenderId)) {
-          sel.value = lenderId;
-        } else if (sel) {
-          sel.value = "";
-        }
-        if (offerEl) offerEl.value = offer;
+        if (sel && lenderId && Array.from(sel.options).some(o => o.value === lenderId)) sel.value = lenderId;
+        else if (sel) sel.value = "";
 
+        if (offerEl) offerEl.value = offer;
         reflectSelectedLenderChip();
       }
     }
@@ -1287,20 +1250,20 @@ async function openListingEditor(slug, S) {
   }
 
   const flatDet = deepFlatten(det || {});
-  const src = [overrides, det, flatDet, item];
+  const src = [det, flatDet, item];
 
   // fill form
-  setValue(SELECTORS.fMLS, pickSmart(src, ALIASES.mls, "mls") || "");
+  setValue(SELECTORS.fMLS,     pickSmart(src, ALIASES.mls, "mls") || "");
   setValue(SELECTORS.fAddress, pickSmart(src, ALIASES.address, "address") || "");
-  setValue(SELECTORS.fCity, pickSmart(src, ALIASES.city, "city") || "");
-  setValue(SELECTORS.fState, pickSmart(src, ALIASES.state, "state") || "");
-  setValue(SELECTORS.fZip, pickSmart(src, ALIASES.zip, "zip", false) || "");
+  setValue(SELECTORS.fCity,    pickSmart(src, ALIASES.city, "city") || "");
+  setValue(SELECTORS.fState,   pickSmart(src, ALIASES.state, "state") || "");
+  setValue(SELECTORS.fZip,     pickSmart(src, ALIASES.zip, "zip", false) || "");
 
   setValue(SELECTORS.fPrice, pickSmart(src, ALIASES.price, "price", true) ?? "");
-  setValue(SELECTORS.fBeds, pickSmart(src, ALIASES.beds, "beds", true) ?? "");
+  setValue(SELECTORS.fBeds,  pickSmart(src, ALIASES.beds, "beds", true) ?? "");
   setValue(SELECTORS.fBaths, pickSmart(src, ALIASES.baths, "baths", true) ?? "");
-  setValue(SELECTORS.fSqft, pickSmart(src, ALIASES.sqft, "sqft", true) ?? "");
-  setValue(SELECTORS.fYear, pickSmart(src, ALIASES.year, "year", true) ?? "");
+  setValue(SELECTORS.fSqft,  pickSmart(src, ALIASES.sqft, "sqft", true) ?? "");
+  setValue(SELECTORS.fYear,  pickSmart(src, ALIASES.year, "year", true) ?? "");
 
   setValue(SELECTORS.fStatus, pickSmart(src, ALIASES.status, "status") || "");
 
@@ -1311,7 +1274,7 @@ async function openListingEditor(slug, S) {
   const tz = pickSmart(src, ALIASES.timezone, "timezone") || item.timezone || TZ;
   setValue(SELECTORS.fTimezone, tz);
 
-  setValue(SELECTORS.fDesc, pickSmart(src, ALIASES.desc, "desc") || "");
+  setValue(SELECTORS.fDesc,  pickSmart(src, ALIASES.desc, "desc") || "");
   setValue(SELECTORS.fNotes, pickSmart(src, ALIASES.notes, "notes") || "");
 
   const photo = pickSmart(src, ALIASES.photo, "photo");
@@ -1344,7 +1307,7 @@ async function openListingEditor(slug, S) {
     }
   }
 
-  renderAdvancedFieldsFromSource([overrides, det, item]);
+  renderAdvancedFieldsFromSource([det, item]);
 }
 
 /* ---------------- ONE set of events ---------------- */
@@ -1389,24 +1352,16 @@ document.addEventListener("click", async (e) => {
 
   // Edit Lenders (top button)
   if (e.target.closest(SELECTORS.btnEditLenders)) {
-    try {
-      if (!state.lenders || state.lenders.length === 0) await loadLenders();
-    } catch (e2) {
-      console.warn(e2);
-      toast("Failed to load lenders", "error");
-    }
+    try { if (!state.lenders || state.lenders.length === 0) await loadLenders(); }
+    catch (e2) { console.warn(e2); toast("Failed to load lenders", "error"); }
     openModal(SELECTORS.lendersModal);
     return;
   }
 
-  // Manage lenders inline (inside listing modal)
+  // Manage lenders inline
   if (e.target.closest(SELECTORS.btnManageLendersInline)) {
-    try {
-      if (!state.lenders || state.lenders.length === 0) await loadLenders();
-    } catch (e2) {
-      console.warn(e2);
-      toast("Failed to load lenders", "error");
-    }
+    try { if (!state.lenders || state.lenders.length === 0) await loadLenders(); }
+    catch (e2) { console.warn(e2); toast("Failed to load lenders", "error"); }
     openModal(SELECTORS.lendersModal);
     return;
   }
@@ -1473,10 +1428,11 @@ document.addEventListener("click", async (e) => {
     if (!confirm(`Delete "${slug}" permanently?`)) return;
 
     try {
+      const listingId = listingIdFrom(state.items.get(slug), slug);
       const res = await fetch(ENDPOINTS.update, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug, delete: true }),
+        body: JSON.stringify({ slug: String(listingId || slug), delete: true }),
       });
 
       if (!res.ok) {
@@ -1486,6 +1442,7 @@ document.addEventListener("click", async (e) => {
 
       toast("✅ Deleted");
       state.items.delete(slug);
+      state.details.delete(slug);
       document.querySelector(`[data-slug="${CSS.escape(slug)}"]`)?.remove();
       closeModal(SELECTORS.listingModal);
     } catch (e2) {
@@ -1498,9 +1455,7 @@ document.addEventListener("click", async (e) => {
 
 // Keep chip in sync when you change dropdown manually
 document.addEventListener("change", (e) => {
-  if (e.target?.matches?.(SELECTORS.fLenderSelect)) {
-    reflectSelectedLenderChip();
-  }
+  if (e.target?.matches?.(SELECTORS.fLenderSelect)) reflectSelectedLenderChip();
 });
 
 /* ---------------- Init ---------------- */

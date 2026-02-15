@@ -797,6 +797,24 @@ async function saveFullEdit(slug) {
  
   const overrides = { ...extras, ...overridesBase };
 
+  console.log("==== SAVE DEBUG ====");
+console.log("Slug:", listingId);
+
+const keys = Object.keys(overrides);
+console.log("Total override keys:", keys.length);
+
+console.log("Has details.* keys:",
+  keys.some(k => k.startsWith("details."))
+);
+
+console.log("Has bedrooms key:", keys.includes("bedrooms"));
+console.log("Has squareFeet key:", keys.includes("squareFeet"));
+
+console.log("Override keys list:", keys);
+console.log("Full overrides object:", overrides);
+console.log("====================");
+
+
   const res = await callUpdate({
     slug: String(listingId),
     overrides,

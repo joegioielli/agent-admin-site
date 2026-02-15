@@ -5,17 +5,14 @@ import {
   PutObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
-  DeleteObjectCommand, 
-  ListObjectsV2Command
+  DeleteObjectCommand,
+  ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { domInZone } from "./domInZone.js";
 
-
-
 /* -------------------- ENV / S3 CLIENT -------------------- */
-const REGION =
-  process.env.MY_AWS_REGION || process.env.AWS_REGION || "us-east-2";
+const REGION = process.env.MY_AWS_REGION || process.env.AWS_REGION || "us-east-2";
 
 const BUCKET =
   process.env.SMARTSIGNS_BUCKET ||
@@ -28,8 +25,7 @@ const SIGN_EXPIRES = 900; // 15 min presign
 const s3 = new S3Client({
   region: REGION,
   credentials: {
-    accessKeyId:
-      process.env.MY_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID,
+    accessKeyId: process.env.MY_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey:
       process.env.MY_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY,
   },
@@ -52,11 +48,13 @@ async function headExists(Key) {
     return false;
   }
 }
+
 async function getJson(Key) {
   if (!(await headExists(Key))) return {};
   const o = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key }));
   return JSON.parse(await streamToString(o.Body));
 }
+
 async function putJson(Key, obj) {
   await s3.send(
     new PutObjectCommand({
@@ -67,7 +65,8 @@ async function putJson(Key, obj) {
     })
   );
 }
-async function deleteJson(Key) {  // ← NEW DELETE HELPER
+
+async function deleteJson(Key) {
   console.log("🗑️ DELETING S3:", Key);
   await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key }));
   console.log("✅ DELETED S3:", Key);
@@ -99,6 +98,7 @@ function parseActiveYMD(s) {
   if (isNaN(ad)) return null;
   return { y: ad.getFullYear(), m: ad.getMonth() + 1, d: ad.getDate() };
 }
+
 function normalizeActiveDateISO(s) {
   const ymd = parseActiveYMD(s);
   if (!ymd) return null;
@@ -108,146 +108,81 @@ function normalizeActiveDateISO(s) {
   return `${y}-${m}-${d}`;
 }
 
-function pickActiveDateAlias(obj) {
-  if (!obj || typeof obj !== "object") return null;
-  const keys = [
-    "activeDate",
-    "ActiveDate",
-    "listActiveDate",
-    "ListActiveDate",
-    "dateActive",
-    "DateActive",
-    "listingDate",
-    "ListingDate",
-    "DateListed",
-    "date_listed",
-  ];
-  for (const k of keys) {
-    const v = obj[k];
-    if (v !== undefined && v !== null && String(v).trim?.() !== "") {
-      return { key: k, value: v };
-    }
-  }
-  return null;
-}
-
-function applyActiveDateNormalization(next, incomingCandidate) {
-  const found = pickActiveDateAlias(incomingCandidate);
-  if (!found) return { iso: null };
-
-  const iso = normalizeActiveDateISO(found.value);
-  if (!iso) return { iso: null };
-
-  next.activeDate = iso;
-
-  const aliases = [
-    "ActiveDate",
-    "listActiveDate",
-    "ListActiveDate",
-    "dateActive",
-    "DateActive",
-    "listingDate",
-    "ListingDate",
-    "DateListed",
-    "date_listed",
-  ];
-  for (const a of aliases) delete next[a];
-
-  if ("daysOnMarket" in next) delete next.daysOnMarket;
-
-  return { iso };
-}
-
 /* -------------------- BODY SHAPE NORMALIZATION (back-compat) -------------------- */
 function extractIdentifier(body) {
   return String(body.listingId || body.slug || body.id || "").trim();
 }
-function extractUpdates(body) {
-  const u = { ...(body.overrides || {}), ...(body.updates || {}) };
 
-  if (body.activeDate != null && u.activeDate == null) u.activeDate = body.activeDate;
-  if (body.timezone != null && u.timezone == null) u.timezone = body.timezone;
+/**
+ * Convert legacy body shapes into a single "details patch".
+ *
+ * Supported inputs:
+ * - body.details (preferred new)
+ * - body.detailsPatch (legacy-ish)
+ * - body.updates (legacy)
+ * - body.overrides (legacy)  <-- treated as details patch (NOT saved separately)
+ * - body.activeDate / body.timezone (legacy)
+ *
+ * Flags:
+ * - body.replaceDetails === true -> replace the whole details file with provided details object
+ * - body.replace === true with body.overrides -> treat as replaceDetails (legacy mapping)
+ */
+function extractDetailsIntent(body) {
+  const replaceDetails =
+    body.replaceDetails === true ||
+    (body.replace === true && body.overrides && typeof body.overrides === "object");
 
-  if ("daysOnMarket" in u) delete u.daysOnMarket;
-  if ("daysOnMarket" in body) delete body.daysOnMarket;
+  // Prefer explicit "details"
+  if (body.details && typeof body.details === "object") {
+    return { patch: body.details, replaceDetails };
+  }
 
-  return u;
-}
+  // Back-compat: "detailsPatch"
+  if (body.detailsPatch && typeof body.detailsPatch === "object") {
+    return { patch: body.detailsPatch, replaceDetails: false };
+  }
 
-/* -------------------- CORS -------------------- */
-function cors() {
-  return {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, x-admin-key",
+  // Legacy: overrides + updates merged
+  const patch = {
+    ...(body.overrides && typeof body.overrides === "object" ? body.overrides : {}),
+    ...(body.updates && typeof body.updates === "object" ? body.updates : {}),
   };
-}
-const ok = (body) => ({ statusCode: 200, headers: cors(), body: JSON.stringify(body) });
-const bad = (code, body) => ({ statusCode: code, headers: cors(), body: JSON.stringify(body) });
 
-/* -------------------- DETAILS PATCH HELPERS -------------------- */
-function orNullString(v) {
-  if (v === null) return null;
-  const s = String(v ?? "").trim();
-  return s === "" ? null : s;
-}
-function numberOrPass(v) {
-  if (v === null) return null;
-  if (typeof v === "number" && Number.isFinite(v)) return v;
-  const n = Number(String(v ?? "").replace(/[^0-9.]/g, ""));
-  return Number.isFinite(n) ? n : orNullString(v);
+  if (body.activeDate != null && patch.activeDate == null) patch.activeDate = body.activeDate;
+  if (body.timezone != null && patch.timezone == null) patch.timezone = body.timezone;
+
+  // never accept these from client
+  if ("daysOnMarket" in patch) delete patch.daysOnMarket;
+
+  return { patch, replaceDetails };
 }
 
-/** Build a conservative patch for details.json from overrides we just saved */
-function deriveCoreDetailsPatch(fromOverrides = {}) {
-  if (!fromOverrides || typeof fromOverrides !== "object") return {};
-  const o = fromOverrides;
+function sanitizeDetailsPatchMutable(patch) {
+  if (!patch || typeof patch !== "object") return patch;
 
-  const activeIso =
-    typeof o.activeDate === "string" ? normalizeActiveDateISO(o.activeDate) : null;
+  // 1) Normalize activeDate + timezone
+  if (typeof patch.activeDate === "string") {
+    const iso = normalizeActiveDateISO(patch.activeDate);
+    if (iso) patch.activeDate = iso;
+  }
+  if ("timezone" in patch) {
+    const tz = normalizeTimezoneMaybe(patch.timezone);
+    if (tz) patch.timezone = tz;
+    else delete patch.timezone;
+  }
 
-  const patch = {};
+  // 2) Strip any details.* keys and banned aliases you never want persisted
+  for (const k of Object.keys(patch)) {
+    if (String(k).startsWith("details.")) delete patch[k];
+  }
 
-  // Address
-  if ("address" in o) patch.address = orNullString(o.address);
-  if ("city" in o)    patch.city    = orNullString(o.city);
-  if ("state" in o)   patch.state   = orNullString(o.state);
-  if ("zip" in o)     patch.zip     = orNullString(o.zip);
+  // kill the two troublemakers explicitly
+  delete patch.bedrooms;
+  delete patch.squareFeet;
 
-  // Price
-  if ("price" in o)     patch.price     = numberOrPass(o.price);
-  if ("listPrice" in o) patch.listPrice = numberOrPass(o.listPrice);
-
-  // Beds / baths / sqft / year
-  if ("beds" in o)       patch.beds       = numberOrPass(o.beds);
-  if ("bedrooms" in o)   patch.bedrooms   = numberOrPass(o.bedrooms);
-  if ("baths" in o)      patch.baths      = numberOrPass(o.baths);
-  if ("totalBaths" in o) patch.totalBaths = numberOrPass(o.totalBaths);
-  if ("sqft" in o)       patch.sqft       = numberOrPass(o.sqft);
-  if ("squareFeet" in o) patch.squareFeet = numberOrPass(o.squareFeet);
-  if ("yearBuilt" in o)  patch.yearBuilt  = numberOrPass(o.yearBuilt);
-
-  // Status
-  if ("status" in o) patch.status = orNullString(o.status);
-
-  // Dates / TZ
-  if ("activeDate" in o) patch.activeDate = activeIso ?? orNullString(o.activeDate);
-  if ("timezone" in o)   patch.timezone   = orNullString(o.timezone);
-
-  // Remarks / notes
-  if ("publicRemarks" in o) patch.publicRemarks = orNullString(o.publicRemarks);
-  if ("remarks" in o)       patch.remarks       = orNullString(o.remarks);
-  if ("agentNotes" in o)    patch.agentNotes    = orNullString(o.agentNotes);
-
-  // Photo
-  if ("primaryPhoto" in o) patch.primaryPhoto = orNullString(o.primaryPhoto);
-  if ("photo" in o)        patch.photo        = orNullString(o.photo);
-
-  // Lender
-  if ("preferredLenderId" in o)    patch.preferredLenderId    = orNullString(o.preferredLenderId);
-  if ("preferredLender" in o)      patch.preferredLender      = orNullString(o.preferredLender);
-  if ("preferredLenderOffer" in o) patch.preferredLenderOffer = orNullString(o.preferredLenderOffer);
+  // (optional) If you ALSO want to prevent these older duplicates:
+  // delete patch.beds;
+  // delete patch.sqft;
 
   return patch;
 }
@@ -278,12 +213,12 @@ function numOrNull(v) {
 function normalizeBaths(details) {
   if (!details || typeof details !== "object") return details;
 
-  const fullMain   = numOrNull(details.FullBathsMain);
+  const fullMain = numOrNull(details.FullBathsMain);
   const fullSecond = numOrNull(details.FullBathsSecond);
-  const fullThird  = numOrNull(details.FullBathsThird);
-  const halfMain   = numOrNull(details.HalfBathsMain);
+  const fullThird = numOrNull(details.FullBathsThird);
+  const halfMain = numOrNull(details.HalfBathsMain);
   const halfSecond = numOrNull(details.HalfBathsSecond);
-  const halfThird  = numOrNull(details.HalfBathsThird);
+  const halfThird = numOrNull(details.HalfBathsThird);
 
   const fullParts = [fullMain, fullSecond, fullThird].filter((n) => n != null);
   const halfParts = [halfMain, halfSecond, halfThird].filter((n) => n != null);
@@ -302,6 +237,18 @@ function normalizeBaths(details) {
 
   return details;
 }
+
+/* -------------------- CORS -------------------- */
+function cors() {
+  return {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, x-admin-key",
+  };
+}
+const ok = (body) => ({ statusCode: 200, headers: cors(), body: JSON.stringify(body) });
+const bad = (code, body) => ({ statusCode: code, headers: cors(), body: JSON.stringify(body) });
 
 /* -------------------- HANDLER -------------------- */
 export async function handler(event) {
@@ -322,209 +269,132 @@ export async function handler(event) {
       return bad(400, { ok: false, error: "Invalid JSON body" });
     }
 
-   // 🗑️ DELETE HANDLING - FULL LISTING + PHOTOS
-if (body.delete === true) {
-  const id = extractIdentifier(body);
-  if (!id) return bad(400, { ok: false, error: "slug/id required for delete" });
-  
-  const overridesKey = `listings/${id}/overrides.json`;
-  const detailsKey = `listings/${id}/details.json`;
-  const photosPrefix = `photos/${id}/`;
-  
-  console.log("🗑️ DELETING FULL LISTING:", id);
-  
-  // 1. Delete listing files
-  await deleteJson(overridesKey);
-  if (await headExists(detailsKey)) {
-    await deleteJson(detailsKey);
-  }
-  
-  // 2. Delete ALL photos for this MLS
-  let photosContinuationToken;
-  let photosDeleted = 0;
-  do {
-    const listPhotos = await s3.send(new ListObjectsV2Command({
-      Bucket: BUCKET,
-      Prefix: photosPrefix,
-      ContinuationToken: photosContinuationToken
-    }));
-    
-    for (const obj of listPhotos.Contents || []) {
-      console.log("🗑️ Deleting photo:", obj.Key);
-      await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: obj.Key }));
-      photosDeleted++;
+    // 🗑️ DELETE HANDLING - FULL LISTING + PHOTOS (NO overrides.json anymore)
+    if (body.delete === true) {
+      const id = extractIdentifier(body);
+      if (!id) return bad(400, { ok: false, error: "slug/id required for delete" });
+
+      const detailsKey = `listings/${id}/details.json`;
+      const photosPrefix = `photos/${id}/`;
+
+      console.log("🗑️ DELETING FULL LISTING:", id);
+
+      // 1) Delete details.json if exists
+      if (await headExists(detailsKey)) {
+        await deleteJson(detailsKey);
+      }
+
+      // 2) Delete ALL photos for this MLS
+      let photosContinuationToken;
+      let photosDeleted = 0;
+      do {
+        const listPhotos = await s3.send(
+          new ListObjectsV2Command({
+            Bucket: BUCKET,
+            Prefix: photosPrefix,
+            ContinuationToken: photosContinuationToken,
+          })
+        );
+
+        for (const obj of listPhotos.Contents || []) {
+          console.log("🗑️ Deleting photo:", obj.Key);
+          await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: obj.Key }));
+          photosDeleted++;
+        }
+
+        photosContinuationToken = listPhotos.IsTruncated
+          ? listPhotos.NextContinuationToken
+          : undefined;
+      } while (photosContinuationToken);
+
+      console.log(`✅ DELETED listing + ${photosDeleted} photos for MLS: ${id}`);
+
+      return ok({
+        ok: true,
+        deleted: id,
+        photosDeleted,
+        message: "Listing and photos deleted",
+      });
     }
-    
-    photosContinuationToken = listPhotos.IsTruncated ? listPhotos.NextContinuationToken : undefined;
-  } while (photosContinuationToken);
-  
-  console.log(`✅ DELETED listing + ${photosDeleted} photos for MLS: ${id}`);
-  
-  return ok({
-    ok: true,
-    deleted: id,
-    photosDeleted,
-    message: "Listing and photos deleted"
-  });
-}
 
-
-    // ← EXISTING UPDATE CODE CONTINUES HERE (unchanged)
+    // UPDATE / GET
     const id = extractIdentifier(body);
     if (!id) return bad(400, { ok: false, error: "listingId/slug/id is required" });
 
-    const overridesKey = `listings/${id}/overrides.json`;
-    const detailsKey   = `listings/${id}/details.json`;
+    const detailsKey = `listings/${id}/details.json`;
 
-    console.log("[updateListing] id:", id, "overridesKey:", overridesKey, "region:", REGION, "bucket:", BUCKET);
+    console.log("[updateListing] id:", id, "detailsKey:", detailsKey, "region:", REGION, "bucket:", BUCKET);
 
-    const currentOverrides = (await getJson(overridesKey)) || {};
+    const currentDetails = (await getJson(detailsKey)) || {};
 
-    const { overrides, replace, detailsPatch: explicitDetailsPatch } = body;
-    let updates = extractUpdates(body);
-    console.log("[updateListing] updates from body:", updates);
-    let nextOverrides;
-    let normalizedISO = null;
+    // If caller is doing the "fetch existing" pattern (no change)
+    // They used to send empty body and get overrides back; now return details.
+    const { patch: rawPatch, replaceDetails } = extractDetailsIntent(body);
+    const noPatch = !rawPatch || typeof rawPatch !== "object" || Object.keys(rawPatch).length === 0;
 
-    if (overrides && typeof overrides === "object" && replace) {
-      nextOverrides = { ...overrides };
-      ({ iso: normalizedISO } = applyActiveDateNormalization(nextOverrides, overrides));
-      if ("timezone" in overrides) {
-        const tz = normalizeTimezoneMaybe(overrides.timezone);
-        if (tz) nextOverrides.timezone = tz;
-        else delete nextOverrides.timezone;
-      }
+    if (noPatch) {
+      const tz = currentDetails.timezone || DEFAULT_LISTING_TZ;
+      const dom = currentDetails.activeDate ? domInZone(currentDetails.activeDate, tz) : null;
+
+      const detailsUrl = await getSignedUrl(
+        s3,
+        new GetObjectCommand({ Bucket: BUCKET, Key: detailsKey }),
+        { expiresIn: SIGN_EXPIRES }
+      ).catch(() => null);
+
+      return ok({
+        ok: true,
+        detailsKey,
+        details: currentDetails,
+        detailsUrl,
+        daysOnMarket: dom,
+        timezone: tz,
+        noChange: true,
+      });
+    }
+
+    // sanitize patch
+    const patch = sanitizeDetailsPatchMutable({ ...rawPatch });
+
+    // Build next details
+    let nextDetails;
+    if (replaceDetails) {
+      nextDetails = { ...patch };
     } else {
-      if (!updates || Object.keys(updates).length === 0) {
-        const tz = currentOverrides.timezone || DEFAULT_LISTING_TZ;
-        const dom = currentOverrides.activeDate ? domInZone(currentOverrides.activeDate, tz) : null;
-
-        const url = await getSignedUrl(
-          s3,
-          new GetObjectCommand({ Bucket: BUCKET, Key: overridesKey }),
-          { expiresIn: SIGN_EXPIRES }
-        ).catch(() => null);
-        const detailsUrl0 = await getSignedUrl(
-          s3,
-          new GetObjectCommand({ Bucket: BUCKET, Key: detailsKey }),
-          { expiresIn: SIGN_EXPIRES }
-        ).catch(() => null);
-
-        return ok({
-          ok: true,
-          key: overridesKey,
-          overrides: currentOverrides,
-          overridesUrl: url,
-          detailsKey,
-          detailsUrl: detailsUrl0,
-          daysOnMarket: dom,
-          timezone: tz,
-          noChange: true,
-        });
-      }
-
-      nextOverrides = { ...currentOverrides };
-      for (const [k, v] of Object.entries(updates)) {
-        if (v === null || (typeof v === "string" && v.trim() === "")) {
-          delete nextOverrides[k];
-        } else {
-          nextOverrides[k] = v;
-        }
-      }
-      ({ iso: normalizedISO } = applyActiveDateNormalization(nextOverrides, updates));
-      if ("timezone" in updates) {
-        const tz = normalizeTimezoneMaybe(updates.timezone);
-        if (tz) nextOverrides.timezone = tz;
-        else delete nextOverrides.timezone;
-      }
+      nextDetails = { ...currentDetails };
+      applyPatchMutable(nextDetails, patch);
     }
 
-    if (!normalizedISO && typeof nextOverrides.activeDate === "string" && nextOverrides.activeDate) {
-      const iso = normalizeActiveDateISO(nextOverrides.activeDate);
-      if (iso) nextOverrides.activeDate = iso;
-      if ("daysOnMarket" in nextOverrides) delete nextOverrides.daysOnMarket;
-    }
+    // ensure tz default
+    if (!nextDetails.timezone) nextDetails.timezone = currentDetails.timezone || DEFAULT_LISTING_TZ;
 
-    if (!nextOverrides.timezone) {
-      nextOverrides.timezone = currentOverrides.timezone || DEFAULT_LISTING_TZ;
-    }
+    // normalize baths (optional but you already rely on it)
+    normalizeBaths(nextDetails);
 
-    nextOverrides.updatedAt = new Date().toISOString();
-    nextOverrides.updatedBy = "admin-dashboard";
+    // stamp
+    nextDetails.updatedAt = new Date().toISOString();
+    nextDetails._lastEditedBy = "admin-dashboard";
 
-    await putJson(overridesKey, nextOverrides);
-    const savedOverrides = await getJson(overridesKey);
+    // save
+    await putJson(detailsKey, nextDetails);
 
-    const detailsCurr = (await getJson(detailsKey)) || {};
-    const autoPatch = deriveCoreDetailsPatch(savedOverrides);
-    let detailsPatch =
-      explicitDetailsPatch && typeof explicitDetailsPatch === "object"
-        ? explicitDetailsPatch
-        : autoPatch;
+    const savedDetails = await getJson(detailsKey);
 
-    if (savedOverrides.activeDate) {
-      if (!detailsPatch || typeof detailsPatch !== "object") detailsPatch = {};
-      detailsPatch.activeDate = savedOverrides.activeDate;
-    }
-    if (savedOverrides.timezone) {
-      if (!detailsPatch || typeof detailsPatch !== "object") detailsPatch = {};
-      detailsPatch.timezone = savedOverrides.timezone;
-    }
-
-    for (const [k, v] of Object.entries(savedOverrides || {})) {
-      if (!detailsPatch || typeof detailsPatch !== "object") detailsPatch = {};
-      if (k === "updatedAt" || k === "updatedBy") continue;
-      detailsPatch[k] = v;
-    }
-
-    let detailsNext = null;
-
-    if (detailsPatch && Object.keys(detailsPatch).length > 0) {
-      if (typeof detailsPatch.activeDate === "string") {
-        const iso = normalizeActiveDateISO(detailsPatch.activeDate);
-        if (iso) detailsPatch.activeDate = iso;
-      }
-      detailsNext = { ...detailsCurr };
-      applyPatchMutable(detailsNext, detailsPatch);
-
-      normalizeBaths(detailsNext);
-
-      detailsNext.updatedAt = new Date().toISOString();
-      detailsNext._lastEditedBy = "admin-dashboard";
-
-      await putJson(detailsKey, detailsNext);
-    }
-
-    console.log("[updateListing] BATH DEBUG", {
-      FullBathsMain: detailsNext?.FullBathsMain,
-      FullBathsSecond: detailsNext?.FullBathsSecond,
-      TotalFullBaths: detailsNext?.TotalFullBaths,
-      totalBaths: detailsNext?.totalBaths,
-      baths: detailsNext?.baths,
-    });
-
-    const overridesUrl = await getSignedUrl(
-      s3,
-      new GetObjectCommand({ Bucket: BUCKET, Key: overridesKey }),
-      { expiresIn: SIGN_EXPIRES }
-    ).catch(() => null);
     const detailsUrl = await getSignedUrl(
       s3,
       new GetObjectCommand({ Bucket: BUCKET, Key: detailsKey }),
       { expiresIn: SIGN_EXPIRES }
     ).catch(() => null);
 
-    const tzForDom = savedOverrides.timezone || DEFAULT_LISTING_TZ;
-    const dom = savedOverrides.activeDate ? domInZone(savedOverrides.activeDate, tzForDom) : null;
+    const tzForDom = savedDetails.timezone || DEFAULT_LISTING_TZ;
+    const dom = savedDetails.activeDate ? domInZone(savedDetails.activeDate, tzForDom) : null;
 
     return ok({
       ok: true,
-      key: overridesKey,
-      overrides: savedOverrides,
-      overridesUrl,
       detailsKey,
       detailsUrl,
-      detailsPatched: !!detailsPatch && Object.keys(detailsPatch).length > 0,
+      details: savedDetails,
+      detailsPatched: true,
       daysOnMarket: dom,
       timezone: tzForDom,
     });

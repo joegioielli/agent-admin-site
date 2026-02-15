@@ -83,7 +83,6 @@ const state = {
   currentSlug: null,
   lenders: [],
   lendersRevision: null,
-  lastOpener: null,
 };
 
 /* ---------------- Modal helpers ---------------- */
@@ -110,6 +109,7 @@ function closeModal(elOrSel) {
   const m = resolveModal(elOrSel);
   if (!m) return;
 
+  // Avoid aria-hidden warning by clearing focus first
   document.activeElement?.blur();
 
   m.classList.remove("show");
@@ -259,84 +259,21 @@ function isHttpUrl(s) {
 
 const ALIASES = {
   mls: ["mls", "MLS", "mlsNumber", "MlsNumber", "ListingId", "ListingID", "MLSNumber"],
-  address: [
-    "address",
-    "Address",
-    "StreetAddress",
-    "StreetNumberNumeric",
-    "StreetName",
-    "FullAddress",
-  ],
+  address: ["address", "Address", "StreetAddress", "StreetNumberNumeric", "StreetName", "FullAddress"],
   city: ["city", "City", "Town"],
   state: ["state", "State", "Province"],
   zip: ["zip", "Zip", "postalCode", "PostalCode", "ZipCode", "ParcelZip"],
-  price: [
-    "price",
-    "listPrice",
-    "ListPrice",
-    "ListPriceOriginal",
-    "OriginalListPrice",
-    "CurrentPrice",
-  ],
-  beds: [
-    "TotalBedrooms",
-    "BedroomsTotal",
-    "Bedrooms",
-    "BedsTotal",
-    "BedroomsTotalInteger",
-    "beds",
-    "bedrooms",
-  ],
-  baths: [
-    "totalBaths",
-    "BathroomsTotalInteger",
-    "FullBaths",
-    "BathTotal",
-    "bathrooms",
-    "baths",
-    "TotalFullBaths",
-  ],
-  sqft: [
-    "SqFtTotal",
-    "TotalSqFt",
-    "BuildingAreaTotal",
-    "squareFeet",
-    "LivingArea",
-    "livingArea",
-    "sqft",
-    "SqFtMainFloor",
-    "AboveGradeFinishedArea",
-  ],
+  price: ["price", "listPrice", "ListPrice", "ListPriceOriginal", "OriginalListPrice", "CurrentPrice"],
+  beds: ["TotalBedrooms", "BedroomsTotal", "Bedrooms", "BedsTotal", "BedroomsTotalInteger", "beds", "bedrooms"],
+  baths: ["totalBaths", "BathroomsTotalInteger", "FullBaths", "BathTotal", "bathrooms", "baths", "TotalFullBaths"],
+  sqft: ["SqFtTotal", "TotalSqFt", "BuildingAreaTotal", "squareFeet", "LivingArea", "livingArea", "sqft", "SqFtMainFloor", "AboveGradeFinishedArea"],
   year: ["YearBuilt", "YearBuiltDetails", "yearBuilt", "year"],
   status: ["status", "ListingStatus", "Status", "StandardStatus"],
-  activeDate: [
-    "activeDate",
-    "listDate",
-    "ListDate",
-    "DateListed",
-    "DateActive",
-    "ListingDate",
-  ],
+  activeDate: ["activeDate", "listDate", "ListDate", "DateListed", "DateActive", "ListingDate"],
   timezone: ["timezone", "TimeZone", "TimeZoneLocal"],
-  desc: [
-    "publicRemarks",
-    "remarks",
-    "description",
-    "PublicRemarks",
-    "PropertyDescription",
-    "RemarksPublic",
-    "Remarks",
-  ],
+  desc: ["publicRemarks", "remarks", "description", "PublicRemarks", "PropertyDescription", "RemarksPublic", "Remarks"],
   notes: ["agentNotes", "AgentNotes", "PrivateRemarks"],
-  photo: [
-    "PrimaryPhoto",
-    "photo",
-    "primaryPhoto",
-    "PhotoUrl",
-    "MainPhotoUrl",
-    "mainPhotoUrl",
-    "photoUrl",
-  ],
+  photo: ["PrimaryPhoto", "photo", "primaryPhoto", "PhotoUrl", "MainPhotoUrl", "mainPhotoUrl", "photoUrl"],
 };
 
 function deepFlatten(input, maxDepth = 6, prefix = "", out = {}) {
@@ -352,7 +289,6 @@ function deepFlatten(input, maxDepth = 6, prefix = "", out = {}) {
   return out;
 }
 
-// Fuzzy search groups for pickSmart
 const FUZZY = {
   mls: [/mls/i, /listing\.?id/i, /mlsnumber/i],
   address: [/address/i, /street/i],
@@ -387,6 +323,7 @@ function pickSmart(objList, aliasKeys, fuzzyGroup = null, numeric = false) {
       }
     }
   }
+
   const flats = objList.map((o) => deepFlatten(o || {}));
   if (fuzzyGroup && FUZZY[fuzzyGroup]) {
     for (const f of flats) {
@@ -399,6 +336,7 @@ function pickSmart(objList, aliasKeys, fuzzyGroup = null, numeric = false) {
       }
     }
   }
+
   if (numeric) {
     let best = null;
     for (const f of flats) {
@@ -409,6 +347,7 @@ function pickSmart(objList, aliasKeys, fuzzyGroup = null, numeric = false) {
     }
     return best;
   }
+
   return undefined;
 }
 
@@ -431,8 +370,7 @@ async function fetchListings() {
   });
   if (!res.ok) throw new Error(`listListings failed ${res.status}`);
   const json = await res.json();
-  const arr =
-    Array.isArray(json) ? json : json.items || json.files || json.listings;
+  const arr = Array.isArray(json) ? json : json.items || json.files || json.listings;
   if (!Array.isArray(arr)) throw new Error("listListings expected array");
   console.log("Loaded", arr.length, "listings");
   return arr;
@@ -457,7 +395,6 @@ async function callUpdate(payload) {
   });
 }
 
-// Active Date quick save
 async function saveActiveDate(slug, isoDate) {
   const item = state.items.get(slug);
   const listingId = listingIdFrom(item, slug);
@@ -470,58 +407,30 @@ async function saveActiveDate(slug, isoDate) {
     activeDate: isoDate,
     timezone: tz,
   });
+
   if (!res.ok) {
     const t = await res.text().catch(() => "");
     throw new Error(`updateListing failed ${res.status} ${t}`);
   }
+
   const data = await res.json().catch(() => ({}));
-  const dom =
-    typeof data.daysOnMarket === "number" ? data.daysOnMarket : null;
+  const dom = typeof data.daysOnMarket === "number" ? data.daysOnMarket : null;
+
   if (dom != null) {
-    const card = document.querySelector(
-      `[data-slug="${CSS.escape(slug)}"]`
-    );
-    if (card) {
-      const domEl = card.querySelector(SELECTORS.domOut);
-      if (domEl) domEl.textContent = String(dom);
-    }
+    const card = document.querySelector(`[data-slug="${CSS.escape(slug)}"]`);
+    const domEl = card?.querySelector(SELECTORS.domOut);
+    if (domEl) domEl.textContent = String(dom);
   }
 }
 
-/* ------------- Advanced fields visibility rules ------------- */
+/* ---------------- Advanced fields (unchanged from your logic) ---------------- */
 
 const CANON_HIDE = new Set([
-  "mls",
-  "listingid",
-  "address",
-  "streetaddress",
-  "city",
-  "state",
-  "province",
-  "zip",
-  "zipcode",
-  "postalcode",
-  "price",
-  "beds",
-  "baths",
-  "sqft",
-  "yearbuilt",
-  "year",
-  "status",
-  "activedate",
-  "listdate",
-  "datelisted",
-  "dateactive",
-  "listingdate",
-  "timezone",
-  "publicremarks",
-  "remarks",
-  "description",
-  "agentnotes",
-  "primaryphoto",
-  "photo",
-  "photourl",
-  "mainphotourl",
+  "mls","listingid","address","streetaddress","city","state","province","zip","zipcode","postalcode",
+  "price","beds","baths","sqft","yearbuilt","year","status",
+  "activedate","listdate","datelisted","dateactive","listingdate",
+  "timezone","publicremarks","remarks","description","agentnotes",
+  "primaryphoto","photo","photourl","mainphotourl",
 ]);
 
 function normalizeKey(k) {
@@ -529,34 +438,8 @@ function normalizeKey(k) {
 }
 
 const ADVHIDE = {
-  hardCI: new Set(
-    [
-      "0.path",
-      "0.value",
-      "path",
-      "value",
-      "key",
-      "csvkey",
-      "ingestedat",
-      "listingtype",
-      "longitude",
-      "parceliddisplay",
-      "slug",
-    ].map((s) => s.toLowerCase())
-  ),
-  patterns: [
-    /\.path$/i,
-    /\.value$/i,
-    /path$/i,
-    /value$/i,
-    /key$/i,
-    /slug$/i,
-    /csvkey/i,
-    /ingestedat/i,
-    /listingtype/i,
-    /longitude/i,
-    /parceliddisplay/i,
-  ],
+  hardCI: new Set(["0.path","0.value","path","value","key","csvkey","ingestedat","listingtype","longitude","parceliddisplay","slug"].map(s => s.toLowerCase())),
+  patterns: [/\.path$/i,/\.value$/i,/path$/i,/value$/i,/key$/i,/slug$/i,/csvkey/i,/ingestedat/i,/listingtype/i,/longitude/i,/parceliddisplay/i],
 };
 
 function shouldHideAdminKey(originalKey) {
@@ -566,59 +449,19 @@ function shouldHideAdminKey(originalKey) {
   return ADVHIDE.patterns.some((rx) => rx.test(originalKey));
 }
 
-/* -------- Alias priority per group (deterministic) -------- */
-
 const GROUP_ALIAS_PRIORITY = {
   price: ["ListPrice", "CurrentPrice", "price", "listPrice", "OriginalListPrice"],
-  beds: [
-    "TotalBedrooms",
-    "BedroomsTotal",
-    "BedroomsTotalInteger",
-    "BedsTotal",
-    "Bedrooms",
-    "beds",
-    "bedrooms",
-  ],
-  baths: [
-    "totalBaths",
-    "BathroomsTotalInteger",
-    "bathrooms",
-    "baths",
-    "BathTotal",
-  ],
-  sqft: [
-    "SqFtTotal",
-    "TotalSqFt",
-    "BuildingAreaTotal",
-    "squareFeet",
-    "LivingArea",
-    "livingArea",
-    "sqft",
-    "SqFtMainFloor",
-    "AboveGradeFinishedArea",
-  ],
-  year: ["YearBuilt", "YearBuiltDetails", "yearBuilt", "year"],
-  status: ["StandardStatus", "ListingStatus", "status"],
-  desc: [
-    "PublicRemarks",
-    "RemarksPublic",
-    "remarks",
-    "description",
-    "publicRemarks",
-  ],
-  photo: [
-    "PrimaryPhoto",
-    "PhotoUrl",
-    "photo",
-    "primaryPhoto",
-    "mainPhotoUrl",
-    "MainPhotoUrl",
-    "photoUrl",
-  ],
-  address: ["FullAddress", "StreetAddress", "address", "StreetName"],
-  city: ["City", "city"],
-  state: ["State", "Province", "state", "province"],
-  zip: ["PostalCode", "ZipCode", "zip", "postalCode", "ParcelZip"],
+  beds: ["TotalBedrooms","BedroomsTotal","BedroomsTotalInteger","BedsTotal","Bedrooms","beds","bedrooms"],
+  baths: ["totalBaths","BathroomsTotalInteger","bathrooms","baths","BathTotal"],
+  sqft: ["SqFtTotal","TotalSqFt","BuildingAreaTotal","squareFeet","LivingArea","livingArea","sqft","SqFtMainFloor","AboveGradeFinishedArea"],
+  year: ["YearBuilt","YearBuiltDetails","yearBuilt","year"],
+  status: ["StandardStatus","ListingStatus","status"],
+  desc: ["PublicRemarks","RemarksPublic","remarks","description","publicRemarks"],
+  photo: ["PrimaryPhoto","PhotoUrl","photo","primaryPhoto","mainPhotoUrl","MainPhotoUrl","photoUrl"],
+  address: ["FullAddress","StreetAddress","address","StreetName"],
+  city: ["City","city"],
+  state: ["State","Province","state","province"],
+  zip: ["PostalCode","ZipCode","zip","postalCode","ParcelZip"],
 };
 
 const GROUP_CANON = {
@@ -646,23 +489,15 @@ const GROUP_MATCHERS = {
     /(^|[^A-Za-z])bathrooms([^A-Za-z]|$)/i,
     /(^|[^A-Za-z])bathtotal([^A-Za-z]|$)/i,
   ],
-  sqft: [
-    /sqfttotal/i,
-    /totalsqft/i,
-    /buildingareatotal/i,
-    /squarefeet/i,
-    /livingarea/i,
-    /sqft/i,
-    /sqftmainfloor/i,
-  ],
-  year: [/yearbuilt/i, /yearbuiltdetails/i, /year/i],
-  status: [/status/i, /standardstatus/i, /listingstatus/i],
-  desc: [/remarks/i, /description/i, /publicremarks/i],
-  photo: [/photo/i, /image.?url/i],
-  address: [/address/i, /streetaddress/i, /streetname/i, /fulladdress/i],
+  sqft: [/sqfttotal/i,/totalsqft/i,/buildingareatotal/i,/squarefeet/i,/livingarea/i,/sqft/i,/sqftmainfloor/i],
+  year: [/yearbuilt/i,/yearbuiltdetails/i,/year/i],
+  status: [/status/i,/standardstatus/i,/listingstatus/i],
+  desc: [/remarks/i,/description/i,/publicremarks/i],
+  photo: [/photo/i,/image.?url/i],
+  address: [/address/i,/streetaddress/i,/streetname/i,/fulladdress/i],
   city: [/city/i],
-  state: [/state/i, /province/i],
-  zip: [/zip/i, /postalcode/i, /parcelzip/i],
+  state: [/state/i,/province/i],
+  zip: [/zip/i,/postalcode/i,/parcelzip/i],
 };
 
 function keyBelongsToGroup(key, group) {
@@ -687,7 +522,6 @@ function pickBestAliasValueForGroup(obj, group) {
   return undefined;
 }
 
-// Advanced -> Core
 function adoptCoreFromExtras(coreValues, extras) {
   for (const g of Object.keys(GROUP_CANON)) {
     const cand = pickBestAliasValueForGroup(extras, g);
@@ -701,13 +535,8 @@ function adoptCoreFromExtras(coreValues, extras) {
   }
 }
 
-// Mirror core back to aliases that exist
 function mirrorAliasesIntoExtras(extras, coreValues, presentSources) {
-  const presentFlat = Object.assign(
-    {},
-    ...presentSources.map((o) => deepFlatten(o || {})),
-    extras
-  );
+  const presentFlat = Object.assign({}, ...presentSources.map((o) => deepFlatten(o || {})), extras);
   for (const [k] of Object.entries(presentFlat)) {
     for (const g of Object.keys(GROUP_CANON)) {
       if (!keyBelongsToGroup(k, g)) continue;
@@ -728,8 +557,6 @@ function mirrorAliasesIntoExtras(extras, coreValues, presentSources) {
     delete extras.squareFeet;
   }
 }
-
-/* ---- Advanced rows helpers ---- */
 
 function stripDetailsPrefix(key) {
   return String(key).startsWith("details.") ? key.slice("details.".length) : key;
@@ -753,15 +580,12 @@ function rowHTML(k, v) {
   return `
     <div class="adv-row">
       <input class="adv-key" placeholder="Name" value="${escapeHtml(displayKey)}" />
-      <input class="adv-val" placeholder="Value (text or JSON)" value="${escapeHtml(
-        v
-      )}" />
+      <input class="adv-val" placeholder="Value (text or JSON)" value="${escapeHtml(v)}" />
       <button type="button" class="btn danger adv-remove">Remove</button>
     </div>
   `;
 }
 
-// Merge+render Advanced (overrides first) with de-duplication
 window.renderAdvancedFieldsFromSource = renderAdvancedFieldsFromSource;
 function renderAdvancedFieldsFromSource(srcObjs) {
   const list = document.querySelector(SELECTORS.advList);
@@ -786,10 +610,7 @@ function renderAdvancedFieldsFromSource(srcObjs) {
   Object.keys(merged).forEach((key) => {
     let foundGroup = null;
     for (const g of Object.keys(GROUP_MATCHERS)) {
-      if (keyBelongsToGroup(key, g)) {
-        foundGroup = g;
-        break;
-      }
+      if (keyBelongsToGroup(key, g)) { foundGroup = g; break; }
     }
     if (foundGroup) {
       if (!groupBuckets[foundGroup]) groupBuckets[foundGroup] = [];
@@ -800,32 +621,23 @@ function renderAdvancedFieldsFromSource(srcObjs) {
   });
 
   const finalEntries = [];
-
   for (const [g, keys] of Object.entries(groupBuckets)) {
     const chosenKey = chooseCanonicalKeyForGroup(keys, g);
-    const val = merged[chosenKey];
-    finalEntries.push([chosenKey, val]);
+    finalEntries.push([chosenKey, merged[chosenKey]]);
   }
+  ungrouped.forEach((k) => finalEntries.push([k, merged[k]]));
 
-  ungrouped.forEach((k) => {
-    finalEntries.push([k, merged[k]]);
-  });
-
-  const rows = finalEntries.map(([k, v]) => {
-    const val =
-      v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+  list.innerHTML = finalEntries.map(([k, v]) => {
+    const val = v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
     return rowHTML(k, val);
-  });
+  }).join("");
 
-  list.innerHTML = rows.join("");
   bindAdvList(list);
 }
 
 function bindAdvList(listEl) {
   listEl.querySelectorAll(".adv-remove").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      btn.closest(".adv-row")?.remove();
-    });
+    btn.addEventListener("click", () => btn.closest(".adv-row")?.remove());
   });
 }
 
@@ -839,7 +651,6 @@ function addAdvancedRow() {
   bindAdvList(list);
   node.querySelector(".adv-key")?.focus();
 }
-
 window.addAdvancedRow = addAdvancedRow;
 
 function collectAdvancedFieldsToObject() {
@@ -850,23 +661,16 @@ function collectAdvancedFieldsToObject() {
     let k = r.querySelector(".adv-key")?.value?.trim();
     const v = r.querySelector(".adv-val")?.value?.trim();
     if (!k) return;
+    if (k.startsWith("details.")) k = k.slice("details.".length);
 
-    if (k.startsWith("details.")) {
-      k = k.slice("details.".length);
-    }
+    if (!v) { obj[k] = ""; return; }
 
-    if (!v) {
-      obj[k] = "";
-      return;
-    }
     let val = v;
     try {
       if (/^[\[{]/.test(v)) val = JSON.parse(v);
       else if (/^-?\d+(\.\d+)?$/.test(v)) val = Number(v);
       else if (/^(true|false)$/i.test(v)) val = /true/i.test(v);
-    } catch {
-      /* keep string */
-    }
+    } catch { /* keep string */ }
     obj[k] = val;
   });
   return obj;
@@ -924,42 +728,15 @@ function collectFormValues() {
   };
 }
 
-function liveUpdateAdvancedRowsFromCore(coreValues) {
-  const list = document.querySelector(SELECTORS.advList);
-  if (!list) return;
-  list.querySelectorAll(".adv-row").forEach((r) => {
-    const key = r.querySelector(".adv-key")?.value?.trim();
-    if (!key) return;
-    for (const g of Object.keys(GROUP_CANON)) {
-      if (!keyBelongsToGroup(key, g)) continue;
-      const val = GROUP_CANON[g](coreValues);
-      if (val !== undefined) {
-        const input = r.querySelector(".adv-val");
-        if (input && document.activeElement !== input) {
-          input.value = String(val ?? "");
-        }
-        break;
-      }
-    }
-  });
-}
-
 /* ---------------- Full editor save ---------------- */
 
 async function saveFullEdit(slug) {
-  console.log("saveFullEdit START", { slug });
-
   const item = state.items.get(slug);
   let listingId = listingIdFrom(item, slug);
-  console.log("DEBUG saveFullEdit", { slug, listingId, item });
-  if (!listingId) {
-    console.error("No listingId – falling back to slug");
-    listingId = slug;
-  }
+  if (!listingId) listingId = slug;
 
   const v = collectFormValues();
   const extras = collectAdvancedFieldsToObject();
-
   adoptCoreFromExtras(v, extras);
 
   const overridesBase = {
@@ -1015,7 +792,7 @@ async function saveFullEdit(slug) {
     throw new Error(`updateListing failed ${res.status} ${t}`);
   }
 
-  // NEW: per-property lender sync
+  // per-property lender sync
   try {
     await upsertPerPropertyLender(listingId, v.lenderId, v.lenderOffer);
   } catch (e) {
@@ -1023,25 +800,22 @@ async function saveFullEdit(slug) {
   }
 
   const saved = await res.json().catch(() => ({}));
-  if (saved && saved.overrides) {
-    state.overrides.set(slug, saved.overrides);
-  }
+  if (saved?.overrides) state.overrides.set(slug, saved.overrides);
 
   const updated = { ...(item || {}) };
   if (v.address) updated.address = v.address;
   if (v.price != null) updated.price = v.price;
   if (v.activeDate !== undefined) updated.activeDate = v.activeDate;
+
   if (v.photo) {
     if (isHttpUrl(v.photo)) updated.photoUrl = v.photo;
     else if (!updated.photoUrl) updated.photoUrl = item?.photoUrl || "";
   }
 
   state.items.set(slug, updated);
-  state.overrides.set(slug, {
-    ...(state.overrides.get(slug) || {}),
-    ...overrides,
-  });
+  state.overrides.set(slug, { ...(state.overrides.get(slug) || {}), ...overrides });
 
+  // Update card UI
   const card = document.querySelector(`[data-slug="${CSS.escape(slug)}"]`);
   if (card) {
     const addrEl = card.querySelector(".addr");
@@ -1060,99 +834,77 @@ async function saveFullEdit(slug) {
 
     const img = card.querySelector(".thumb");
     if (img) {
-      const preview = previewUrlFrom(
-        v.photo || item?.primaryPhoto || "",
-        updated
-      );
+      const preview = previewUrlFrom(v.photo || item?.primaryPhoto || "", updated);
       if (preview) img.src = preview;
     }
 
     const input = card.querySelector(SELECTORS.dateInput);
-    if (input && updated.activeDate) {
-      input.value = updated.activeDate;
-    }
+    if (input && updated.activeDate) input.value = updated.activeDate;
+
     updateDomForCard(card);
   }
 
-  liveUpdateAdvancedRowsFromCore(v);
   reflectSelectedLenderChip();
   toast("Listing saved");
 }
 
-
 /* ---- Per-property lender sync ---- */
 
 async function upsertPerPropertyLender(listingId, lenderId, offerStr) {
-  const hasAnything =
-    (lenderId && lenderId.trim()) || (offerStr && offerStr.trim());
+  const hasAnything = (lenderId && lenderId.trim()) || (offerStr && offerStr.trim());
   let revision = null;
 
   try {
-    const g = await fetch(
-      `${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`,
-      { cache: "no-store" }
-    );
+    const g = await fetch(`${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`, { cache: "no-store" });
     if (g.ok) {
       const data = await g.json().catch(() => ({}));
       revision = data?.revision ?? null;
       if (!hasAnything && !data?.lender && !data?.offer) return;
     }
-  } catch {
-    /* ignore */
-  }
+  } catch { /* ignore */ }
 
   let lenderObj = null;
   if (lenderId && lenderId.trim()) {
-    const found = state.lenders.find(
-      (l) => l.id === lenderId || l.slug === lenderId || l.email === lenderId
-    );
-    if (found) {
-      lenderObj = {
-        name: String(found.name || ""),
-        phone: String(found.phone || ""),
-        nmls: String(found.nmls || found.nmlsId || ""),
-        email: String(found.email || ""),
-        link: String(found.link || found.url || ""),
-      };
-    } else {
-      lenderObj = { name: lenderId };
-    }
+    const found = state.lenders.find((l) => l.id === lenderId || l.slug === lenderId || l.email === lenderId);
+    lenderObj = found
+      ? {
+          name: String(found.name || ""),
+          phone: String(found.phone || ""),
+          nmls: String(found.nmls || found.nmlsId || ""),
+          email: String(found.email || ""),
+          link: String(found.link || found.url || ""),
+        }
+      : { name: lenderId };
   }
 
   const body = {
-  revision: revision === null ? undefined : revision,
-  lender: lenderObj || undefined,
-  lenderId: lenderId || undefined,
-  offer: hasAnything ? { details: String(offerStr || "") } : undefined,
-};
+    revision: revision === null ? undefined : revision,
+    lender: lenderObj || undefined,
+    lenderId: lenderId || undefined,
+    offer: hasAnything ? { details: String(offerStr || "") } : undefined,
+  };
 
   if (!hasAnything) {
     body.lender = null;
     body.offer = null;
   }
 
-  const r = await fetch(
-    `${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`,
-    {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }
-  );
+  const r = await fetch(`${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
   if (!r.ok) {
     const t = await r.text().catch(() => "");
     throw new Error(`per-property lenders PUT ${r.status} ${t}`);
   }
 }
 
-/* ---- Lenders IDs UI ---- */
+/* ---- Lenders UI helpers ---- */
 
 function genLenderId(seed) {
-  const base = seed
-    .trim()
-    .toLowerCase()
-    .replace(/[^\w]+/g, "-")
-    .replace(/--+/g, "-");
+  const base = seed.trim().toLowerCase().replace(/[^\w]+/g, "-").replace(/--+/g, "-");
   const stamp = Date.now().toString(36).slice(-5);
   return base ? `${base}-${stamp}` : `lender-${stamp}`;
 }
@@ -1164,45 +916,38 @@ function ensureLenderId(l) {
 }
 
 async function loadLenders() {
-  try {
-    const r = await fetch(ENDPOINTS.lenders, { cache: "no-store" });
-    if (!r.ok) throw new Error(`lenders GET ${r.status}`);
-    const data = await r.json();
-    state.lenders = Array.isArray(data?.lenders)
-      ? data.lenders.map(ensureLenderId)
-      : [];
-    state.lendersRevision = data?.revision ?? null;
-    updateLendersMeta();
-    renderLendersList();
-    updateLenderSelectOptions();
-  } catch (e) {
-    console.error(e);
-    toast("Failed to load lenders", "error");
-    state.lenders = state.lenders || [];
-    renderLendersList();
-    updateLenderSelectOptions();
-  }
+  const r = await fetch(ENDPOINTS.lenders, { cache: "no-store" });
+  if (!r.ok) throw new Error(`lenders GET ${r.status}`);
+  const data = await r.json().catch(() => ({}));
+
+  state.lenders = Array.isArray(data?.lenders) ? data.lenders.map(ensureLenderId) : [];
+  state.lendersRevision = data?.revision ?? null;
+
+  updateLendersMeta();
+  renderLendersList();
+  updateLenderSelectOptions();
 }
 
 async function saveLenders() {
   try {
     await collectLendersFromDOM();
     state.lenders = state.lenders.map(ensureLenderId);
-    const body = {
-      lenders: state.lenders,
-      revision: state.lendersRevision ?? undefined,
-    };
+
+    const body = { lenders: state.lenders, revision: state.lendersRevision ?? undefined };
     const r = await fetch(ENDPOINTS.lenders, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+
     if (!r.ok) {
       const t = await r.text().catch(() => "");
       throw new Error(`lenders PUT ${r.status} ${t}`);
     }
+
     const data = await r.json().catch(() => ({}));
     state.lendersRevision = data?.revision ?? state.lendersRevision;
+
     toast("Lenders saved");
     updateLendersMeta();
     updateLenderSelectOptions();
@@ -1213,6 +958,128 @@ async function saveLenders() {
   }
 }
 
+function updateLendersMeta() {
+  const meta = document.querySelector(SELECTORS.lendersMeta);
+  if (!meta) return;
+  const count = state.lenders.length || 0;
+  meta.textContent = `${count} lender${count === 1 ? "" : "s"} configured`;
+}
+
+function renderLendersList() {
+  const list = document.querySelector(SELECTORS.lendersList);
+  if (!list) return;
+
+  if (!state.lenders.length) {
+    list.innerHTML = `<div style="padding:8px 4px; font-size:13px; color:#666;">No lenders configured yet. Click “Add Lender” to create one.</div>`;
+    return;
+  }
+
+  list.innerHTML = state.lenders.map((l, idx) => {
+    const name = l.name || "";
+    const company = l.company || "";
+    const email = l.email || "";
+    const phone = l.phone || "";
+    const nmls = l.nmls || l.nmlsId || "";
+    const offer = l.offer || "";
+    return `
+      <div class="lender-row" data-idx="${idx}">
+        <div class="lender-grid">
+          <div class="f col-4"><label>Name</label><input class="ln-name" type="text" value="${escapeHtml(name)}" /></div>
+          <div class="f col-4"><label>Company</label><input class="ln-company" type="text" value="${escapeHtml(company)}" /></div>
+          <div class="f col-4"><label>Email</label><input class="ln-email" type="email" value="${escapeHtml(email)}" /></div>
+          <div class="f col-4"><label>Phone</label><input class="ln-phone" type="text" value="${escapeHtml(phone)}" /></div>
+          <div class="f col-4"><label>NMLS</label><input class="ln-nmls" type="text" value="${escapeHtml(nmls)}" /></div>
+          <div class="f col-12"><label>Default Offer (optional)</label><textarea class="ln-offer" placeholder="Default lender offer...">${escapeHtml(offer)}</textarea></div>
+        </div>
+        <div class="lender-actions">
+          <button type="button" class="btn danger ln-remove">Remove</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  list.querySelectorAll(".ln-remove").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest(".lender-row");
+      const idx = Number(row?.dataset?.idx);
+      if (Number.isNaN(idx)) return;
+
+      state.lenders.splice(idx, 1);
+      renderLendersList();
+      updateLendersMeta();
+      updateLenderSelectOptions();
+      reflectSelectedLenderChip();
+    });
+  });
+}
+
+async function collectLendersFromDOM() {
+  const list = document.querySelector(SELECTORS.lendersList);
+  if (!list) return;
+  const rows = Array.from(list.querySelectorAll(".lender-row"));
+
+  state.lenders = rows.map((r, i) => {
+    const prev = state.lenders[i] || {};
+    return ensureLenderId({
+      id: prev.id,
+      name: r.querySelector(".ln-name")?.value?.trim() || "",
+      company: r.querySelector(".ln-company")?.value?.trim() || "",
+      email: r.querySelector(".ln-email")?.value?.trim() || "",
+      phone: r.querySelector(".ln-phone")?.value?.trim() || "",
+      nmls: r.querySelector(".ln-nmls")?.value?.trim() || "",
+      offer: r.querySelector(".ln-offer")?.value?.trim() || "",
+    });
+  });
+}
+
+function addLenderRow() {
+  state.lenders.push({ id: "", name: "", company: "", email: "", phone: "", nmls: "", offer: "" });
+}
+
+function updateLenderSelectOptions() {
+  const sel = document.querySelector(SELECTORS.fLenderSelect);
+  if (!sel) return;
+
+  const current = sel.value;
+
+  sel.innerHTML =
+    `<option value="">— None —</option>` +
+    state.lenders.map((l) => {
+      const id = l.id || l.slug || l.email || (l.name || "").toLowerCase().replace(/[^\w]+/g, "-");
+      const label = [l.name, l.company].filter(Boolean).join(" • ");
+      return `<option value="${escapeHtml(id)}">${escapeHtml(label || id)}</option>`;
+    }).join("");
+
+  // keep current selection if still valid
+  if (current && Array.from(sel.options).some((o) => o.value === current)) {
+    sel.value = current;
+  } else {
+    sel.value = "";
+  }
+}
+
+function reflectSelectedLenderChip() {
+  const sel = document.querySelector(SELECTORS.fLenderSelect);
+  const chip = document.querySelector(SELECTORS.fLenderChip);
+  const chipText = document.querySelector(SELECTORS.fLenderChipText);
+  if (!sel || !chip || !chipText) return;
+
+  const id = sel.value;
+  if (!id) {
+    chip.style.display = "none";
+    chipText.textContent = "";
+    return;
+  }
+
+  const lenderObj = state.lenders.find((l) => l.id === id || l.slug === id || l.email === id);
+  if (lenderObj) {
+    chip.style.display = "inline-flex";
+    chipText.textContent = [lenderObj.name, lenderObj.company].filter(Boolean).join(" • ");
+  } else {
+    chip.style.display = "none";
+    chipText.textContent = "";
+  }
+}
 
 /* ---------------- Rendering cards ---------------- */
 
@@ -1220,71 +1087,42 @@ function safeSlugFrom(it) {
   if (it.slug) return String(it.slug);
   if (it.id) return String(it.id);
   if (it.listingId) return String(it.listingId);
-  const addr =
-    (typeof it.address === "string" && it.address) ||
-    (typeof it.Address === "string" && it.Address);
+  const addr = (typeof it.address === "string" && it.address) || (typeof it.Address === "string" && it.Address);
   return addr ? addr.toLowerCase().replace(/[^\w]+/g, "-") : "unknown";
 }
 
 function renderListingsIntoGrid(listings) {
   const grid = document.querySelector(SELECTORS.grid);
-  if (!grid) {
-    console.error("Missing #listingsGrid container");
-    return;
-  }
+  if (!grid) return console.error("Missing #listingsGrid container");
 
   const html = listings.map((l) => {
     const slug = safeSlugFrom(l);
-    const address =
-      (typeof l.address === "string" && l.address) ||
-      (typeof l.title === "string" && l.title) ||
-      (typeof l.Address === "string" && l.Address) ||
-      slug ||
-      "Address unavailable";
+    const address = (typeof l.address === "string" && l.address) || (typeof l.title === "string" && l.title) || (typeof l.Address === "string" && l.Address) || slug || "Address unavailable";
     const iso = typeof l.activeDate === "string" && l.activeDate;
+
     const priceVal = l.price ?? l.listPrice ?? l.ListPrice;
-    const priceNum =
-      typeof priceVal === "string"
-        ? Number(priceVal.replace(/[^\d.-]/g, ""))
-        : priceVal;
-    const price =
-      priceNum != null && Number.isFinite(priceNum)
-        ? new Intl.NumberFormat("en-US", {
-            style: "currency",
-            currency: "USD",
-            maximumFractionDigits: 0,
-          }).format(priceNum)
-        : "";
-    const photo =
-      (typeof l.photoUrl === "string" && l.photoUrl) ||
-      (typeof l.primaryPhoto === "string" && l.primaryPhoto);
+    const priceNum = typeof priceVal === "string" ? Number(priceVal.replace(/[^\d.-]/g, "")) : priceVal;
+    const price = priceNum != null && Number.isFinite(priceNum)
+      ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(priceNum)
+      : "";
+
+    const photo = (typeof l.photoUrl === "string" && l.photoUrl) || (typeof l.primaryPhoto === "string" && l.primaryPhoto);
     const mls = getMLSForCard(l);
-    const domValue =
-      typeof l.computedDaysOnMarket === "number"
-        ? l.computedDaysOnMarket
-        : "";
+    const domValue = typeof l.computedDaysOnMarket === "number" ? l.computedDaysOnMarket : "";
 
     return `
       <div class="card-inner" data-slug="${escapeHtml(slug)}">
-        ${
-          photo
-            ? `<img class="thumb" src="${escapeHtml(photo)}" alt="">`
-            : `<div class="thumb"></div>`
-        }
+        ${photo ? `<img class="thumb" src="${escapeHtml(photo)}" alt="">` : `<div class="thumb"></div>`}
         <div class="content">
           <div class="price">${price ? escapeHtml(price) : ""}</div>
           <div class="addr">${escapeHtml(address)}</div>
           <div class="meta">
             <span class="mls">MLS # ${escapeHtml(String(mls || ""))}</span>
-            <span class="dom-badge">
-              DOM <span class="js-daysOnMarket">${domValue}</span>
-            </span>
+            <span class="dom-badge">DOM <span class="js-daysOnMarket">${domValue}</span></span>
           </div>
           <div class="actions actions--date">
             <label class="mls" style="min-width:auto; margin-right:6px;">Active Date</label>
-            <input class="js-activeDate" type="date" value="${
-              iso ? escapeHtml(iso) : ""
-            }">
+            <input class="js-activeDate" type="date" value="${iso ? escapeHtml(iso) : ""}">
             <button class="js-saveActiveDate" type="button">Save Date</button>
           </div>
           <div class="actions actions--footer">
@@ -1295,8 +1133,7 @@ function renderListingsIntoGrid(listings) {
     `;
   });
 
-  grid.innerHTML =
-    html.join("") || `<div class="empty">No properties found.</div>`;
+  grid.innerHTML = html.join("") || `<div class="empty">No properties found.</div>`;
 
   listings.forEach((it) => {
     const slug = safeSlugFrom(it);
@@ -1313,30 +1150,168 @@ function updateDomForCard(card) {
   const slug = card.dataset.slug;
   const listing = state.items.get(slug);
   if (!listing) return;
+
   const domEl = card.querySelector(SELECTORS.domOut);
   if (!domEl) return;
 
   const activeISO = listing.activeDate;
-  if (!activeISO) {
-    domEl.textContent = "0";
-    return;
-  }
+  if (!activeISO) return (domEl.textContent = "0");
+
   const activeYMD = parseLooseDate(activeISO);
-  if (!activeYMD) {
-    domEl.textContent = "0";
-    return;
-  }
+  if (!activeYMD) return (domEl.textContent = "0");
+
   const t = todayYMDInTZ(TZ);
-  domEl.textContent = String(
-    daysBetweenTZ(t.y, t.m, t.d, activeYMD.y, activeYMD.m, activeYMD.d, TZ)
-  );
+  domEl.textContent = String(daysBetweenTZ(t.y, t.m, t.d, activeYMD.y, activeYMD.m, activeYMD.d, TZ));
 }
 
 function updateAllDom() {
   document.querySelectorAll(SELECTORS.card).forEach(updateDomForCard);
 }
 
-/* ---------------- Events ---------------- */
+/* ---- Populate Edit Listing (ONLY ONE) ---- */
+
+async function openListingEditor(slug, S) {
+  const item = S.items.get(slug);
+  if (!item) return toast("Listing not found", "error");
+
+  // ensure lenders are loaded so select has options
+  if (!state.lenders || state.lenders.length === 0) {
+    try { await loadLenders(); } catch {}
+  }
+
+  // details.json
+  if (!S.details.has(slug)) {
+    const url = item.detailsUrl;
+    if (url) {
+      try {
+        const r = await fetch(url, { cache: "no-store" });
+        S.details.set(slug, r.ok ? await r.json() : {});
+      } catch {
+        S.details.set(slug, {});
+      }
+    } else {
+      S.details.set(slug, {});
+    }
+  }
+  const det = S.details.get(slug);
+
+  // overrides
+  let overrides = S.overrides.get(slug) || {};
+  try {
+    const listingId = listingIdFrom(item, slug);
+    if (listingId) {
+      const r = await fetch(ENDPOINTS.update, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listingId }),
+      });
+      if (r.ok) {
+        const j = await r.json().catch(() => ({}));
+        if (j && typeof j.overrides === "object") overrides = j.overrides;
+      }
+    }
+  } catch (e) {
+    console.warn("Overrides fetch skipped", e);
+  }
+  state.overrides.set(slug, overrides);
+
+  // ✅ Per-property lender loader (RESET FIRST — prevents carrying last listing)
+  try {
+    const listingId = listingIdFrom(item, slug);
+    const sel = document.querySelector(SELECTORS.fLenderSelect);
+    const offerEl = document.querySelector(SELECTORS.fLenderOffer);
+
+    // reset UI first
+    if (sel) sel.value = "";
+    if (offerEl) offerEl.value = "";
+    updateLenderSelectOptions();
+    reflectSelectedLenderChip();
+
+    if (listingId) {
+      const lr = await fetch(`${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`, { cache: "no-store" });
+      if (lr.ok) {
+        const ldata = await lr.json().catch(() => null);
+        const lenderId = (ldata?.lenderId || "").trim();
+        const offer = (ldata?.offer?.details || "").trim();
+
+        updateLenderSelectOptions();
+
+        if (sel && lenderId && Array.from(sel.options).some(o => o.value === lenderId)) {
+          sel.value = lenderId;
+        } else if (sel) {
+          sel.value = "";
+        }
+        if (offerEl) offerEl.value = offer;
+
+        reflectSelectedLenderChip();
+      }
+    }
+  } catch (e2) {
+    console.warn("Per-property lender fetch failed", e2);
+  }
+
+  const flatDet = deepFlatten(det || {});
+  const src = [overrides, det, flatDet, item];
+
+  // fill form
+  setValue(SELECTORS.fMLS, pickSmart(src, ALIASES.mls, "mls") || "");
+  setValue(SELECTORS.fAddress, pickSmart(src, ALIASES.address, "address") || "");
+  setValue(SELECTORS.fCity, pickSmart(src, ALIASES.city, "city") || "");
+  setValue(SELECTORS.fState, pickSmart(src, ALIASES.state, "state") || "");
+  setValue(SELECTORS.fZip, pickSmart(src, ALIASES.zip, "zip", false) || "");
+
+  setValue(SELECTORS.fPrice, pickSmart(src, ALIASES.price, "price", true) ?? "");
+  setValue(SELECTORS.fBeds, pickSmart(src, ALIASES.beds, "beds", true) ?? "");
+  setValue(SELECTORS.fBaths, pickSmart(src, ALIASES.baths, "baths", true) ?? "");
+  setValue(SELECTORS.fSqft, pickSmart(src, ALIASES.sqft, "sqft", true) ?? "");
+  setValue(SELECTORS.fYear, pickSmart(src, ALIASES.year, "year", true) ?? "");
+
+  setValue(SELECTORS.fStatus, pickSmart(src, ALIASES.status, "status") || "");
+
+  const activeRaw = pickSmart(src, ALIASES.activeDate, "activeDate") || item.activeDate;
+  const activeYMD = parseLooseDate(activeRaw);
+  setValue(SELECTORS.fActiveDate, activeYMD ? ymdToISO(activeYMD.y, activeYMD.m, activeYMD.d) : "");
+
+  const tz = pickSmart(src, ALIASES.timezone, "timezone") || item.timezone || TZ;
+  setValue(SELECTORS.fTimezone, tz);
+
+  setValue(SELECTORS.fDesc, pickSmart(src, ALIASES.desc, "desc") || "");
+  setValue(SELECTORS.fNotes, pickSmart(src, ALIASES.notes, "notes") || "");
+
+  const photo = pickSmart(src, ALIASES.photo, "photo");
+  setValue(SELECTORS.fPhoto, photo || "");
+
+  // preview
+  const wrap = document.querySelector(SELECTORS.fPhotoPreviewWrap);
+  const imgEl = document.querySelector(SELECTORS.fPhotoPreview);
+  const hintEl = document.querySelector(SELECTORS.fPhotoHint);
+  if (wrap && imgEl) {
+    const previewUrl = previewUrlFrom(photo || "", item);
+    if (previewUrl) {
+      wrap.style.display = "block";
+      imgEl.src = previewUrl;
+      if (hintEl) hintEl.style.display = "none";
+    } else {
+      wrap.style.display = "none";
+    }
+  }
+
+  // DOM display
+  const fDomDisplay = document.querySelector(SELECTORS.fDomDisplay);
+  if (fDomDisplay) {
+    if (activeYMD) {
+      const t = todayYMDInTZ(tz || TZ);
+      const dom = daysBetweenTZ(t.y, t.m, t.d, activeYMD.y, activeYMD.m, activeYMD.d, tz || TZ);
+      fDomDisplay.textContent = `Days on Market: ${dom}`;
+    } else {
+      fDomDisplay.textContent = "Days on Market: —";
+    }
+  }
+
+  renderAdvancedFieldsFromSource([overrides, det, item]);
+}
+
+/* ---------------- ONE set of events ---------------- */
 
 document.addEventListener("click", async (e) => {
   // Save Active Date
@@ -1347,14 +1322,14 @@ document.addEventListener("click", async (e) => {
     const input = card.querySelector(SELECTORS.dateInput);
     const item = state.items.get(slug);
     if (!input || !item) return;
+
     const ymd = parseLooseDate(input.value);
-    if (!ymd) {
-      toast("Invalid date. Pick a date from the calendar.", "error");
-      return;
-    }
+    if (!ymd) return toast("Invalid date. Pick a date from the calendar.", "error");
+
     const iso = ymdToISO(ymd.y, ymd.m, ymd.d);
     item.activeDate = iso;
     updateDomForCard(card);
+
     try {
       await saveActiveDate(slug, iso);
       toast(`Saved Active Date for ${slug} → ${input.value || iso}`);
@@ -1372,27 +1347,39 @@ document.addEventListener("click", async (e) => {
     const slug = card.dataset.slug;
     state.currentSlug = slug;
     await openListingEditor(slug, state);
-    showModal(SELECTORS.listingModal);
+    openModal(SELECTORS.listingModal);
     return;
   }
 
-  // Edit Lenders
+  // Edit Lenders (top button)
   if (e.target.closest(SELECTORS.btnEditLenders)) {
-    showModal("#lendersModal");
+    try {
+      if (!state.lenders || state.lenders.length === 0) await loadLenders();
+    } catch (e2) {
+      console.warn(e2);
+      toast("Failed to load lenders", "error");
+    }
+    openModal(SELECTORS.lendersModal);
     return;
   }
-});
 
-// Modal‑level buttons (save listing, save lenders, add lender, add field)
-document.addEventListener("click", async (e) => {
+  // Manage lenders inline (inside listing modal)
+  if (e.target.closest(SELECTORS.btnManageLendersInline)) {
+    try {
+      if (!state.lenders || state.lenders.length === 0) await loadLenders();
+    } catch (e2) {
+      console.warn(e2);
+      toast("Failed to load lenders", "error");
+    }
+    openModal(SELECTORS.lendersModal);
+    return;
+  }
+
   // Save listing modal
   if (e.target.closest(SELECTORS.btnModalSave)) {
     e.preventDefault();
     const slug = state.currentSlug;
-    if (!slug) {
-      toast("No listing selected", "error");
-      return;
-    }
+    if (!slug) return toast("No listing selected", "error");
     try {
       await saveFullEdit(slug);
       closeModal(SELECTORS.listingModal);
@@ -1403,7 +1390,21 @@ document.addEventListener("click", async (e) => {
     return;
   }
 
-  // Save lenders (button in lenders modal)
+  // Close listing modal
+  if (e.target.closest(SELECTORS.closeListingX) || e.target.closest(SELECTORS.btnModalCancel)) {
+    e.preventDefault();
+    closeModal(SELECTORS.listingModal);
+    return;
+  }
+
+  // Close lenders modal
+  if (e.target.closest(SELECTORS.closeLendersX)) {
+    e.preventDefault();
+    closeModal(SELECTORS.lendersModal);
+    return;
+  }
+
+  // Save lenders
   if (e.target.closest(SELECTORS.btnSaveLenders)) {
     e.preventDefault();
     await saveLenders();
@@ -1413,9 +1414,7 @@ document.addEventListener("click", async (e) => {
   // Add lender row
   if (e.target.closest(SELECTORS.btnAddLender)) {
     e.preventDefault();
-    try {
-      await collectLendersFromDOM();   // preserve existing rows
-    } catch {}
+    try { await collectLendersFromDOM(); } catch {}
     addLenderRow();
     renderLendersList();
     updateLendersMeta();
@@ -1431,674 +1430,42 @@ document.addEventListener("click", async (e) => {
     return;
   }
 
-  // Close buttons in modals
-  if (
-    e.target.closest(SELECTORS.closeListingX) ||
-    e.target.closest(SELECTORS.btnModalCancel)
-  ) {
-    e.preventDefault();
-    closeModal(SELECTORS.listingModal);
-    return;
-  }
-  if (e.target.closest(SELECTORS.closeLendersX)) {
-    e.preventDefault();
-    closeModal(SELECTORS.lendersModal);
-    return;
-  }
-});
+  // Delete listing
+  if (e.target.closest(SELECTORS.btnDelete)) {
+    const slug = state.currentSlug;
+    if (!slug) return toast("No listing selected", "error");
+    if (!confirm(`Delete "${slug}" permanently?`)) return;
 
-/* DELETE LISTING */
-
-document.addEventListener("click", async (e) => {
-  if (e.target.id !== "btnDelete") return;
-
-  const slug = state.currentSlug;
-  console.log("🗑️ DELETE CLICKED", { slug });
-
-  if (!slug) {
-    console.error("NO SLUG!");
-    toast("No listing selected", "error");
-    return;
-  }
-
-  if (!confirm(`Delete "${slug}" permanently?`)) return;
-
-  try {
-    console.log("📤 SENDING POST to", ENDPOINTS.update);
-    const res = await fetch(ENDPOINTS.update, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug, delete: true }),
-    });
-
-    console.log("📥 RESPONSE", res.status, res.statusText);
-
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("❌ FULL ERROR:", errText);
-      throw new Error(`${res.status}: ${errText}`);
-    }
-
-    console.log("✅ SUCCESS");
-    toast("✅ Deleted");
-    state.items.delete(slug);
-    document
-      .querySelector(`[data-slug="${CSS.escape(slug)}"]`)
-      ?.remove();
-    closeModal(SELECTORS.listingModal);
-  } catch (e2) {
-    console.error("💥 DELETE FAILED:", e2);
-    toast(`❌ ${e2.message}`, "error");
-  }
-});
-
-/* ---- Populate Edit Listing ---- */
-
-async function openListingEditor(slug, S) {
-  const item = S.items.get(slug);
-  if (!item) {
-    toast("Listing not found", "error");
-    return;
-  }
-
-  if (!S.details.has(slug)) {
-    const url = item.detailsUrl;
-    if (url) {
-      try {
-        const r = await fetch(url, { cache: "no-store" });
-        const json = r.ok ? await r.json() : {};
-        S.details.set(slug, json);
-      } catch {
-        S.details.set(slug, {});
-      }
-    } else {
-      S.details.set(slug, {});
-    }
-  }
-  const det = S.details.get(slug);
-
-  let overrides = S.overrides.get(slug) || {};
-try {
-  const listingId = listingIdFrom(item, slug);
-  if (listingId) {
-    const r = await fetch(ENDPOINTS.update, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ listingId }),
-    });
-    if (r.ok) {
-      const j = await r.json().catch(() => ({}));
-      if (j && typeof j.overrides === "object") overrides = j.overrides;
-    }
-
-    // NEW per-property lender loader
-try {
-  const listingId = listingIdFrom(item, slug);
-  if (listingId) {
-    const lr = await fetch(
-      `${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`,
-      { cache: 'no-store' }
-    );
-    if (lr.ok) {
-      const ldata = await lr.json().catch(() => null);
-
-      const lenderId = ldata?.lenderId || null;
-      const offer = ldata?.offer?.details || '';
-      const sel = document.querySelector(SELECTORS.fLenderSelect);
-      const offerEl = document.querySelector(SELECTORS.fLenderOffer);
-
-      // Always reset to "None" for this listing first
-      if (sel) sel.value = '';
-
-      // Only apply a lender if this listing actually has one
-      if (sel && lenderId) sel.value = lenderId;
-      if (offerEl) offerEl.value = offer || '';
-
-      reflectSelectedLenderChip();
-    }
-  }
-} catch (e2) {
-  console.warn('Per-property lender fetch failed', e2);
-}
-
-  }
-} catch (e) {
-  console.warn("Overrides fetch skipped", e);
-}
-
-  state.overrides.set(slug, overrides);
-
-  const flatDet = deepFlatten(det || {});
-  const src = [overrides, det, flatDet, item];
-
-  const mls = pickSmart(src, ALIASES.mls, "mls");
-  const addr = pickSmart(src, ALIASES.address, "address");
-  const city = pickSmart(src, ALIASES.city, "city");
-  const st = pickSmart(src, ALIASES.state, "state");
-  const zip = pickSmart(src, ALIASES.zip, "zip", false);
-
-  setValue(SELECTORS.fMLS, mls || "");
-  setValue(SELECTORS.fAddress, addr || "");
-  setValue(SELECTORS.fCity, city || "");
-  setValue(SELECTORS.fState, st || "");
-  setValue(SELECTORS.fZip, zip || "");
-
-  const price = pickSmart(src, ALIASES.price, "price", true);
-  const beds = pickSmart(src, ALIASES.beds, "beds", true);
-  const baths = pickSmart(src, ALIASES.baths, "baths", true);
-  const sqft = pickSmart(src, ALIASES.sqft, "sqft", true);
-  const year = pickSmart(src, ALIASES.year, "year", true);
-
-  setValue(SELECTORS.fPrice, price ?? "");
-  setValue(SELECTORS.fBeds, beds ?? "");
-  setValue(SELECTORS.fBaths, baths ?? "");
-  setValue(SELECTORS.fSqft, sqft ?? "");
-  setValue(SELECTORS.fYear, year ?? "");
-
-  const status = pickSmart(src, ALIASES.status, "status");
-  setValue(SELECTORS.fStatus, status || "");
-
-  const activeRaw =
-    pickSmart(src, ALIASES.activeDate, "activeDate") || item.activeDate;
-  const activeYMD = parseLooseDate(activeRaw);
-  setValue(
-    SELECTORS.fActiveDate,
-    activeYMD ? ymdToISO(activeYMD.y, activeYMD.m, activeYMD.d) : ""
-  );
-
-  const tz =
-    pickSmart(src, ALIASES.timezone, "timezone") ||
-    item.timezone ||
-    TZ;
-  setValue(SELECTORS.fTimezone, tz);
-
-  const desc = pickSmart(src, ALIASES.desc, "desc");
-  const notes = pickSmart(src, ALIASES.notes, "notes");
-  setValue(SELECTORS.fDesc, desc || "");
-  setValue(SELECTORS.fNotes, notes || "");
-
-  const photo = pickSmart(src, ALIASES.photo, "photo");
-  setValue(SELECTORS.fPhoto, photo || "");
-  const wrap = document.querySelector(SELECTORS.fPhotoPreviewWrap);
-  const imgEl = document.querySelector(SELECTORS.fPhotoPreview);
-  const hintEl = document.querySelector(SELECTORS.fPhotoHint);
-  if (wrap && imgEl) {
-    const previewUrl = previewUrlFrom(photo || "", item);
-    if (previewUrl) {
-      wrap.style.display = "block";
-      imgEl.src = previewUrl;
-      if (hintEl) hintEl.style.display = "none";
-    } else {
-      wrap.style.display = "none";
-    }
-  }
-
-  const fDomDisplay = document.querySelector(SELECTORS.fDomDisplay);
-  if (fDomDisplay) {
-    const activeISO =
-      activeYMD && ymdToISO(activeYMD.y, activeYMD.m, activeYMD.d);
-    if (activeISO) {
-      const aYMD = parseLooseDate(activeISO);
-      if (aYMD) {
-        const t = todayYMDInTZ(tz || TZ);
-        const dom = daysBetweenTZ(
-          t.y,
-          t.m,
-          t.d,
-          aYMD.y,
-          aYMD.m,
-          aYMD.d,
-          tz || TZ
-        );
-        fDomDisplay.textContent = `Days on Market: ${dom}`;
-      } else {
-        fDomDisplay.textContent = "Days on Market: —";
-      }
-    } else {
-      fDomDisplay.textContent = "Days on Market: —";
-    }
-  }
-
-  renderAdvancedFieldsFromSource([overrides, det, item]);
-  updateLenderSelectOptions();
-  reflectSelectedLenderChip();
-}
-
-/* ---- Lenders list / meta / select helpers ---- */
-
-function updateLendersMeta() {
-  const meta = document.querySelector(SELECTORS.lendersMeta);
-  if (!meta) return;
-  const count = state.lenders.length || 0;
-  meta.textContent = `${count} lender${count === 1 ? "" : "s"} configured`;
-}
-
-function renderLendersList() {
-  const list = document.querySelector(SELECTORS.lendersList);
-  if (!list) return;
-  if (!state.lenders || !state.lenders.length) {
-    list.innerHTML = `<div style="padding:8px 4px; font-size:13px; color:#666;">No lenders configured yet. Click “Add Lender” to create one.</div>`;
-    return;
-  }
-  list.innerHTML = state.lenders
-    .map((l, idx) => {
-      const name = l.name || "";
-      const company = l.company || "";
-      const email = l.email || "";
-      const phone = l.phone || "";
-      const nmls = l.nmls || l.nmlsId || "";
-      const offer = l.offer || "";
-      return `
-        <div class="lender-row" data-idx="${idx}">
-          <div class="lender-grid">
-            <div class="f col-4">
-              <label>Name</label>
-              <input class="ln-name" type="text" value="${escapeHtml(name)}" />
-            </div>
-            <div class="f col-4">
-              <label>Company</label>
-              <input class="ln-company" type="text" value="${escapeHtml(company)}" />
-            </div>
-            <div class="f col-4">
-              <label>Email</label>
-              <input class="ln-email" type="email" value="${escapeHtml(email)}" />
-            </div>
-            <div class="f col-4">
-              <label>Phone</label>
-              <input class="ln-phone" type="text" value="${escapeHtml(phone)}" />
-            </div>
-            <div class="f col-4">
-              <label>NMLS</label>
-              <input class="ln-nmls" type="text" value="${escapeHtml(nmls)}" />
-            </div>
-            <div class="f col-12">
-              <label>Default Offer (optional)</label>
-              <textarea class="ln-offer" placeholder="Default lender offer...">${escapeHtml(
-                offer
-              )}</textarea>
-            </div>
-          </div>
-          <div class="lender-actions">
-            <button type="button" class="btn danger ln-remove">Remove</button>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-
-  list.querySelectorAll(".ln-remove").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const row = btn.closest(".lender-row");
-      if (!row) return;
-      const idx = Number(row.dataset.idx);
-      if (!Number.isNaN(idx)) {
-        state.lenders.splice(idx, 1);
-        renderLendersList();
-        updateLendersMeta();
-        updateLenderSelectOptions();
-        reflectSelectedLenderChip();
-      }
-    });
-  });
-}
-
-async function collectLendersFromDOM() {
-  const list = document.querySelector(SELECTORS.lendersList);
-  if (!list) return;
-  const rows = Array.from(list.querySelectorAll(".lender-row"));
-  state.lenders = rows.map((r, i) => {
-    const prev = state.lenders[i] || {};
-    return ensureLenderId({
-      id: prev.id,
-      name: r.querySelector(".ln-name")?.value?.trim() || "",
-      company: r.querySelector(".ln-company")?.value?.trim() || "",
-      email: r.querySelector(".ln-email")?.value?.trim() || "",
-      phone: r.querySelector(".ln-phone")?.value?.trim() || "",
-      nmls: r.querySelector(".ln-nmls")?.value?.trim() || "",
-      offer: r.querySelector(".ln-offer")?.value?.trim() || "",
-    });
-  });
-}
-
-// NEW: helper used by the Add Lender button
-function addLenderRow() {
-  state.lenders.push({
-    id: "",
-    name: "",
-    company: "",
-    email: "",
-    phone: "",
-    nmls: "",
-    offer: "",
-  });
-}
-
-function updateLenderSelectOptions() {
-  const sel = document.querySelector(SELECTORS.fLenderSelect);
-  if (!sel) return;
-  const val = sel.value;
-  sel.innerHTML =
-    `<option value="">— None —</option>` +
-    state.lenders
-      .map((l) => {
-        const id =
-          l.id ||
-          l.slug ||
-          l.email ||
-          l.name.toLowerCase().replace(/[^\w]+/g, "-");
-        const label = [l.name, l.company].filter(Boolean).join(" • ");
-        return `<option value="${escapeHtml(id)}">${escapeHtml(
-          label || id
-        )}</option>`;
-      })
-      .join("");
-  if (val && Array.from(sel.options).some((o) => o.value === val)) {
-    sel.value = val;
-  }
-}
-
-function reflectSelectedLenderChip() {
-  const sel = document.querySelector(SELECTORS.fLenderSelect);
-  const chip = document.querySelector(SELECTORS.fLenderChip);
-  const chipText = document.querySelector(SELECTORS.fLenderChipText);
-  if (!sel || !chip || !chipText) return;
-  const id = sel.value;
-  if (!id) {
-    chip.style.display = "none";
-    chipText.textContent = "";
-    return;
-  }
-  const lenderObj = state.lenders.find(
-    (l) => l.id === id || l.slug === id || l.email === id
-  );
-  if (lenderObj) {
-    chip.style.display = "inline-flex";
-    chipText.textContent = [lenderObj.name, lenderObj.company]
-      .filter(Boolean)
-      .join(" • ");
-  } else {
-    chip.style.display = "none";
-    chipText.textContent = "";
-  }
-}
-
-/* ---------------- Init ---------------- */
-
-async function init() {
-  try {
-    const listings = await fetchListings();
-    renderListingsIntoGrid(listings);
-    await loadLenders();
-    console.log("State items", state.items.size);
-  } catch (e) {
-    console.error(e);
-    toast("Failed to load dashboard", "error");
-  }
-}
-
-document.addEventListener("DOMContentLoaded", init);
-
-
-/* ---------------- Events ---------------- */
-
-document.addEventListener("click", async (e) => {
-  // Save Active Date
-  if (e.target.closest(SELECTORS.saveBtn)) {
-    const card = e.target.closest(SELECTORS.card);
-    if (!card) return;
-    const slug = card.dataset.slug;
-    const input = card.querySelector(SELECTORS.dateInput);
-    const item = state.items.get(slug);
-    if (!input || !item) return;
-    const ymd = parseLooseDate(input.value);
-    if (!ymd) {
-      toast("Invalid date. Pick a date from the calendar.", "error");
-      return;
-    }
-    const iso = ymdToISO(ymd.y, ymd.m, ymd.d);
-    item.activeDate = iso;
-    updateDomForCard(card);
     try {
-      await saveActiveDate(slug, iso);
-      toast(`Saved Active Date for ${slug} → ${input.value || iso}`);
-    } catch (err) {
-      console.error(err);
-      toast("Save failed. Check logs.", "error");
-    }
-    return;
-  }
-
-  // Edit Listing
-  if (e.target.closest(SELECTORS.btnEditListing)) {
-    const card = e.target.closest(SELECTORS.card);
-    if (!card) return;
-    const slug = card.dataset.slug;
-    state.currentSlug = slug;
-    await openListingEditor(slug, state);
-    showModal(SELECTORS.listingModal);
-    return;
-  }
-
-  // Edit Lenders
-  if (e.target.closest(SELECTORS.btnEditLenders)) {
-    showModal("#lendersModal");
-    return;
-  }
-});
-
-/* DELETE LISTING */
-
-document.addEventListener("click", async (e) => {
-  if (e.target.id !== "btnDelete") return;
-
-  const slug = state.currentSlug;
-  console.log("🗑️ DELETE CLICKED", { slug });
-
-  if (!slug) {
-    console.error("NO SLUG!");
-    toast("No listing selected", "error");
-    return;
-  }
-
-  if (!confirm(`Delete "${slug}" permanently?`)) return;
-
-  try {
-    console.log("📤 SENDING POST to", ENDPOINTS.update);
-    const res = await fetch(ENDPOINTS.update, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug, delete: true }),
-    });
-
-    console.log("📥 RESPONSE", res.status, res.statusText);
-
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("❌ FULL ERROR:", errText);
-      throw new Error(`${res.status}: ${errText}`);
-    }
-
-    console.log("✅ SUCCESS");
-    toast("✅ Deleted");
-    state.items.delete(slug);
-    document
-      .querySelector(`[data-slug="${CSS.escape(slug)}"]`)
-      ?.remove();
-    closeModal(SELECTORS.listingModal);
-  } catch (e2) {
-    console.error("💥 DELETE FAILED:", e2);
-    toast(`❌ ${e2.message}`, "error");
-  }
-});
-
-/* ---- Populate Edit Listing ---- */
-
-async function openListingEditor(slug, S) {
-  const item = S.items.get(slug);
-  if (!item) {
-    toast("Listing not found", "error");
-    return;
-  }
-
-  if (!S.details.has(slug)) {
-    const url = item.detailsUrl;
-    if (url) {
-      try {
-        const r = await fetch(url, { cache: "no-store" });
-        const json = r.ok ? await r.json() : {};
-        S.details.set(slug, json);
-      } catch {
-        S.details.set(slug, {});
-      }
-    } else {
-      S.details.set(slug, {});
-    }
-  }
-  const det = S.details.get(slug);
-
-  let overrides = S.overrides.get(slug) || {};
-  try {
-    const listingId = listingIdFrom(item, slug);
-    if (listingId) {
-      const r = await fetch(ENDPOINTS.update, {
+      const res = await fetch(ENDPOINTS.update, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ listingId }),
+        body: JSON.stringify({ slug, delete: true }),
       });
-      if (r.ok) {
-        const j = await r.json().catch(() => ({}));
-        if (j && typeof j.overrides === "object") overrides = j.overrides;
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`${res.status}: ${errText}`);
       }
 
-      // NEW per-property lender loader
-try {
-  const lr = await fetch(
-    `${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`,
-    { cache: "no-store" }
-  );
-  if (lr.ok) {
-    const ldata = await lr.json().catch(() => null);
-
-    const lenderId = ldata?.lenderId || null;
-    const offer = ldata?.offer?.details || "";
-    const sel = document.querySelector(SELECTORS.fLenderSelect);
-    const offerEl = document.querySelector(SELECTORS.fLenderOffer);
-
-    if (sel && lenderId) {
-      sel.value = lenderId;
+      toast("✅ Deleted");
+      state.items.delete(slug);
+      document.querySelector(`[data-slug="${CSS.escape(slug)}"]`)?.remove();
+      closeModal(SELECTORS.listingModal);
+    } catch (e2) {
+      console.error(e2);
+      toast(`❌ ${e2.message}`, "error");
     }
-    if (offerEl) {
-      offerEl.value = offer || "";
-    }
+    return;
+  }
+});
 
-    // keep UI chip in sync with the select
+// Keep chip in sync when you change dropdown manually
+document.addEventListener("change", (e) => {
+  if (e.target?.matches?.(SELECTORS.fLenderSelect)) {
     reflectSelectedLenderChip();
   }
-} catch (e2) {
-  console.warn("Per-property lender fetch failed", e2);
-}
-
-    }
-  } catch (e) {
-    console.warn("Overrides fetch skipped", e);
-  }
-  state.overrides.set(slug, overrides);
-
-  const flatDet = deepFlatten(det || {});
-  const src = [overrides, det, flatDet, item];
-
-  const mls = pickSmart(src, ALIASES.mls, "mls");
-  const addr = pickSmart(src, ALIASES.address, "address");
-  const city = pickSmart(src, ALIASES.city, "city");
-  const st = pickSmart(src, ALIASES.state, "state");
-  const zip = pickSmart(src, ALIASES.zip, "zip", false);
-
-  setValue(SELECTORS.fMLS, mls || "");
-  setValue(SELECTORS.fAddress, addr || "");
-  setValue(SELECTORS.fCity, city || "");
-  setValue(SELECTORS.fState, st || "");
-  setValue(SELECTORS.fZip, zip || "");
-
-  const price = pickSmart(src, ALIASES.price, "price", true);
-  const beds = pickSmart(src, ALIASES.beds, "beds", true);
-  const baths = pickSmart(src, ALIASES.baths, "baths", true);
-  const sqft = pickSmart(src, ALIASES.sqft, "sqft", true);
-  const year = pickSmart(src, ALIASES.year, "year", true);
-
-  setValue(SELECTORS.fPrice, price ?? "");
-  setValue(SELECTORS.fBeds, beds ?? "");
-  setValue(SELECTORS.fBaths, baths ?? "");
-  setValue(SELECTORS.fSqft, sqft ?? "");
-  setValue(SELECTORS.fYear, year ?? "");
-
-  const status = pickSmart(src, ALIASES.status, "status");
-  setValue(SELECTORS.fStatus, status || "");
-
-  const activeRaw =
-    pickSmart(src, ALIASES.activeDate, "activeDate") || item.activeDate;
-  const activeYMD = parseLooseDate(activeRaw);
-  setValue(
-    SELECTORS.fActiveDate,
-    activeYMD ? ymdToISO(activeYMD.y, activeYMD.m, activeYMD.d) : ""
-  );
-
-  const tz =
-    pickSmart(src, ALIASES.timezone, "timezone") ||
-    item.timezone ||
-    TZ;
-  setValue(SELECTORS.fTimezone, tz);
-
-  const desc = pickSmart(src, ALIASES.desc, "desc");
-  const notes = pickSmart(src, ALIASES.notes, "notes");
-  setValue(SELECTORS.fDesc, desc || "");
-  setValue(SELECTORS.fNotes, notes || "");
-
-  const photo = pickSmart(src, ALIASES.photo, "photo");
-  setValue(SELECTORS.fPhoto, photo || "");
-  const wrap = document.querySelector(SELECTORS.fPhotoPreviewWrap);
-  const imgEl = document.querySelector(SELECTORS.fPhotoPreview);
-  const hintEl = document.querySelector(SELECTORS.fPhotoHint);
-  if (wrap && imgEl) {
-    const previewUrl = previewUrlFrom(photo || "", item);
-    if (previewUrl) {
-      wrap.style.display = "block";
-      imgEl.src = previewUrl;
-      if (hintEl) hintEl.style.display = "none";
-    } else {
-      wrap.style.display = "none";
-    }
-  }
-
-  const fDomDisplay = document.querySelector(SELECTORS.fDomDisplay);
-  if (fDomDisplay) {
-    const activeISO =
-      activeYMD && ymdToISO(activeYMD.y, activeYMD.m, activeYMD.d);
-    if (activeISO) {
-      const aYMD = parseLooseDate(activeISO);
-      if (aYMD) {
-        const t = todayYMDInTZ(tz || TZ);
-        const dom = daysBetweenTZ(
-          t.y,
-          t.m,
-          t.d,
-          aYMD.y,
-          aYMD.m,
-          aYMD.d,
-          tz || TZ
-        );
-        fDomDisplay.textContent = `Days on Market: ${dom}`;
-      } else {
-        fDomDisplay.textContent = "Days on Market: —";
-      }
-    } else {
-      fDomDisplay.textContent = "Days on Market: —";
-    }
-  }
-
-  renderAdvancedFieldsFromSource([overrides, det, item]);
-  updateLenderSelectOptions();
-  reflectSelectedLenderChip();
-}
+});
 
 /* ---------------- Init ---------------- */
 
@@ -2106,7 +1473,10 @@ async function init() {
   try {
     const listings = await fetchListings();
     renderListingsIntoGrid(listings);
-    await loadLenders();
+
+    // load lenders once
+    try { await loadLenders(); } catch (e) { console.warn(e); }
+
     console.log("State items", state.items.size);
   } catch (e) {
     console.error(e);
@@ -2115,4 +1485,3 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
-

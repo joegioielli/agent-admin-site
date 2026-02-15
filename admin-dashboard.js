@@ -545,7 +545,10 @@ function adoptCoreFromExtras(coreValues, extras) {
 
 function mirrorAliasesIntoExtras(extras, coreValues, presentSources) {
   const presentFlat = Object.assign({}, ...presentSources.map((o) => deepFlatten(o || {})), extras);
+
   for (const [k] of Object.entries(presentFlat)) {
+    if (String(k).startsWith("details.")) continue; // ✅ skip details.* keys
+
     for (const g of Object.keys(GROUP_CANON)) {
       if (!keyBelongsToGroup(k, g)) continue;
       const val = GROUP_CANON[g](coreValues);
@@ -565,6 +568,7 @@ function mirrorAliasesIntoExtras(extras, coreValues, presentSources) {
     delete extras.squareFeet;
   }
 }
+
 
 function stripDetailsPrefix(key) {
   return String(key).startsWith("details.") ? key.slice("details.".length) : key;
@@ -669,7 +673,7 @@ function collectAdvancedFieldsToObject() {
     let k = r.querySelector(".adv-key")?.value?.trim();
     const v = r.querySelector(".adv-val")?.value?.trim();
     if (!k) return;
-    if (k.startsWith("details.")) k = k.slice("details.".length);
+    if (k.startsWith("details.")) return; // ✅ do not allow details.* to be saved into overrides
 
     if (!v) { obj[k] = ""; return; }
 
@@ -787,6 +791,10 @@ async function saveFullEdit(slug) {
   delete extras.bedrooms;
   delete extras.squareFeet;
 
+  for (const k of Object.keys(extras)) {
+   if (k.startsWith("details.")) delete extras[k];
+  }
+ 
   const overrides = { ...extras, ...overridesBase };
 
   const res = await callUpdate({
@@ -1052,14 +1060,15 @@ function updateLenderSelectOptions() {
 
   sel.innerHTML =
     `<option value="">— None —</option>` +
-    state.lenders.map((l) => {
-      const id = l.id;
-      if (!id) return "";
-      const label = [l.name, l.company].filter(Boolean).join(" • ");
-      return `<option value="${escapeHtml(id)}">${escapeHtml(label || id)}</option>`;
-    }).join("");
+    state.lenders
+      .filter((l) => l?.id && String(l.id).trim())
+      .map((l) => {
+        const id = String(l.id).trim();
+        const label = [l.name, l.company].filter(Boolean).join(" • ");
+        return `<option value="${escapeHtml(id)}">${escapeHtml(label || id)}</option>`;
+      })
+      .join("");
 
-  // keep current selection if still valid
   if (current && Array.from(sel.options).some((o) => o.value === current)) {
     sel.value = current;
   } else {

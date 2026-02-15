@@ -1046,6 +1046,7 @@ function updateLenderSelectOptions() {
     `<option value="">— None —</option>` +
     state.lenders.map((l) => {
       const id = l.id;
+      if (!id) return "";
       const label = [l.name, l.company].filter(Boolean).join(" • ");
       return `<option value="${escapeHtml(id)}">${escapeHtml(label || id)}</option>`;
     }).join("");

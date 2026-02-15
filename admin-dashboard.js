@@ -522,10 +522,18 @@ function pickBestAliasValueForGroup(obj, group) {
   return undefined;
 }
 
+function isBlank(v) {
+  return v === undefined || v === null || (typeof v === "string" && v.trim() === "");
+}
+
 function adoptCoreFromExtras(coreValues, extras) {
   for (const g of Object.keys(GROUP_CANON)) {
     const cand = pickBestAliasValueForGroup(extras, g);
     if (cand === undefined) continue;
+
+    // ✅ Form wins: only fill if the form/core value is currently blank
+    if (!isBlank(coreValues[g])) continue;
+
     if (["price", "beds", "baths", "sqft", "year", "zip"].includes(g)) {
       const n = toNumberOrNull(cand);
       if (n != null) coreValues[g] = n;

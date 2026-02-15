@@ -132,17 +132,14 @@ function extractDetailsIntent(body) {
     body.replaceDetails === true ||
     (body.replace === true && body.overrides && typeof body.overrides === "object");
 
-  // Prefer explicit "details"
   if (body.details && typeof body.details === "object") {
     return { patch: body.details, replaceDetails };
   }
 
-  // Back-compat: "detailsPatch"
   if (body.detailsPatch && typeof body.detailsPatch === "object") {
     return { patch: body.detailsPatch, replaceDetails: false };
   }
 
-  // Legacy: overrides + updates merged
   const patch = {
     ...(body.overrides && typeof body.overrides === "object" ? body.overrides : {}),
     ...(body.updates && typeof body.updates === "object" ? body.updates : {}),
@@ -151,7 +148,6 @@ function extractDetailsIntent(body) {
   if (body.activeDate != null && patch.activeDate == null) patch.activeDate = body.activeDate;
   if (body.timezone != null && patch.timezone == null) patch.timezone = body.timezone;
 
-  // never accept these from client
   if ("daysOnMarket" in patch) delete patch.daysOnMarket;
 
   return { patch, replaceDetails };
@@ -160,7 +156,7 @@ function extractDetailsIntent(body) {
 function sanitizeDetailsPatchMutable(patch) {
   if (!patch || typeof patch !== "object") return patch;
 
-  // 1) Normalize activeDate + timezone
+  // normalize activeDate + timezone
   if (typeof patch.activeDate === "string") {
     const iso = normalizeActiveDateISO(patch.activeDate);
     if (iso) patch.activeDate = iso;
@@ -171,7 +167,7 @@ function sanitizeDetailsPatchMutable(patch) {
     else delete patch.timezone;
   }
 
-  // 2) Strip any details.* keys and banned aliases you never want persisted
+  // strip details.* keys
   for (const k of Object.keys(patch)) {
     if (String(k).startsWith("details.")) delete patch[k];
   }
@@ -179,10 +175,6 @@ function sanitizeDetailsPatchMutable(patch) {
   // kill the two troublemakers explicitly
   delete patch.bedrooms;
   delete patch.squareFeet;
-
-  // (optional) If you ALSO want to prevent these older duplicates:
-  // delete patch.beds;
-  // delete patch.sqft;
 
   return patch;
 }
@@ -206,10 +198,6 @@ function numOrNull(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-/**
- * Normalize bath fields without ever overwriting per-level full bath counts
- * from totalBaths/baths.
- */
 function normalizeBaths(details) {
   if (!details || typeof details !== "object") return details;
 
@@ -224,15 +212,13 @@ function normalizeBaths(details) {
   const halfParts = [halfMain, halfSecond, halfThird].filter((n) => n != null);
 
   if (fullParts.length) {
-    const totalFull = fullParts.reduce((a, b) => a + b, 0);
-    details.TotalFullBaths = totalFull;
+    details.TotalFullBaths = fullParts.reduce((a, b) => a + b, 0);
   }
 
   if (fullParts.length || halfParts.length) {
     const fullCount = fullParts.reduce((a, b) => a + b, 0);
     const halfCount = halfParts.reduce((a, b) => a + b, 0);
-    const total = fullCount + halfCount;
-    details.totalBaths = total;
+    details.totalBaths = fullCount + halfCount;
   }
 
   return details;
@@ -269,7 +255,7 @@ export async function handler(event) {
       return bad(400, { ok: false, error: "Invalid JSON body" });
     }
 
-    // 🗑️ DELETE HANDLING - FULL LISTING + PHOTOS (NO overrides.json anymore)
+    // 🗑️ DELETE HANDLING - FULL LISTING + PHOTOS (NO overrides.json)
     if (body.delete === true) {
       const id = extractIdentifier(body);
       if (!id) return bad(400, { ok: false, error: "slug/id required for delete" });
@@ -279,12 +265,8 @@ export async function handler(event) {
 
       console.log("🗑️ DELETING FULL LISTING:", id);
 
-      // 1) Delete details.json if exists
-      if (await headExists(detailsKey)) {
-        await deleteJson(detailsKey);
-      }
+      if (await headExists(detailsKey)) await deleteJson(detailsKey);
 
-      // 2) Delete ALL photos for this MLS
       let photosContinuationToken;
       let photosDeleted = 0;
       do {
@@ -309,12 +291,7 @@ export async function handler(event) {
 
       console.log(`✅ DELETED listing + ${photosDeleted} photos for MLS: ${id}`);
 
-      return ok({
-        ok: true,
-        deleted: id,
-        photosDeleted,
-        message: "Listing and photos deleted",
-      });
+      return ok({ ok: true, deleted: id, photosDeleted, message: "Listing and photos deleted" });
     }
 
     // UPDATE / GET
@@ -327,10 +304,9 @@ export async function handler(event) {
 
     const currentDetails = (await getJson(detailsKey)) || {};
 
-    // If caller is doing the "fetch existing" pattern (no change)
-    // They used to send empty body and get overrides back; now return details.
     const { patch: rawPatch, replaceDetails } = extractDetailsIntent(body);
-    const noPatch = !rawPatch || typeof rawPatch !== "object" || Object.keys(rawPatch).length === 0;
+    const noPatch =
+      !rawPatch || typeof rawPatch !== "object" || Object.keys(rawPatch).length === 0;
 
     if (noPatch) {
       const tz = currentDetails.timezone || DEFAULT_LISTING_TZ;
@@ -357,28 +333,18 @@ export async function handler(event) {
     const patch = sanitizeDetailsPatchMutable({ ...rawPatch });
 
     // Build next details
-    let nextDetails;
-    if (replaceDetails) {
-      nextDetails = { ...patch };
-    } else {
-      nextDetails = { ...currentDetails };
-      applyPatchMutable(nextDetails, patch);
-    }
+    const nextDetails = replaceDetails
+      ? { ...patch }
+      : applyPatchMutable({ ...currentDetails }, patch);
 
-    // ensure tz default
     if (!nextDetails.timezone) nextDetails.timezone = currentDetails.timezone || DEFAULT_LISTING_TZ;
 
-    // normalize baths (optional but you already rely on it)
     normalizeBaths(nextDetails);
 
-    // stamp
     nextDetails.updatedAt = new Date().toISOString();
     nextDetails._lastEditedBy = "admin-dashboard";
 
-    // save
     await putJson(detailsKey, nextDetails);
-
-    const savedDetails = await getJson(detailsKey);
 
     const detailsUrl = await getSignedUrl(
       s3,
@@ -386,14 +352,14 @@ export async function handler(event) {
       { expiresIn: SIGN_EXPIRES }
     ).catch(() => null);
 
-    const tzForDom = savedDetails.timezone || DEFAULT_LISTING_TZ;
-    const dom = savedDetails.activeDate ? domInZone(savedDetails.activeDate, tzForDom) : null;
+    const tzForDom = nextDetails.timezone || DEFAULT_LISTING_TZ;
+    const dom = nextDetails.activeDate ? domInZone(nextDetails.activeDate, tzForDom) : null;
 
     return ok({
       ok: true,
       detailsKey,
       detailsUrl,
-      details: savedDetails,
+      details: nextDetails,
       detailsPatched: true,
       daysOnMarket: dom,
       timezone: tzForDom,

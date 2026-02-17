@@ -404,6 +404,32 @@ const CANON_HIDE = new Set([
   "primaryphoto","photo","photourl","mainphotourl",
 ]);
 
+/* ---------------- Core-field protection (Advanced Fields cannot override top form) ---------------- */
+
+// Any “core” field name (or alias) typed into Advanced Fields should be ignored
+const CORE_SIMPLE_KEYS = new Set([
+  "address","city","state","zip",
+  "price","listprice",
+  "beds","bed","bedrooms","totalbedrooms","bedroomstotal","bedroomstotalinteger",
+  "baths","bath","bathrooms","totalbaths","bathtotal","bathroomstotalinteger","totalfullbaths",
+  "sqft","sqfttotal","squarefeet","totalsqft","buildingareatotal","livingarea",
+  "year","yearbuilt","yearbuiltdetails",
+  "status","listingstatus","standardstatus",
+  "activedate","listdate","datelisted","dateactive","listingdate",
+  "timezone",
+  "remarks","publicremarks","description","agentnotes",
+  "primaryphoto","photo","photourl","mainphotourl",
+  "mls","mlsnumber","mlsno","mlsid","listingid","listingnumber","mls#",
+  "ok","id","slug","lastmodified","computeddaysonmarket","updatedat","_lasteditedby"
+]);
+
+function isCoreKey(key) {
+  if (!key) return false;
+  const base = String(key).split(".").pop();                 // ignore nesting like foo.bar
+  const norm = base.replace(/[^\w]/g, "").toLowerCase();     // normalize
+  return CORE_SIMPLE_KEYS.has(norm);
+}
+
 function normalizeKey(k) {
   return String(k).replace(/[^\w]+/g, "").toLowerCase();
 }
@@ -485,11 +511,17 @@ function collectAdvancedFieldsToObject() {
   const list = document.querySelector(SELECTORS.advList);
   if (!list) return {};
   const obj = {};
+
   list.querySelectorAll(".adv-row").forEach((r) => {
     let k = r.querySelector(".adv-key")?.value?.trim();
     const v = r.querySelector(".adv-val")?.value?.trim();
     if (!k) return;
-    if (k.startsWith("details.")) return; // never save details.* keys
+
+    // never allow details.* to be saved
+    if (k.startsWith("details.")) return;
+
+    // ✅ block core keys + aliases from being saved via Advanced Fields
+    if (isCoreKey(k)) return;
 
     if (!v) { obj[k] = ""; return; }
 
@@ -502,8 +534,10 @@ function collectAdvancedFieldsToObject() {
 
     obj[k] = val;
   });
+
   return obj;
 }
+
 /* --------- Form helpers --------- */
 
 function collectFormValues() {

@@ -31,6 +31,36 @@ const s3 = new S3Client({
   },
 });
 
+/* -------------------- TENANT PATH HELPERS (non-breaking) -------------------- */
+/**
+ * Optional tenant id for future agent separation.
+ * If omitted, everything uses legacy keys (current behavior).
+ */
+function extractTenantId(body) {
+  const t = body && (body.tenantId || body.tenant || body.accountId);
+  const s = String(t ?? "").trim();
+  return s ? s : null;
+}
+
+/**
+ * Returns tenant keys when tenantId present; always includes legacy fallback.
+ */
+function keysForListing(id, tenantId) {
+  const legacy = {
+    detailsKey: `listings/${id}/details.json`,
+    photosPrefix: `photos/${id}/`,
+  };
+
+  if (!tenantId) return { tenantId: null, ...legacy, legacy };
+
+  return {
+    tenantId,
+    detailsKey: `tenants/${tenantId}/listings/${id}/details.json`,
+    photosPrefix: `tenants/${tenantId}/photos/${id}/`,
+    legacy,
+  };
+}
+
 /* -------------------- HELPERS -------------------- */
 const streamToString = (stream) =>
   new Promise((resolve, reject) => {
@@ -255,72 +285,106 @@ export async function handler(event) {
       return bad(400, { ok: false, error: "Invalid JSON body" });
     }
 
+    const tenantId = extractTenantId(body);
+
     // 🗑️ DELETE HANDLING - FULL LISTING + PHOTOS (NO overrides.json)
     if (body.delete === true) {
       const id = extractIdentifier(body);
       if (!id) return bad(400, { ok: false, error: "slug/id required for delete" });
 
-      const detailsKey = `listings/${id}/details.json`;
-      const photosPrefix = `photos/${id}/`;
+      const k = keysForListing(id, tenantId);
 
-      console.log("🗑️ DELETING FULL LISTING:", id);
+      // Prefer tenant keys if they exist, otherwise fall back to legacy keys
+      const detailsKeyToDelete = (await headExists(k.detailsKey)) ? k.detailsKey : k.legacy.detailsKey;
 
-      if (await headExists(detailsKey)) await deleteJson(detailsKey);
+      // If deleting via tenant path but photos might still be legacy, we also fall back.
+      // We'll delete photos from BOTH prefixes when tenantId is provided (safe; list may be empty).
+      const prefixesToDelete = tenantId ? [k.photosPrefix, k.legacy.photosPrefix] : [k.photosPrefix];
 
-      let photosContinuationToken;
+      console.log("🗑️ DELETING FULL LISTING:", id, tenantId ? `(tenant: ${tenantId})` : "(legacy)");
+
+      if (await headExists(detailsKeyToDelete)) await deleteJson(detailsKeyToDelete);
+
       let photosDeleted = 0;
-      do {
-        const listPhotos = await s3.send(
-          new ListObjectsV2Command({
-            Bucket: BUCKET,
-            Prefix: photosPrefix,
-            ContinuationToken: photosContinuationToken,
-          })
-        );
 
-        for (const obj of listPhotos.Contents || []) {
-          console.log("🗑️ Deleting photo:", obj.Key);
-          await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: obj.Key }));
-          photosDeleted++;
-        }
+      for (const prefix of prefixesToDelete) {
+        let photosContinuationToken;
+        do {
+          const listPhotos = await s3.send(
+            new ListObjectsV2Command({
+              Bucket: BUCKET,
+              Prefix: prefix,
+              ContinuationToken: photosContinuationToken,
+            })
+          );
 
-        photosContinuationToken = listPhotos.IsTruncated
-          ? listPhotos.NextContinuationToken
-          : undefined;
-      } while (photosContinuationToken);
+          for (const obj of listPhotos.Contents || []) {
+            console.log("🗑️ Deleting photo:", obj.Key);
+            await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: obj.Key }));
+            photosDeleted++;
+          }
+
+          photosContinuationToken = listPhotos.IsTruncated
+            ? listPhotos.NextContinuationToken
+            : undefined;
+        } while (photosContinuationToken);
+      }
 
       console.log(`✅ DELETED listing + ${photosDeleted} photos for MLS: ${id}`);
 
-      return ok({ ok: true, deleted: id, photosDeleted, message: "Listing and photos deleted" });
+      return ok({
+        ok: true,
+        deleted: id,
+        tenantId: tenantId || undefined,
+        detailsKey: detailsKeyToDelete,
+        photosDeleted,
+        message: "Listing and photos deleted",
+      });
     }
 
     // UPDATE / GET
     const id = extractIdentifier(body);
     if (!id) return bad(400, { ok: false, error: "listingId/slug/id is required" });
 
-    const detailsKey = `listings/${id}/details.json`;
+    const k = keysForListing(id, tenantId);
 
-    console.log("[updateListing] id:", id, "detailsKey:", detailsKey, "region:", REGION, "bucket:", BUCKET);
+    // Read: tenant path if exists, else legacy path
+    const readKey = (await headExists(k.detailsKey)) ? k.detailsKey : k.legacy.detailsKey;
 
-    const currentDetails = (await getJson(detailsKey)) || {};
+    console.log(
+      "[updateListing] id:",
+      id,
+      "tenant:",
+      tenantId || "(none)",
+      "readKey:",
+      readKey,
+      "region:",
+      REGION,
+      "bucket:",
+      BUCKET
+    );
+
+    const currentDetails = (await getJson(readKey)) || {};
 
     const { patch: rawPatch, replaceDetails } = extractDetailsIntent(body);
     const noPatch =
       !rawPatch || typeof rawPatch !== "object" || Object.keys(rawPatch).length === 0;
 
+    // "No change" snapshot
     if (noPatch) {
       const tz = currentDetails.timezone || DEFAULT_LISTING_TZ;
       const dom = currentDetails.activeDate ? domInZone(currentDetails.activeDate, tz) : null;
 
       const detailsUrl = await getSignedUrl(
         s3,
-        new GetObjectCommand({ Bucket: BUCKET, Key: detailsKey }),
+        new GetObjectCommand({ Bucket: BUCKET, Key: readKey }),
         { expiresIn: SIGN_EXPIRES }
       ).catch(() => null);
 
       return ok({
         ok: true,
-        detailsKey,
+        tenantId: tenantId || undefined,
+        detailsKey: readKey,
         details: currentDetails,
         detailsUrl,
         daysOnMarket: dom,
@@ -344,11 +408,15 @@ export async function handler(event) {
     nextDetails.updatedAt = new Date().toISOString();
     nextDetails._lastEditedBy = "admin-dashboard";
 
-    await putJson(detailsKey, nextDetails);
+    // Write: if tenantId is supplied, write to tenant path; otherwise keep legacy.
+    // This avoids moving your existing files until you intentionally start sending tenantId.
+    const writeKey = tenantId ? k.detailsKey : k.legacy.detailsKey;
+
+    await putJson(writeKey, nextDetails);
 
     const detailsUrl = await getSignedUrl(
       s3,
-      new GetObjectCommand({ Bucket: BUCKET, Key: detailsKey }),
+      new GetObjectCommand({ Bucket: BUCKET, Key: writeKey }),
       { expiresIn: SIGN_EXPIRES }
     ).catch(() => null);
 
@@ -357,7 +425,8 @@ export async function handler(event) {
 
     return ok({
       ok: true,
-      detailsKey,
+      tenantId: tenantId || undefined,
+      detailsKey: writeKey,
       detailsUrl,
       details: nextDetails,
       detailsPatched: true,

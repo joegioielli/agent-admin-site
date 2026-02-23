@@ -26,8 +26,7 @@ const s3 = new S3Client({
   region: REGION,
   credentials: {
     accessKeyId: process.env.MY_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey:
-      process.env.MY_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY,
+    secretAccessKey: process.env.MY_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY,
   },
 });
 
@@ -112,10 +111,12 @@ function normalizeTimezoneMaybe(v) {
 function parseActiveYMD(s) {
   if (!s) return null;
   const str = String(s).trim();
+
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
     const [y, m, d] = str.split("-").map(Number);
     return { y, m, d };
   }
+
   if (/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(str)) {
     const [mm, dd, yy] = str.split(/[/-]/);
     const m = Number(mm);
@@ -124,6 +125,7 @@ function parseActiveYMD(s) {
     if (yy.length === 2) y = y >= 70 ? 1900 + y : 2000 + y;
     return { y, m, d };
   }
+
   const ad = new Date(str);
   if (isNaN(ad)) return null;
   return { y: ad.getFullYear(), m: ad.getMonth() + 1, d: ad.getDate() };
@@ -178,7 +180,9 @@ function extractDetailsIntent(body) {
   if (body.activeDate != null && patch.activeDate == null) patch.activeDate = body.activeDate;
   if (body.timezone != null && patch.timezone == null) patch.timezone = body.timezone;
 
+  // never accept these from client
   if ("daysOnMarket" in patch) delete patch.daysOnMarket;
+  if ("computedDaysOnMarket" in patch) delete patch.computedDaysOnMarket;
 
   return { patch, replaceDetails };
 }
@@ -205,6 +209,23 @@ function sanitizeDetailsPatchMutable(patch) {
   // kill the two troublemakers explicitly
   delete patch.bedrooms;
   delete patch.squareFeet;
+
+  // ✅ never persist server-computed / admin-only keys
+  const SERVER_ONLY_KEYS = [
+    "computedDaysOnMarket",
+    "daysOnMarket",
+    "updatedAt",
+    "_lastEditedBy",
+    "hasNote",
+    "lastModified",
+    "ok",
+    "id",
+    "slug",
+    "detailsUrl",
+  ];
+  for (const k of SERVER_ONLY_KEYS) {
+    if (k in patch) delete patch[k];
+  }
 
   return patch;
 }
@@ -297,7 +318,7 @@ export async function handler(event) {
       // Prefer tenant keys if they exist, otherwise fall back to legacy keys
       const detailsKeyToDelete = (await headExists(k.detailsKey)) ? k.detailsKey : k.legacy.detailsKey;
 
-      // If deleting via tenant path but photos might still be legacy, we also fall back.
+      // If deleting via tenant path but photos might still be legacy, also fall back.
       // We'll delete photos from BOTH prefixes when tenantId is provided (safe; list may be empty).
       const prefixesToDelete = tenantId ? [k.photosPrefix, k.legacy.photosPrefix] : [k.photosPrefix];
 
@@ -324,9 +345,7 @@ export async function handler(event) {
             photosDeleted++;
           }
 
-          photosContinuationToken = listPhotos.IsTruncated
-            ? listPhotos.NextContinuationToken
-            : undefined;
+          photosContinuationToken = listPhotos.IsTruncated ? listPhotos.NextContinuationToken : undefined;
         } while (photosContinuationToken);
       }
 
@@ -367,8 +386,7 @@ export async function handler(event) {
     const currentDetails = (await getJson(readKey)) || {};
 
     const { patch: rawPatch, replaceDetails } = extractDetailsIntent(body);
-    const noPatch =
-      !rawPatch || typeof rawPatch !== "object" || Object.keys(rawPatch).length === 0;
+    const noPatch = !rawPatch || typeof rawPatch !== "object" || Object.keys(rawPatch).length === 0;
 
     // "No change" snapshot
     if (noPatch) {
@@ -387,7 +405,7 @@ export async function handler(event) {
         detailsKey: readKey,
         details: currentDetails,
         detailsUrl,
-        daysOnMarket: dom,
+        daysOnMarket: dom, // ✅ always available to AI via this endpoint
         timezone: tz,
         noChange: true,
       });
@@ -397,9 +415,7 @@ export async function handler(event) {
     const patch = sanitizeDetailsPatchMutable({ ...rawPatch });
 
     // Build next details
-    const nextDetails = replaceDetails
-      ? { ...patch }
-      : applyPatchMutable({ ...currentDetails }, patch);
+    const nextDetails = replaceDetails ? { ...patch } : applyPatchMutable({ ...currentDetails }, patch);
 
     if (!nextDetails.timezone) nextDetails.timezone = currentDetails.timezone || DEFAULT_LISTING_TZ;
 
@@ -408,8 +424,7 @@ export async function handler(event) {
     nextDetails.updatedAt = new Date().toISOString();
     nextDetails._lastEditedBy = "admin-dashboard";
 
-    // Write: if tenantId is supplied, write to tenant path; otherwise keep legacy.
-    // This avoids moving your existing files until you intentionally start sending tenantId.
+    // Write: if tenantId supplied, write to tenant path; otherwise keep legacy.
     const writeKey = tenantId ? k.detailsKey : k.legacy.detailsKey;
 
     await putJson(writeKey, nextDetails);
@@ -430,7 +445,7 @@ export async function handler(event) {
       detailsUrl,
       details: nextDetails,
       detailsPatched: true,
-      daysOnMarket: dom,
+      daysOnMarket: dom, // ✅ always returned on save too
       timezone: tzForDom,
     });
   } catch (e) {

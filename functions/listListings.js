@@ -10,10 +10,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { domInZone } from "./domInZone.js";
 
 /** ===== Config ===== */
-const REGION =
-  process.env.MY_AWS_REGION ||
-  process.env.AWS_REGION ||
-  "us-east-2";
+const REGION = process.env.MY_AWS_REGION || process.env.AWS_REGION || "us-east-2";
 
 const BUCKET =
   process.env.SMARTSIGNS_BUCKET ||
@@ -21,8 +18,7 @@ const BUCKET =
   process.env.MY_AWS_BUCKET_NAME ||
   "gioi-real-estate-bucket";
 
-const DEFAULT_LISTING_TZ =
-  process.env.DEFAULT_LISTING_TZ || "America/Chicago";
+const DEFAULT_LISTING_TZ = process.env.DEFAULT_LISTING_TZ || "America/Chicago";
 const SIGN_EXPIRES = 3600; // 1 hour
 
 const s3 = new S3Client({
@@ -66,11 +62,9 @@ async function headExists(Key) {
 }
 
 async function presign(Key) {
-  return getSignedUrl(
-    s3,
-    new GetObjectCommand({ Bucket: BUCKET, Key }),
-    { expiresIn: SIGN_EXPIRES }
-  );
+  return getSignedUrl(s3, new GetObjectCommand({ Bucket: BUCKET, Key }), {
+    expiresIn: SIGN_EXPIRES,
+  });
 }
 
 function cleanNumberOrString(v) {
@@ -94,7 +88,11 @@ function firstNonEmpty(...vals) {
 function normalizeISODate(s) {
   if (!s) return null;
   const str = String(s).trim();
+
+  // ISO already
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+
+  // M/D/YY or M/D/YYYY or with dashes
   if (/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(str)) {
     const [mm, dd, yy] = str.split(/[/-]/);
     let y = Number(yy);
@@ -103,6 +101,8 @@ function normalizeISODate(s) {
     const d = String(Number(dd)).padStart(2, "0");
     return `${y}-${m}-${d}`;
   }
+
+  // Last resort
   const d = new Date(str);
   if (isNaN(d)) return null;
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
@@ -196,6 +196,7 @@ export async function handler() {
           ContinuationToken: token,
         })
       );
+
       for (const obj of page.Contents ?? []) {
         const key = obj.Key || "";
         if (key.endsWith("/details.json")) {
@@ -205,72 +206,52 @@ export async function handler() {
           });
         }
       }
+
       token = page.IsTruncated ? page.NextContinuationToken : undefined;
     } while (token);
 
-    // 2) For each details.json, read, merge overrides, & enrich
+    // 2) For each details.json, read & enrich (NO overrides.json)
     const limit = pLimit(8);
+
     const items = await Promise.all(
       detailObjects.map((o) =>
         limit(async () => {
-          const key = o.Key;                     // listings/{id}/details.json
-          const listingId = key.split("/")[1];   // extract {id}
+          const key = o.Key; // listings/{id}/details.json
+          const listingId = key.split("/")[1];
 
           let details = {};
           try {
             details = await readJSON(key);
           } catch {}
 
-          const overridesKey = `listings/${listingId}/overrides.json`;
-          let overrides = {};
-          try {
-            if (await headExists(overridesKey)) {
-              overrides = await readJSON(overridesKey);
-            }
-          } catch {}
+          // --- Canonical fields for cards ---
+          const mls = firstNonEmpty(details.mlsNumber, details.MlsNumber, details.mls, details.MLS, listingId);
 
-          const merged = { ...details, ...overrides };
+          const address = firstNonEmpty(details.address, details.Address);
 
-          const mls = firstNonEmpty(merged.mlsNumber, merged.mls, listingId);
-          const address = firstNonEmpty(merged.address, merged.Address);
-          const price = cleanNumberOrString(
-            firstNonEmpty(merged.listPrice, merged.ListPrice, merged.price)
+          const price = cleanNumberOrString(firstNonEmpty(details.price, details.listPrice, details.ListPrice));
+
+          // --- Active Date truth ---
+          // Prefer explicit activeDate; fall back to ListDate/listDate.
+          const activeDate = normalizeISODate(
+            firstNonEmpty(details.activeDate, details.ActiveDate, details.listDate, details.ListDate)
           );
 
-          const mergedActiveDate = normalizeISODate(
-            firstNonEmpty(
-              overrides.activeDate,
-              merged.activeDate,
-              merged.listDate,
-              merged.ListDate,
-              details.activeDate,
-              details.listDate,
-              details.ListDate
-            )
-          );
-          const timezone = firstNonEmpty(
-            overrides.timezone,
-            merged.timezone,
-            details.timezone,
-            DEFAULT_LISTING_TZ
-          );
+          const timezone = firstNonEmpty(details.timezone, details.Timezone, DEFAULT_LISTING_TZ);
 
-          const computedDaysOnMarket = mergedActiveDate
-            ? domInZone(mergedActiveDate, timezone)
-            : null;
+          // --- DOM MUST be computed from activeDate ---
+          const computedDaysOnMarket = activeDate ? domInZone(activeDate, timezone) : null;
 
-          const hasNote =
-            typeof merged.agentNotes === "string" &&
-            merged.agentNotes.trim().length > 0;
+          // CSV DOM is allowed only as debug, never as truth
+          const csvDaysOnMarket = cleanNumberOrString(firstNonEmpty(details.DaysOnMarket, details.daysOnMarket));
 
-          const photoKey = await resolvePhotoKey(listingId, merged);
+          const hasNote = typeof details.agentNotes === "string" && details.agentNotes.trim().length > 0;
+
+          const photoKey = await resolvePhotoKey(listingId, details);
           const photoUrl = photoKey ? await presign(photoKey) : null;
 
-          // IMPORTANT CHANGE: detailsUrl now points at Netlify function,
-          // not a presigned S3 URL.
-          const detailsUrl = `/.netlify/functions/getListingDetails?listingId=${encodeURIComponent(
-            listingId
-          )}`;
+          // detailsUrl stays Netlify function (not presigned S3)
+          const detailsUrl = `/.netlify/functions/getListingDetails?listingId=${encodeURIComponent(listingId)}`;
 
           return {
             slug: listingId,
@@ -280,9 +261,15 @@ export async function handler() {
             mls,
             address: address || null,
             price: price ?? null,
-            activeDate: mergedActiveDate,
+
+            activeDate,
             timezone,
+
+            // ✅ always the one the UI should use
             computedDaysOnMarket,
+
+            // optional debug only
+            csvDaysOnMarket: csvDaysOnMarket ?? null,
 
             photoUrl,
             detailsUrl,

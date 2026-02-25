@@ -435,13 +435,55 @@ function normalizeKey(k) {
 }
 
 const ADVHIDE = {
-  hardCI: new Set(["0.path","0.value","path","value","key","csvkey","ingestedat","listingtype","longitude","parceliddisplay","slug"].map(s => s.toLowerCase())),
-  patterns: [/\.path$/i,/\.value$/i,/path$/i,/value$/i,/key$/i,/slug$/i,/csvkey/i,/ingestedat/i,/listingtype/i,/longitude/i,/parceliddisplay/i],
+  // Case-insensitive exact matches
+  hardCI: new Set(
+    [
+      // internal plumbing / ingestion
+      "0.path", "0.value", "path", "value", "key", "csvkey", "ingestedat", "source.csvkey", "source.ingestedat",
+
+      // routing / ui
+      "slug", "id", "listingid", "detailsurl", "ok", "lastmodified",
+
+      // computed/system fields (not editable)
+      "computeddaysonmarket", "csvdaysonmarket", "daysonmarket",
+      "updatedat", "_lasteditedby", "hasnote",
+
+      // you said irrelevant noise
+      "latitude", "longitude",
+      "officelistcode",
+      "propertyclassid",
+    ].map((s) => s.toLowerCase())
+  ),
+
+  // Pattern-based hides (case-insensitive)
+  patterns: [
+    /\.path$/i, /\.value$/i,
+    /(^|\.)(path|value|key)$/i,
+    /(^|\.)(slug|id|listingid|detailsurl|ok|lastmodified)$/i,
+    /csvkey/i, /ingestedat/i,
+
+    // DOM variants
+    /computed.?days.?on.?market/i,
+    /csv.?days.?on.?market/i,
+    /days.?on.?market/i,
+
+    // irrelevant (per your note)
+    /latitude/i, /longitude/i,
+    /office(list)?code/i,
+    /propertyclassid/i,
+    /_lasteditedby/i,
+    /updatedat/i,
+    /hasnote/i,
+  ],
 };
 
 function shouldHideAdminKey(originalKey) {
+  // Optional: if you ever add a toggle later
   if (localStorage.getItem("showAdminKeys") === "1") return false;
-  const kc = String(originalKey).toLowerCase();
+
+  const kc = String(originalKey || "").toLowerCase().trim();
+  if (!kc) return true;
+
   if (ADVHIDE.hardCI.has(kc)) return true;
   return ADVHIDE.patterns.some((rx) => rx.test(originalKey));
 }

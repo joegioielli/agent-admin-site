@@ -210,7 +210,7 @@ export async function handler() {
       token = page.IsTruncated ? page.NextContinuationToken : undefined;
     } while (token);
 
-    // 2) For each details.json, read & enrich (NO overrides.json)
+    // 2) For each details.json, read & enrich
     const limit = pLimit(8);
 
     const items = await Promise.all(
@@ -242,9 +242,6 @@ export async function handler() {
           // --- DOM MUST be computed from activeDate ---
           const computedDaysOnMarket = activeDate ? domInZone(activeDate, timezone) : null;
 
-          // CSV DOM is allowed only as debug, never as truth
-          const csvDaysOnMarket = cleanNumberOrString(firstNonEmpty(details.DaysOnMarket, details.daysOnMarket));
-
           const hasNote = typeof details.agentNotes === "string" && details.agentNotes.trim().length > 0;
 
           const photoKey = await resolvePhotoKey(listingId, details);
@@ -265,19 +262,14 @@ export async function handler() {
             activeDate,
             timezone,
 
-            // ✅ always the one the UI should use
+            // ✅ only DOM we expose to UI
             computedDaysOnMarket,
-
-            // optional debug only
-            csvDaysOnMarket: csvDaysOnMarket ?? null,
 
             photoUrl,
             detailsUrl,
 
             lastModified: o.LastModified,
             hasNote,
-
-            key,
           };
         })
       )
@@ -287,7 +279,7 @@ export async function handler() {
       const ad = a.lastModified ? Date.parse(a.lastModified) : 0;
       const bd = b.lastModified ? Date.parse(b.lastModified) : 0;
       if (ad !== bd) return bd - ad;
-      return String(b.key).localeCompare(String(a.key));
+      return String(b.listingId).localeCompare(String(a.listingId));
     });
 
     return {

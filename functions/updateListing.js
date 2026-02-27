@@ -122,7 +122,7 @@ function parseActiveYMD(s) {
     const m = Number(mm);
     const d = Number(dd);
     let y = Number(yy);
-    if (yy.length === 2) y = y >= 70 ? 1900 + y : 2000 + y;
+    if (yy.length === 2) y = y >= 70 ? 1900 + yy : 2000 + yy;
     return { y, m, d };
   }
 
@@ -147,17 +147,6 @@ function extractIdentifier(body) {
 
 /**
  * Convert legacy body shapes into a single "details patch".
- *
- * Supported inputs:
- * - body.details (preferred new)
- * - body.detailsPatch (legacy-ish)
- * - body.updates (legacy)
- * - body.overrides (legacy)  <-- treated as details patch (NOT saved separately)
- * - body.activeDate / body.timezone (legacy)
- *
- * Flags:
- * - body.replaceDetails === true -> replace the whole details file with provided details object
- * - body.replace === true with body.overrides -> treat as replaceDetails (legacy mapping)
  */
 function extractDetailsIntent(body) {
   const replaceDetails =
@@ -180,11 +169,68 @@ function extractDetailsIntent(body) {
   if (body.activeDate != null && patch.activeDate == null) patch.activeDate = body.activeDate;
   if (body.timezone != null && patch.timezone == null) patch.timezone = body.timezone;
 
-  // never accept these from client
-  if ("daysOnMarket" in patch) delete patch.daysOnMarket;
-  if ("computedDaysOnMarket" in patch) delete patch.computedDaysOnMarket;
-
   return { patch, replaceDetails };
+}
+
+/* -------------------- DOM POLICY (HARD BLOCK + AUTO CLEAN) -------------------- */
+/**
+ * CSV DOM is worthless after ingest day.
+ * We compute DOM from activeDate + timezone only.
+ * These keys are NEVER stored, and will be removed on any save.
+ */
+const DOM_KEYS_EXACT = new Set([
+  // common "DOM" concepts we never persist
+  "daysOnMarket",
+  "computedDaysOnMarket",
+
+  // CSV / RealTracs style
+  "DaysOnMarket",
+  "DOM",
+  "CsvDom",
+  "CSVDOM",
+  "csvDOM",
+  "csvDom",
+  "csvDaysOnMarket",
+  "CsvDaysOnMarket",
+
+  // any past experiments
+  "dom",
+  "computedDom",
+]);
+
+function shouldStripDomKey(key) {
+  if (!key) return false;
+  const k = String(key).trim();
+  if (!k) return false;
+
+  // exact match first
+  if (DOM_KEYS_EXACT.has(k)) return true;
+
+  // normalized match (case/punct insensitive)
+  const norm = k.replace(/[^\w]/g, "").toLowerCase();
+  if (
+    norm === "daysonmarket" ||
+    norm === "computeddaysonmarket" ||
+    norm === "csvdaysonmarket" ||
+    norm === "csvdom" ||
+    norm === "dom"
+  ) return true;
+
+  // pattern safety net
+  if (/csv.*days.*on.*market/i.test(k)) return true;
+  if (/computed.*days.*on.*market/i.test(k)) return true;
+  if (/(^|[^a-z])dom([^a-z]|$)/i.test(k) && /market/i.test(k)) return true; // "DOM (Market)" style
+  if (/days.*on.*market/i.test(k)) return true;
+
+  return false;
+}
+
+function stripDomFieldsMutable(obj) {
+  if (!obj || typeof obj !== "object") return obj;
+  for (const k of Object.keys(obj)) {
+    if (shouldStripDomKey(k)) delete obj[k];
+  }
+  return obj;
 }
 
 function sanitizeDetailsPatchMutable(patch) {
@@ -210,10 +256,11 @@ function sanitizeDetailsPatchMutable(patch) {
   delete patch.bedrooms;
   delete patch.squareFeet;
 
+  // ✅ never persist any DOM fields (csv or computed)
+  stripDomFieldsMutable(patch);
+
   // ✅ never persist server-computed / admin-only keys
   const SERVER_ONLY_KEYS = [
-    "computedDaysOnMarket",
-    "daysOnMarket",
     "updatedAt",
     "_lastEditedBy",
     "hasNote",
@@ -315,11 +362,8 @@ export async function handler(event) {
 
       const k = keysForListing(id, tenantId);
 
-      // Prefer tenant keys if they exist, otherwise fall back to legacy keys
       const detailsKeyToDelete = (await headExists(k.detailsKey)) ? k.detailsKey : k.legacy.detailsKey;
 
-      // If deleting via tenant path but photos might still be legacy, also fall back.
-      // We'll delete photos from BOTH prefixes when tenantId is provided (safe; list may be empty).
       const prefixesToDelete = tenantId ? [k.photosPrefix, k.legacy.photosPrefix] : [k.photosPrefix];
 
       console.log("🗑️ DELETING FULL LISTING:", id, tenantId ? `(tenant: ${tenantId})` : "(legacy)");
@@ -383,7 +427,10 @@ export async function handler(event) {
       BUCKET
     );
 
-    const currentDetails = (await getJson(readKey)) || {};
+    const currentDetailsRaw = (await getJson(readKey)) || {};
+
+    // IMPORTANT: for responses, never leak CSV DOM fields
+    const currentDetails = stripDomFieldsMutable({ ...currentDetailsRaw });
 
     const { patch: rawPatch, replaceDetails } = extractDetailsIntent(body);
     const noPatch = !rawPatch || typeof rawPatch !== "object" || Object.keys(rawPatch).length === 0;
@@ -405,7 +452,7 @@ export async function handler(event) {
         detailsKey: readKey,
         details: currentDetails,
         detailsUrl,
-        daysOnMarket: dom, // ✅ always available to AI via this endpoint
+        daysOnMarket: dom, // computed only
         timezone: tz,
         noChange: true,
       });
@@ -415,10 +462,21 @@ export async function handler(event) {
     const patch = sanitizeDetailsPatchMutable({ ...rawPatch });
 
     // Build next details
-    const nextDetails = replaceDetails ? { ...patch } : applyPatchMutable({ ...currentDetails }, patch);
+    const nextDetails = replaceDetails
+      ? { ...patch }
+      : applyPatchMutable(
+          // start from raw stored details, but immediately strip DOM junk
+          stripDomFieldsMutable({ ...(currentDetailsRaw || {}) }),
+          patch
+        );
 
-    if (!nextDetails.timezone) nextDetails.timezone = currentDetails.timezone || DEFAULT_LISTING_TZ;
+    // Ensure timezone defaults
+    if (!nextDetails.timezone) nextDetails.timezone = currentDetailsRaw.timezone || DEFAULT_LISTING_TZ;
 
+    // FINAL HARD CLEAN: ensure no DOM fields exist, even if old file had them
+    stripDomFieldsMutable(nextDetails);
+
+    // Normalize baths and metadata
     normalizeBaths(nextDetails);
 
     nextDetails.updatedAt = new Date().toISOString();
@@ -443,9 +501,9 @@ export async function handler(event) {
       tenantId: tenantId || undefined,
       detailsKey: writeKey,
       detailsUrl,
-      details: nextDetails,
+      details: nextDetails, // already cleaned (no CSV DOM fields)
       detailsPatched: true,
-      daysOnMarket: dom, // ✅ always returned on save too
+      daysOnMarket: dom, // computed only
       timezone: tzForDom,
     });
   } catch (e) {

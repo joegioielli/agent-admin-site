@@ -7,7 +7,7 @@ function ymdInZone(date = new Date(), timeZone) {
     month: "2-digit",
     day: "2-digit",
   });
-  const parts = Object.fromEntries(fmt.formatToParts(date).map(p => [p.type, p.value]));
+  const parts = Object.fromEntries(fmt.formatToParts(date).map((p) => [p.type, p.value]));
   return { y: +parts.year, m: +parts.month, d: +parts.day };
 }
 
@@ -22,11 +22,14 @@ function parseToYMD(s) {
   }
 
   // MM/DD/YY(YY) or MM-DD-YY(YY)
-  const t = str.split(/[\/-]/).map(x => x.trim());
+  const t = str.split(/[\/-]/).map((x) => x.trim());
   if (t.length === 3) {
-    let [mm, dd, yy] = t;
+    const [mm, dd, yy] = t;
     let y = Number(yy);
-    if (y < 100) y += 2000; // simple pivot (00–99 -> 2000–2099)
+
+    // ✅ pivot like the dashboard: 70–99 => 1970–1999, 00–69 => 2000–2069
+    if (yy.length === 2) y = y >= 70 ? 1900 + y : 2000 + y;
+
     return { y, m: Number(mm), d: Number(dd) };
   }
 
@@ -36,9 +39,14 @@ function parseToYMD(s) {
 export function domInZone(activeDateStr, timeZone = "America/Chicago", now = new Date()) {
   const a = parseToYMD(activeDateStr);
   if (!a) return 0;
+
+  // "today" in the listing's timezone
   const n = ymdInZone(now, timeZone);
+
+  // compare by calendar day (not clock time) => DST safe
   const aUTC = Date.UTC(a.y, a.m - 1, a.d);
   const nUTC = Date.UTC(n.y, n.m - 1, n.d);
+
   const days = Math.floor((nUTC - aUTC) / 86400000);
   return days < 0 ? 0 : days; // Day 0 inclusive
 }

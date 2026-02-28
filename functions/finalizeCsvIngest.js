@@ -22,6 +22,10 @@ const DEFAULT_LISTING_TZ = process.env.DEFAULT_LISTING_TZ || "America/Chicago";
 // Delete the CSV from csv-incoming/ after a successful ingest:
 const DELETE_CSV_AFTER_SUCCESS = true;
 
+// (Optional) safety: refuse to overwrite an existing details.json unless explicitly allowed.
+// Set to "1" to require allowOverwrite=true in request body.
+const REQUIRE_ALLOW_OVERWRITE = process.env.REQUIRE_ALLOW_OVERWRITE === "1";
+
 /** ===== S3 client (prefer MY_* creds on Netlify) ===== */
 function makeS3() {
   const accessKeyId = process.env.MY_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
@@ -87,8 +91,10 @@ function parseCSV(text) {
   let field = "";
   let i = 0;
   let inQuotes = false;
+
   while (i < text.length) {
     const ch = text[i];
+
     if (inQuotes) {
       if (ch === '"') {
         const next = text[i + 1];
@@ -104,35 +110,36 @@ function parseCSV(text) {
       field += ch;
       i += 1;
       continue;
-    } else {
-      if (ch === '"') {
-        inQuotes = true;
-        i += 1;
-        continue;
-      }
-      if (ch === ",") {
-        row.push(field);
-        field = "";
-        i += 1;
-        continue;
-      }
-      if (ch === "\r") {
-        i += 1;
-        continue;
-      }
-      if (ch === "\n") {
-        row.push(field);
-        rows.push(row);
-        row = [];
-        field = "";
-        i += 1;
-        continue;
-      }
-      field += ch;
+    }
+
+    // not in quotes
+    if (ch === '"') {
+      inQuotes = true;
       i += 1;
       continue;
     }
+    if (ch === ",") {
+      row.push(field);
+      field = "";
+      i += 1;
+      continue;
+    }
+    if (ch === "\r") {
+      i += 1;
+      continue;
+    }
+    if (ch === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      i += 1;
+      continue;
+    }
+    field += ch;
+    i += 1;
   }
+
   row.push(field);
   rows.push(row);
   return rows;
@@ -195,12 +202,15 @@ function readAddress(row) {
   ]);
   if (direct) return String(direct).trim();
 
-  const street = pickFirst(row, ["Street", "Street Name", "StreetName"]) || pickFirst(row, ["Street Address", "StreetAddress"]);
+  const street =
+    pickFirst(row, ["Street", "Street Name", "StreetName"]) ||
+    pickFirst(row, ["Street Address", "StreetAddress"]);
   const number = pickFirst(row, ["Street Number", "StreetNumber", "Address Number"]) || "";
   const unit = pickFirst(row, ["Unit", "Unit Number", "UnitNumber", "Apt"]) || "";
   const city = pickFirst(row, ["City", "Municipality"]) || "";
   const state = pickFirst(row, ["State", "State Or Province", "StateOrProvince"]) || "";
   const zip = pickFirst(row, ["Zip", "Zip Code", "Postal Code", "PostalCode"]) || "";
+
   const streetLine = [number, street].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
   const line1 = [streetLine, unit].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
   const line2 = [city, state, zip].filter(Boolean).join(", ").replace(/,\s*,/g, ",").trim();
@@ -216,7 +226,7 @@ function deriveListingId(row, idx) {
   return `row-${idx + 1}`;
 }
 
-/** ---- Date normalization for activeDate (Plan: DOM is computed from activeDate, never from CSV DOM) ---- */
+/** ---- Active date normalization (DOM computed from activeDate elsewhere) ---- */
 function parseActiveYMD(s) {
   if (!s) return null;
   const str = String(s).trim();
@@ -250,7 +260,6 @@ function normalizeActiveDateISO(s) {
 }
 
 function readActiveDateISO(row) {
-  // Realtracs exports vary; these are safe guesses without breaking anything.
   const raw =
     pickFirst(row, ["Active Date", "ActiveDate", "Date Active", "DateActive"]) ||
     pickFirst(row, ["List Date", "ListDate", "Listing Date", "ListingDate", "Date Listed", "DateListed"]) ||
@@ -266,40 +275,56 @@ function readTimezone(row) {
   return tz || null;
 }
 
-/** ---- Strip CSV DOM fields (Plan: never persist CSV DOM; UI shows computed DOM) ---- */
+/** ---- Strip CSV DOM fields (never persist CSV DOM) ---- */
 const DOM_KEYS_TO_STRIP = new Set([
+  // Common variations
   "DaysOnMarket",
+  "Days on Market",
+  "Days On Market",
   "daysOnMarket",
-  "computedDaysOnMarket",
-  "csvDaysOnMarket",
+  "DOM",
+  "Dom",
+  "dom",
   "CSVDOM",
   "CsvDom",
   "csvDom",
-  "DOM",
+  "csvDaysOnMarket",
+  "computedDaysOnMarket",
+  // Some exports / vendor variants
+  "DOMTotal",
+  "DOM Total",
+  "CumulativeDaysOnMarket",
+  "Cumulative Days On Market",
 ]);
 
 function stripDomFromRow(row) {
   if (!row || typeof row !== "object") return row;
   const out = { ...row };
+
   for (const k of Object.keys(out)) {
-    const norm = String(k).replace(/[^\w]/g, "").toLowerCase();
-    if (
+    const norm = String(k).replace(/[^a-z0-9]/gi, "").toLowerCase();
+
+    const isDom =
       DOM_KEYS_TO_STRIP.has(k) ||
       norm === "daysonmarket" ||
       norm === "computeddaysonmarket" ||
       norm === "csvdaysonmarket" ||
-      norm === "csvdom"
-    ) {
-      delete out[k];
-    }
+      norm === "csvdom" ||
+      norm === "dom" ||
+      norm === "domtotal" ||
+      norm === "cumulativedaysonmarket" ||
+      norm === "daysonmarketcumulative";
+
+    if (isDom) delete out[k];
   }
+
   return out;
 }
 
 /** ===== S3 helpers ===== */
 async function listNewestCSV(s3) {
-  let newest = null,
-    token;
+  let newest = null;
+  let token;
   do {
     const page = await s3.send(
       new ListObjectsV2Command({
@@ -331,6 +356,16 @@ async function copyThenDelete(s3, srcKey, destKey) {
   const CopySource = encodeURIComponent(`${BUCKET}/${srcKey}`);
   await s3.send(new CopyObjectCommand({ Bucket: BUCKET, Key: destKey, CopySource, MetadataDirective: "COPY" }));
   await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: srcKey })); // remove incoming photo
+}
+
+async function headExists(s3, Key) {
+  try {
+    await s3.send(new HeadBucketCommand({ Bucket: BUCKET })); // cheap-ish sanity; ok for Netlify
+    await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key, Range: "bytes=0-0" }));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** ===== Photo discovery (flat keys + folder variant) ===== */
@@ -392,14 +427,15 @@ export async function handler(event) {
   try {
     await s3.send(new HeadBucketCommand({ Bucket: BUCKET }));
 
-    // Body can include: { csvKey?, fileNames?, dryRun? }
+    // Body can include: { csvKey?, fileNames?, dryRun?, allowOverwrite? }
     let body = {};
     try {
       body = JSON.parse(event.body || "{}");
     } catch {}
     const dryRun = !!body.dryRun;
+    const allowOverwrite = !!body.allowOverwrite;
 
-    // Resolve CSV key:
+    // Resolve CSV key
     let csvKey = body.csvKey || null;
     if (!csvKey && Array.isArray(body.fileNames)) {
       const csvName = body.fileNames.find((n) => /\.csv$/i.test(n));
@@ -407,14 +443,16 @@ export async function handler(event) {
     }
     if (!csvKey) csvKey = await listNewestCSV(s3);
     if (!csvKey) {
-      return { statusCode: 400, body: JSON.stringify({ error: "No CSV found to ingest." }) };
+      return { statusCode: 400, body: JSON.stringify({ ok: false, error: "No CSV found to ingest." }) };
     }
 
     const csvText = await getTextObject(s3, csvKey);
     const rows = csvToObjects(csvText);
 
-    let processed = 0,
-      written = 0;
+    let processed = 0;
+    let written = 0;
+    let skippedExisting = 0;
+
     const detailKeys = [];
     const photoMoves = [];
 
@@ -430,8 +468,23 @@ export async function handler(event) {
       // Plan: activeDate ingested from CSV when possible
       const activeDate = readActiveDateISO(row) || undefined;
 
-      // Plan: timezone defaults to America/Chicago unless CSV has something
+      // Plan: timezone defaults unless CSV overrides it
       const timezone = readTimezone(row) || DEFAULT_LISTING_TZ;
+
+      // Details key
+      const detailsKey = `listings/${listingId}/details.json`;
+
+      // Optional: skip overwrite protection
+      if (REQUIRE_ALLOW_OVERWRITE && !allowOverwrite && !dryRun) {
+        // Lightweight existence check: list objects under exact key prefix
+        const page = await s3.send(new ListObjectsV2Command({ Bucket: BUCKET, Prefix: detailsKey, MaxKeys: 1 }));
+        const exists = (page.Contents || []).some((o) => o.Key === detailsKey);
+        if (exists) {
+          skippedExisting++;
+          processed++;
+          continue;
+        }
+      }
 
       // Discover photos
       const candidates = await listPhotoCandidates(s3, listingId);
@@ -450,15 +503,10 @@ export async function handler(event) {
       // Choose primary photo path (if any moved)
       const primaryPhoto = movedDestKeys.length ? choosePrimary(movedDestKeys, listingId) : undefined;
 
-      // Clean the raw row (removes empty/blank/null) AND strip DOM keys
+      // Clean raw row AND strip any DOM columns
       const cleanedRaw = deepClean(stripDomFromRow(row)) ?? {};
 
-      // Build and write details.json
-      // Plan rules:
-      // - DO NOT persist csv DOM fields
-      // - Persist activeDate (from CSV) when present
-      // - Persist timezone with default fallback
-      const detailsKey = `listings/${listingId}/details.json`;
+      // Build and write details.json (Plan rules: never persist CSV DOM)
       const details =
         deepClean({
           mlsNumber: mls ?? undefined,
@@ -466,8 +514,8 @@ export async function handler(event) {
           address: address ?? undefined,
           primaryPhoto: primaryPhoto ?? undefined,
 
-          activeDate, // ISO if found; otherwise undefined (agent can set later)
-          timezone, // always present (default or CSV)
+          activeDate, // ISO if found
+          timezone, // always present
 
           source: { csvKey, ingestedAt: new Date().toISOString() },
 
@@ -479,8 +527,8 @@ export async function handler(event) {
       }
 
       detailKeys.push(detailsKey);
-      written += 1;
-      processed += 1;
+      written++;
+      processed++;
     }
 
     // Optionally delete the CSV after success
@@ -503,6 +551,7 @@ export async function handler(event) {
         dryRun,
         processed,
         written,
+        skippedExisting,
         details: detailKeys,
         photosMoved: photoMoves.length,
         photoMoves,
@@ -511,6 +560,7 @@ export async function handler(event) {
           domFromActiveDateOnly: true,
           csvDomPersisted: false,
           timezoneDefault: DEFAULT_LISTING_TZ,
+          overwriteGuard: REQUIRE_ALLOW_OVERWRITE ? "REQUIRE_ALLOW_OVERWRITE=1 (use allowOverwrite=true)" : "off",
         },
       }),
     };
@@ -519,6 +569,7 @@ export async function handler(event) {
       statusCode: 502,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        ok: false,
         error: "finalizeCsvIngest failed",
         diag: {
           region: REGION,

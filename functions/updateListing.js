@@ -122,7 +122,7 @@ function parseActiveYMD(s) {
     const m = Number(mm);
     const d = Number(dd);
     let y = Number(yy);
-    if (yy.length === 2) y = y >= 70 ? 1900 + yy : 2000 + yy;
+    if (yy.length === 2) y = y >= 70 ? 1900 + y : 2000 + y;
     return { y, m, d };
   }
 
@@ -147,6 +147,13 @@ function extractIdentifier(body) {
 
 /**
  * Convert legacy body shapes into a single "details patch".
+ * - body.details (preferred new)
+ * - body.detailsPatch (legacy-ish)
+ * - body.updates / body.overrides (legacy)
+ *
+ * Flags:
+ * - body.replaceDetails === true -> replace the whole details file with provided object
+ * - body.replace === true w/ overrides -> legacy mapping to replaceDetails
  */
 function extractDetailsIntent(body) {
   const replaceDetails =
@@ -174,27 +181,22 @@ function extractDetailsIntent(body) {
 
 /* -------------------- DOM POLICY (HARD BLOCK + AUTO CLEAN) -------------------- */
 /**
- * CSV DOM is worthless after ingest day.
- * We compute DOM from activeDate + timezone only.
- * These keys are NEVER stored, and will be removed on any save.
+ * DOM truth = computed from activeDate + timezone.
+ * We NEVER persist any DOM-like fields (including CSV DOM).
+ * We also remove them from existing files on any save.
  */
 const DOM_KEYS_EXACT = new Set([
-  // common "DOM" concepts we never persist
   "daysOnMarket",
   "computedDaysOnMarket",
-
-  // CSV / RealTracs style
   "DaysOnMarket",
   "DOM",
+  "dom",
   "CsvDom",
   "CSVDOM",
   "csvDOM",
   "csvDom",
   "csvDaysOnMarket",
   "CsvDaysOnMarket",
-
-  // any past experiments
-  "dom",
   "computedDom",
 ]);
 
@@ -203,10 +205,8 @@ function shouldStripDomKey(key) {
   const k = String(key).trim();
   if (!k) return false;
 
-  // exact match first
   if (DOM_KEYS_EXACT.has(k)) return true;
 
-  // normalized match (case/punct insensitive)
   const norm = k.replace(/[^\w]/g, "").toLowerCase();
   if (
     norm === "daysonmarket" ||
@@ -216,10 +216,8 @@ function shouldStripDomKey(key) {
     norm === "dom"
   ) return true;
 
-  // pattern safety net
   if (/csv.*days.*on.*market/i.test(k)) return true;
   if (/computed.*days.*on.*market/i.test(k)) return true;
-  if (/(^|[^a-z])dom([^a-z]|$)/i.test(k) && /market/i.test(k)) return true; // "DOM (Market)" style
   if (/days.*on.*market/i.test(k)) return true;
 
   return false;
@@ -256,10 +254,10 @@ function sanitizeDetailsPatchMutable(patch) {
   delete patch.bedrooms;
   delete patch.squareFeet;
 
-  // ✅ never persist any DOM fields (csv or computed)
+  // never persist any DOM fields (csv or computed)
   stripDomFieldsMutable(patch);
 
-  // ✅ never persist server-computed / admin-only keys
+  // never persist server-ish keys
   const SERVER_ONLY_KEYS = [
     "updatedAt",
     "_lastEditedBy",
@@ -277,6 +275,12 @@ function sanitizeDetailsPatchMutable(patch) {
   return patch;
 }
 
+/**
+ * IMPORTANT: Deletions are honored.
+ * - v === null => delete
+ * - v === "" (blank string) => delete
+ * This matches your preference: if an edit is deleted, it should NOT be preserved.
+ */
 function applyPatchMutable(target, patch) {
   if (!patch || typeof patch !== "object") return target;
   for (const [k, v] of Object.entries(patch)) {
@@ -322,6 +326,24 @@ function normalizeBaths(details) {
   return details;
 }
 
+/**
+ * Keep details.json clean:
+ * - Do NOT write updatedAt / _lastEditedBy into details.json
+ * - But optionally remove any legacy copies if they exist
+ */
+function stripServerMetaMutable(obj) {
+  if (!obj || typeof obj !== "object") return obj;
+  delete obj.updatedAt;
+  delete obj._lastEditedBy;
+  delete obj.hasNote;
+  delete obj.lastModified;
+  delete obj.ok;
+  delete obj.id;
+  delete obj.slug;
+  delete obj.detailsUrl;
+  return obj;
+}
+
 /* -------------------- CORS -------------------- */
 function cors() {
   return {
@@ -363,7 +385,6 @@ export async function handler(event) {
       const k = keysForListing(id, tenantId);
 
       const detailsKeyToDelete = (await headExists(k.detailsKey)) ? k.detailsKey : k.legacy.detailsKey;
-
       const prefixesToDelete = tenantId ? [k.photosPrefix, k.legacy.photosPrefix] : [k.photosPrefix];
 
       console.log("🗑️ DELETING FULL LISTING:", id, tenantId ? `(tenant: ${tenantId})` : "(legacy)");
@@ -429,8 +450,8 @@ export async function handler(event) {
 
     const currentDetailsRaw = (await getJson(readKey)) || {};
 
-    // IMPORTANT: for responses, never leak CSV DOM fields
-    const currentDetails = stripDomFieldsMutable({ ...currentDetailsRaw });
+    // Always keep responses clean (no CSV DOM / no server-meta)
+    const currentDetails = stripServerMetaMutable(stripDomFieldsMutable({ ...currentDetailsRaw }));
 
     const { patch: rawPatch, replaceDetails } = extractDetailsIntent(body);
     const noPatch = !rawPatch || typeof rawPatch !== "object" || Object.keys(rawPatch).length === 0;
@@ -458,33 +479,35 @@ export async function handler(event) {
       });
     }
 
-    // sanitize patch
+    // sanitize patch (includes DOM stripping + removing server-ish keys)
     const patch = sanitizeDetailsPatchMutable({ ...rawPatch });
 
     // Build next details
-    const nextDetails = replaceDetails
-      ? { ...patch }
-      : applyPatchMutable(
-          // start from raw stored details, but immediately strip DOM junk
-          stripDomFieldsMutable({ ...(currentDetailsRaw || {}) }),
-          patch
-        );
+    let nextDetails;
+    if (replaceDetails) {
+      // Replace mode: you are setting the entire details object.
+      // Still enforce: timezone default, no DOM fields, no server-meta.
+      nextDetails = { ...patch };
+    } else {
+      // Patch mode: honor deletions (null/blank => delete)
+      nextDetails = applyPatchMutable(
+        stripServerMetaMutable(stripDomFieldsMutable({ ...(currentDetailsRaw || {}) })),
+        patch
+      );
+    }
 
     // Ensure timezone defaults
     if (!nextDetails.timezone) nextDetails.timezone = currentDetailsRaw.timezone || DEFAULT_LISTING_TZ;
 
-    // FINAL HARD CLEAN: ensure no DOM fields exist, even if old file had them
+    // FINAL HARD CLEAN: no DOM fields + no server meta stored in S3
     stripDomFieldsMutable(nextDetails);
+    stripServerMetaMutable(nextDetails);
 
-    // Normalize baths and metadata
+    // Normalize derived baths (ok to persist if you want)
     normalizeBaths(nextDetails);
-
-    nextDetails.updatedAt = new Date().toISOString();
-    nextDetails._lastEditedBy = "admin-dashboard";
 
     // Write: if tenantId supplied, write to tenant path; otherwise keep legacy.
     const writeKey = tenantId ? k.detailsKey : k.legacy.detailsKey;
-
     await putJson(writeKey, nextDetails);
 
     const detailsUrl = await getSignedUrl(
@@ -496,15 +519,22 @@ export async function handler(event) {
     const tzForDom = nextDetails.timezone || DEFAULT_LISTING_TZ;
     const dom = nextDetails.activeDate ? domInZone(nextDetails.activeDate, tzForDom) : null;
 
+    // Return UI meta in response only (NOT stored in details.json)
+    const responseMeta = {
+      updatedAt: new Date().toISOString(),
+      _lastEditedBy: "admin-dashboard",
+    };
+
     return ok({
       ok: true,
       tenantId: tenantId || undefined,
       detailsKey: writeKey,
       detailsUrl,
-      details: nextDetails, // already cleaned (no CSV DOM fields)
+      details: nextDetails, // cleaned + persisted
       detailsPatched: true,
       daysOnMarket: dom, // computed only
       timezone: tzForDom,
+      ...responseMeta,
     });
   } catch (e) {
     console.error("[updateListing] ERROR:", e);

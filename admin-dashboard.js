@@ -397,7 +397,7 @@ async function callUpdate(payload) {
 /* ---------------- Advanced fields ---------------- */
 
 const CANON_HIDE = new Set([
-  "mls","listingid","address","streetaddress","city","state","province","zip","zipcode","postalcode",
+  "mls","mlsnumber","listingid","address","streetaddress","city","state","province","zip","zipcode","postalcode",
   "price","beds","baths","sqft","yearbuilt","year","status",
   "activedate","listdate","datelisted","dateactive","listingdate",
   "timezone","publicremarks","remarks","description","agentnotes",

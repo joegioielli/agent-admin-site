@@ -24,10 +24,21 @@ const SIGN_EXPIRES = 900; // 15 min presign
 
 const s3 = new S3Client({
   region: REGION,
-  credentials: {
-    accessKeyId: process.env.MY_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.MY_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY,
-  },
+  credentials:
+    process.env.SMARTSIGNS_ACCESS_KEY_ID ||
+    process.env.MY_AWS_ACCESS_KEY_ID ||
+    process.env.AWS_ACCESS_KEY_ID
+      ? {
+          accessKeyId:
+            process.env.SMARTSIGNS_ACCESS_KEY_ID ||
+            process.env.MY_AWS_ACCESS_KEY_ID ||
+            process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey:
+            process.env.SMARTSIGNS_SECRET_ACCESS_KEY ||
+            process.env.MY_AWS_SECRET_ACCESS_KEY ||
+            process.env.AWS_SECRET_ACCESS_KEY,
+        }
+      : undefined,
 });
 
 /* -------------------- TENANT PATH HELPERS (non-breaking) -------------------- */

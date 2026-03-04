@@ -1,7 +1,11 @@
-// admin-dashboard.js
+/* =========================
+   admin-dashboard.js (PART 1/3)
+   Core config, state, modal/toast, time helpers, utils, aliases
+   ========================= */
+
 // cards • editor • lenders • Advanced Fields • per-listing lender offer
 // DETAILS-FIRST strategy (NO overrides.json)
-// KEYLESS Deterministic aliases (Bedrooms -> TotalBedrooms, Sq Ft -> SqFtTotal)
+// Canonical writes only (avoid duplicate keys like mlsNumber vs MlsNumber)
 // stop writing bedrooms / squareFeet
 
 const TZ = "America/Chicago";
@@ -78,7 +82,7 @@ const SELECTORS = {
 };
 
 const state = {
-  items: new Map(),   // slug -> listing object (cards)
+  items: new Map(), // slug -> listing object (cards)
   details: new Map(), // slug -> details.json (loaded/saved)
   currentSlug: null,
   lenders: [],
@@ -212,11 +216,11 @@ function parseLooseDate(str) {
   return null;
 }
 
-function daysBetweenTZ(aY, aM, aD, bY, bM, bD, tz = TZ) {
-  const aMid = dateAtMidnightTZ(aY, aM, aD, tz).getTime();
-  const bMid = dateAtMidnightTZ(bY, bM, bD, tz).getTime();
+function daysBetweenTZ(todayY, todayM, todayD, activeY, activeM, activeD, tz = TZ) {
+  const aMid = dateAtMidnightTZ(todayY, todayM, todayD, tz).getTime();
+  const bMid = dateAtMidnightTZ(activeY, activeM, activeD, tz).getTime();
   const diff = Math.floor((aMid - bMid) / 86400000);
-  return diff < 0 ? 0 : diff;
+  return diff < 0 ? 0 : diff; // day 0 = active day
 }
 
 function ymdToISO(y, m, d) {
@@ -228,11 +232,8 @@ function ymdToISO(y, m, d) {
 function setValue(sel, val) {
   const el = document.querySelector(sel);
   if (!el) return;
-  if (["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) {
-    el.value = val ?? "";
-  } else {
-    el.textContent = val ?? "";
-  }
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) el.value = val ?? "";
+  else el.textContent = val ?? "";
 }
 
 function escapeHtml(s) {
@@ -254,26 +255,7 @@ function isHttpUrl(s) {
   return typeof s === "string" && /^https?:\/\//i.test(s);
 }
 
-/* ---------- CSV alias map helper ---------- */
-
-const ALIASES = {
-  mls: ["mls", "MLS", "mlsNumber", "MlsNumber", "ListingId", "ListingID", "MLSNumber"],
-  address: ["address", "Address", "StreetAddress", "StreetNumberNumeric", "StreetName", "FullAddress"],
-  city: ["city", "City", "Town"],
-  state: ["state", "State", "Province"],
-  zip: ["zip", "Zip", "postalCode", "PostalCode", "ZipCode", "ParcelZip"],
-  price: ["price", "listPrice", "ListPrice", "ListPriceOriginal", "OriginalListPrice", "CurrentPrice"],
-  beds: ["TotalBedrooms", "BedroomsTotal", "Bedrooms", "BedsTotal", "BedroomsTotalInteger", "beds", "bedrooms"],
-  baths: ["totalBaths", "BathroomsTotalInteger", "FullBaths", "BathTotal", "bathrooms", "baths", "TotalFullBaths"],
-  sqft: ["SqFtTotal", "TotalSqFt", "BuildingAreaTotal", "squareFeet", "LivingArea", "livingArea", "sqft", "SqFtMainFloor", "AboveGradeFinishedArea"],
-  year: ["YearBuilt", "YearBuiltDetails", "yearBuilt", "year"],
-  status: ["status", "ListingStatus", "Status", "StandardStatus"],
-  activeDate: ["activeDate", "listDate", "ListDate", "DateListed", "DateActive", "ListingDate"],
-  timezone: ["timezone", "TimeZone", "TimeZoneLocal"],
-  desc: ["publicRemarks", "remarks", "description", "PublicRemarks", "PropertyDescription", "RemarksPublic", "Remarks"],
-  notes: ["agentNotes", "AgentNotes", "PrivateRemarks"],
-  photo: ["PrimaryPhoto", "photo", "primaryPhoto", "PhotoUrl", "MainPhotoUrl", "mainPhotoUrl", "photoUrl"],
-};
+/* ---------- Flatten + smart picking ---------- */
 
 function deepFlatten(input, maxDepth = 6, prefix = "", out = {}) {
   if (!input || typeof input !== "object") return out;
@@ -288,38 +270,55 @@ function deepFlatten(input, maxDepth = 6, prefix = "", out = {}) {
   return out;
 }
 
-const FUZZY = {
-  mls: [/mls/i, /listing\.?id/i, /mlsnumber/i],
-  address: [/address/i, /street/i],
-  city: [/city/i],
-  state: [/state/i, /province/i],
-  zip: [/zip/i, /postal/i],
-  price: [/price/i, /list\.?price/i, /current\.?price/i],
-  beds: [/beds?/i, /bedrooms?/i, /totalbedrooms?/i],
-  baths: [/baths?/i, /bathrooms?/i, /full\b.*bath/i],
-  sqft: [/sq.?ft/i, /square.?feet/i, /living.?area/i, /building.?area/i],
-  year: [/year.?built/i, /built.?year/i],
-  status: [/status/i, /standardstatus/i, /listingstatus/i],
-  activeDate: [/active.?date/i, /list.?date/i, /date.?listed/i],
-  timezone: [/time.?zone/i],
-  desc: [/remarks?/i, /description/i],
-  notes: [/agent.?notes?/i, /private.?remarks?/i],
-  photo: [/photo/i, /image.?url/i],
-};
-
 function numberFrom(v) {
   if (v == null) return null;
   const n = Number(String(v).replace(/[^\d.-]/g, ""));
   return Number.isFinite(n) ? n : null;
 }
 
+const ALIASES = {
+  mls: ["mlsNumber", "MlsNumber", "MLSNumber", "MLS", "mls", "ListingId", "ListingID", "listingId"],
+  address: ["address", "Address", "StreetAddress", "FullAddress"],
+  city: ["city", "City"],
+  state: ["state", "State"],
+  zip: ["zip", "Zip", "ZipCode", "PostalCode"],
+  price: ["listPrice", "ListPrice", "price"],
+  beds: ["TotalBedrooms", "BedroomsTotal", "beds", "bedrooms"],
+  baths: ["totalBaths", "TotalFullBaths", "BathTotal", "baths"],
+  sqft: ["SqFtTotal", "TotalSqFt", "sqft", "LivingArea"],
+  year: ["YearBuilt", "yearBuilt", "year"],
+  status: ["ListingStatus", "Status", "StandardStatus", "status"],
+  activeDate: ["activeDate", "ActiveDate", "ListDate", "listDate", "ListingDate", "DateListed", "DateActive"],
+  timezone: ["timezone", "TimeZone", "TimeZoneLocal"],
+  desc: ["Remarks", "PublicRemarks", "remarks", "publicRemarks", "description"],
+  notes: ["agentNotes", "AgentNotes", "PrivateRemarks"],
+  photo: ["primaryPhoto", "PrimaryPhoto", "photoUrl", "PhotoUrl", "photo"],
+};
+
+const FUZZY = {
+  mls: [/mls/i, /listing\.?id/i, /mlsnumber/i],
+  address: [/address/i, /street/i],
+  city: [/city/i],
+  state: [/state/i],
+  zip: [/zip/i, /postal/i],
+  price: [/price/i],
+  beds: [/beds?/i, /bedrooms?/i, /totalbedrooms?/i],
+  baths: [/baths?/i, /bathrooms?/i],
+  sqft: [/sq.?ft/i, /square.?feet/i, /living.?area/i],
+  year: [/year.?built/i],
+  status: [/status/i],
+  activeDate: [/active.?date/i, /list.?date/i, /date.?listed/i],
+  timezone: [/time.?zone/i],
+  desc: [/remarks?/i, /description/i],
+  notes: [/notes?/i, /private.?remarks?/i],
+  photo: [/photo/i, /image.?url/i],
+};
+
 function pickSmart(objList, aliasKeys, fuzzyGroup = null, numeric = false) {
   for (const src of objList) {
     for (const k of aliasKeys) {
       const v = src?.[k];
-      if (v != null && String(v).trim() !== "") {
-        return numeric ? numberFrom(v) : v;
-      }
+      if (v != null && String(v).trim() !== "") return numeric ? numberFrom(v) : v;
     }
   }
 
@@ -328,23 +327,10 @@ function pickSmart(objList, aliasKeys, fuzzyGroup = null, numeric = false) {
     for (const f of flats) {
       for (const [k, v] of Object.entries(f)) {
         if (FUZZY[fuzzyGroup].some((rx) => rx.test(k))) {
-          if (v != null && String(v).trim() !== "") {
-            return numeric ? numberFrom(v) : v;
-          }
+          if (v != null && String(v).trim() !== "") return numeric ? numberFrom(v) : v;
         }
       }
     }
-  }
-
-  if (numeric) {
-    let best = null;
-    for (const f of flats) {
-      for (const v of Object.values(f)) {
-        const n = numberFrom(v);
-        if (n != null && n > 0 && best == null) best = n;
-      }
-    }
-    return best;
   }
 
   return undefined;
@@ -353,25 +339,21 @@ function pickSmart(objList, aliasKeys, fuzzyGroup = null, numeric = false) {
 /* ---- Photo preview helper ---- */
 
 function previewUrlFrom(photoKeyOrUrl, item) {
-  if (typeof photoKeyOrUrl === "string" && /^https?:\/\//i.test(photoKeyOrUrl)) {
-    return photoKeyOrUrl;
-  }
+  if (typeof photoKeyOrUrl === "string" && /^https?:\/\//i.test(photoKeyOrUrl)) return photoKeyOrUrl;
   if (item && typeof item.photoUrl === "string") return item.photoUrl;
   return null;
 }
-
-/* ---------------- Data ---------------- */
+/* =========================
+   admin-dashboard.js (PART 2/3)
+   Data fetch, cards render, DOM calculation, advanced fields (fixed)
+   ========================= */
 
 async function fetchListings() {
-  const res = await fetch(`${ENDPOINTS.list}?ts=${Date.now()}`, {
-    method: "GET",
-    cache: "no-store",
-  });
+  const res = await fetch(`${ENDPOINTS.list}?ts=${Date.now()}`, { method: "GET", cache: "no-store" });
   if (!res.ok) throw new Error(`listListings failed ${res.status}`);
   const json = await res.json();
   const arr = Array.isArray(json) ? json : json.items || json.files || json.listings;
   if (!Array.isArray(arr)) throw new Error("listListings expected array");
-  console.log("Loaded", arr.length, "listings");
   return arr;
 }
 
@@ -379,8 +361,103 @@ function listingIdFrom(item, fallback) {
   return item?.listingId || item?.mls || item?.MLS || item?.id || fallback;
 }
 
+function safeSlugFrom(it) {
+  if (it.slug) return String(it.slug);
+  if (it.id) return String(it.id);
+  if (it.listingId) return String(it.listingId);
+  const addr = (typeof it.address === "string" && it.address) || (typeof it.Address === "string" && it.Address);
+  return addr ? addr.toLowerCase().replace(/[^\w]+/g, "-") : "unknown";
+}
+
 function getMLSForCard(l) {
   return l.mls || l.MLS || l.listingId || l.id || "";
+}
+
+/* ---------------- DOM calc per card (FIXED timezone) ---------------- */
+
+function updateDomForCard(card) {
+  const slug = card.dataset.slug;
+  const listing = state.items.get(slug);
+  if (!listing) return;
+
+  const domEl = card.querySelector(SELECTORS.domOut);
+  if (!domEl) return;
+
+  const activeISO = listing.activeDate;
+  if (!activeISO) return (domEl.textContent = "0");
+
+  const activeYMD = parseLooseDate(activeISO);
+  if (!activeYMD) return (domEl.textContent = "0");
+
+  const tz = listing.timezone || TZ;
+  const t = todayYMDInTZ(tz);
+  domEl.textContent = String(daysBetweenTZ(t.y, t.m, t.d, activeYMD.y, activeYMD.m, activeYMD.d, tz));
+}
+
+function updateAllDom() {
+  document.querySelectorAll(SELECTORS.card).forEach(updateDomForCard);
+}
+
+/* ---------------- Render cards ---------------- */
+
+function renderListingsIntoGrid(listings) {
+  const grid = document.querySelector(SELECTORS.grid);
+  if (!grid) return console.error("Missing #listingsGrid container");
+
+  const html = listings.map((l) => {
+    const slug = safeSlugFrom(l);
+    const address =
+      (typeof l.address === "string" && l.address) ||
+      (typeof l.title === "string" && l.title) ||
+      (typeof l.Address === "string" && l.Address) ||
+      slug ||
+      "Address unavailable";
+
+    const iso = typeof l.activeDate === "string" && l.activeDate;
+
+    const priceVal = l.price ?? l.listPrice ?? l.ListPrice;
+    const priceNum = typeof priceVal === "string" ? Number(priceVal.replace(/[^\d.-]/g, "")) : priceVal;
+    const price =
+      priceNum != null && Number.isFinite(priceNum)
+        ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(priceNum)
+        : "";
+
+    const photo = (typeof l.photoUrl === "string" && l.photoUrl) || (typeof l.primaryPhoto === "string" && l.primaryPhoto);
+    const mls = getMLSForCard(l);
+    const domValue = typeof l.computedDaysOnMarket === "number" ? l.computedDaysOnMarket : "";
+
+    return `
+      <div class="card-inner" data-slug="${escapeHtml(slug)}">
+        ${photo ? `<img class="thumb" src="${escapeHtml(photo)}" alt="">` : `<div class="thumb"></div>`}
+        <div class="content">
+          <div class="price">${price ? escapeHtml(price) : ""}</div>
+          <div class="addr">${escapeHtml(address)}</div>
+          <div class="meta">
+            <span class="mls">MLS # ${escapeHtml(String(mls || ""))}</span>
+            <span class="dom-badge">DOM <span class="js-daysOnMarket">${domValue}</span></span>
+          </div>
+          <div class="actions actions--date">
+            <label class="mls" style="min-width:auto; margin-right:6px;">Active Date</label>
+            <input class="js-activeDate" type="date" value="${iso ? escapeHtml(iso) : ""}">
+            <button class="js-saveActiveDate" type="button">Save Date</button>
+          </div>
+          <div class="actions actions--footer">
+            <button class="js-editListing" type="button">Edit Listing</button>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  grid.innerHTML = html.join("") || `<div class="empty">No properties found.</div>`;
+
+  listings.forEach((it) => {
+    const slug = safeSlugFrom(it);
+    it.slug = slug;
+    state.items.set(slug, it);
+  });
+
+  updateAllDom();
 }
 
 /* ---------------- updateListing calls ---------------- */
@@ -394,80 +471,96 @@ async function callUpdate(payload) {
   });
 }
 
-/* ---------------- Advanced fields ---------------- */
+/* ---- Fetch details via getListingDetails OR updateListing snapshot (FIXED payload) ---- */
 
-const CANON_HIDE = new Set([
-  "mls","mlsnumber","listingid","address","streetaddress","city","state","province","zip","zipcode","postalcode",
-  "price","beds","baths","sqft","yearbuilt","year","status",
-  "activedate","listdate","datelisted","dateactive","listingdate",
-  "timezone","publicremarks","remarks","description","agentnotes",
-  "primaryphoto","photo","photourl","mainphotourl",
-]);
+async function fetchDetailsForModal(item, slug) {
+  const listingId = listingIdFrom(item, slug);
 
-/* ---------------- Core-field protection (Advanced Fields cannot override top form) ---------------- */
+  // Prefer item.detailsUrl (getListingDetails)
+  if (item?.detailsUrl) {
+    try {
+      const r = await fetch(item.detailsUrl, { cache: "no-store" });
+      if (r.ok) {
+        const payload = await r.json();
+        // ✅ FIX: payload is { ok, details }
+        if (payload?.details && typeof payload.details === "object") return payload.details;
+      }
+    } catch {}
+  }
 
-// Any “core” field name (or alias) typed into Advanced Fields should be ignored
-const CORE_SIMPLE_KEYS = new Set([
-  "address","city","state","zip",
-  "price","listprice",
-  "beds","bed","bedrooms","totalbedrooms","bedroomstotal","bedroomstotalinteger",
-  "baths","bath","bathrooms","totalbaths","bathtotal","bathroomstotalinteger","totalfullbaths",
-  "sqft","sqfttotal","squarefeet","totalsqft","buildingareatotal","livingarea",
-  "year","yearbuilt","yearbuiltdetails",
-  "status","listingstatus","standardstatus",
-  "activedate","listdate","datelisted","dateactive","listingdate",
-  "timezone",
-  "remarks","publicremarks","description","agentnotes",
-  "primaryphoto","photo","photourl","mainphotourl",
-  "mls","mlsnumber","mlsno","mlsid","listingid","listingnumber","mls#",
-  "ok","id","slug","lastmodified","computeddaysonmarket","updatedat","_lasteditedby"
-]);
+  // Fallback: updateListing snapshot
+  if (listingId) {
+    try {
+      const r = await callUpdate({ listingId: String(listingId) });
+      if (r.ok) {
+        const j = await r.json().catch(() => ({}));
+        if (j?.details && typeof j.details === "object") return j.details;
+      }
+    } catch {}
+  }
 
-function isCoreKey(key) {
-  if (!key) return false;
-  const base = String(key).split(".").pop();                 // ignore nesting like foo.bar
-  const norm = base.replace(/[^\w]/g, "").toLowerCase();     // normalize
-  return CORE_SIMPLE_KEYS.has(norm);
+  return {};
 }
+
+/* ---------------- Advanced fields ---------------- */
 
 function normalizeKey(k) {
   return String(k).replace(/[^\w]+/g, "").toLowerCase();
 }
 
+// Hide canonical/core fields from Advanced list
+const CANON_HIDE = new Set([
+  "mls","mlsnumber","listingid",
+  "address","city","state","zip","zipcode","postalcode",
+  "listprice","price",
+  "totalbedrooms","beds","bedrooms",
+  "totalfullbaths","totalbaths","baths","bathrooms",
+  "sqfttotal","sqft","squarefeet",
+  "yearbuilt","year",
+  "listingstatus","status",
+  "activedate","listdate","datelisted","dateactive","listingdate",
+  "timezone",
+  "remarks","publicremarks","description","agentnotes",
+  "primaryphoto","photo","photourl","mainphotourl",
+]);
+
+// Block core keys from being saved via Advanced Fields (defense-in-depth)
+const CORE_SIMPLE_KEYS = new Set([
+  ...Array.from(CANON_HIDE),
+  "ok","id","slug","detailsurl","lastmodified",
+  "computeddaysonmarket","daysonmarket","csvdaysonmarket","csvdom",
+  "updatedat","_lasteditedby","hasnote",
+]);
+
+function isCoreKey(key) {
+  if (!key) return false;
+  const base = String(key).split(".").pop();
+  const norm = base.replace(/[^\w]/g, "").toLowerCase();
+  return CORE_SIMPLE_KEYS.has(norm);
+}
+
 const ADVHIDE = {
-  // Case-insensitive exact matches
   hardCI: new Set(
     [
-      // internal plumbing / ingestion
-      "0.path", "0.value", "path", "value", "key", "csvkey", "ingestedat", "source.csvkey", "source.ingestedat",
-
-      // routing / ui
-      "slug", "id", "listingid", "detailsurl", "ok", "lastmodified",
-
-      // computed/system fields (not editable)
-      "computeddaysonmarket", "csvdaysonmarket", "daysonmarket",
-      "updatedat", "_lasteditedby", "hasnote",
-
-      // you said irrelevant noise
-      "latitude", "longitude",
+      "path","value","key",
+      "csvkey","ingestedat","source.csvkey","source.ingestedat",
+      "slug","id","listingid","detailsurl","ok","lastmodified",
+      "computeddaysonmarket","csvdaysonmarket","daysonmarket","csvdom",
+      "updatedat","_lasteditedby","hasnote",
+      "latitude","longitude",
       "officelistcode",
       "propertyclassid",
     ].map((s) => s.toLowerCase())
   ),
-
-  // Pattern-based hides (case-insensitive)
   patterns: [
     /\.path$/i, /\.value$/i,
     /(^|\.)(path|value|key)$/i,
     /(^|\.)(slug|id|listingid|detailsurl|ok|lastmodified)$/i,
     /csvkey/i, /ingestedat/i,
-
-    // DOM variants
     /computed.?days.?on.?market/i,
     /csv.?days.?on.?market/i,
     /days.?on.?market/i,
-
-    // irrelevant (per your note)
+    /csvdom/i,
     /latitude/i, /longitude/i,
     /office(list)?code/i,
     /propertyclassid/i,
@@ -478,7 +571,6 @@ const ADVHIDE = {
 };
 
 function shouldHideAdminKey(originalKey) {
-  // Optional: if you ever add a toggle later
   if (localStorage.getItem("showAdminKeys") === "1") return false;
 
   const kc = String(originalKey || "").toLowerCase().trim();
@@ -488,22 +580,22 @@ function shouldHideAdminKey(originalKey) {
   return ADVHIDE.patterns.some((rx) => rx.test(originalKey));
 }
 
-function stripDetailsPrefix(key) {
-  return String(key).startsWith("details.") ? key.slice("details.".length) : key;
-}
-
 function rowHTML(k, v) {
-  const displayKey = stripDetailsPrefix(k);
   return `
     <div class="adv-row">
-      <input class="adv-key" placeholder="Name" value="${escapeHtml(displayKey)}" />
+      <input class="adv-key" placeholder="Name" value="${escapeHtml(k)}" />
       <input class="adv-val" placeholder="Value (text or JSON)" value="${escapeHtml(v)}" />
       <button type="button" class="btn danger adv-remove">Remove</button>
     </div>
   `;
 }
 
-window.renderAdvancedFieldsFromSource = renderAdvancedFieldsFromSource;
+function bindAdvList(listEl) {
+  listEl.querySelectorAll(".adv-remove").forEach((btn) => {
+    btn.addEventListener("click", () => btn.closest(".adv-row")?.remove());
+  });
+}
+
 function renderAdvancedFieldsFromSource(srcObjs) {
   const list = document.querySelector(SELECTORS.advList);
   if (!list) return;
@@ -513,9 +605,13 @@ function renderAdvancedFieldsFromSource(srcObjs) {
     const flat = deepFlatten(obj || {});
     for (const [k, v] of Object.entries(flat)) {
       const nk = normalizeKey(k);
+
+      // Hide canonical/core
       if (CANON_HIDE.has(nk)) continue;
-      if (/source\.i/i.test(k)) continue;
-      if (k === "detailsUrl") continue;
+
+      // Hide source.* plumbing
+      if (/^source\./i.test(k)) continue;
+
       if (shouldHideAdminKey(k)) continue;
       merged[k] = v;
     }
@@ -523,19 +619,17 @@ function renderAdvancedFieldsFromSource(srcObjs) {
 
   const finalEntries = Object.entries(merged);
 
-  list.innerHTML = finalEntries.map(([k, v]) => {
-    const val = v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
-    return rowHTML(k, val);
-  }).join("");
+  list.innerHTML = finalEntries
+    .map(([k, v]) => {
+      const val = v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+      return rowHTML(k, val);
+    })
+    .join("");
 
   bindAdvList(list);
 }
 
-function bindAdvList(listEl) {
-  listEl.querySelectorAll(".adv-remove").forEach((btn) => {
-    btn.addEventListener("click", () => btn.closest(".adv-row")?.remove());
-  });
-}
+window.renderAdvancedFieldsFromSource = renderAdvancedFieldsFromSource;
 
 function addAdvancedRow() {
   const list = document.querySelector(SELECTORS.advList);
@@ -555,32 +649,37 @@ function collectAdvancedFieldsToObject() {
   const obj = {};
 
   list.querySelectorAll(".adv-row").forEach((r) => {
-    let k = r.querySelector(".adv-key")?.value?.trim();
-    const v = r.querySelector(".adv-val")?.value?.trim();
-    if (!k) return;
+    const kRaw = r.querySelector(".adv-key")?.value?.trim();
+    const vRaw = r.querySelector(".adv-val")?.value?.trim();
+    if (!kRaw) return;
 
-    // never allow details.* to be saved
-    if (k.startsWith("details.")) return;
+    // block core keys + aliases
+    if (isCoreKey(kRaw)) return;
 
-    // ✅ block core keys + aliases from being saved via Advanced Fields
-    if (isCoreKey(k)) return;
+    // treat blank as delete
+    if (!vRaw) {
+      obj[kRaw] = "";
+      return;
+    }
 
-    if (!v) { obj[k] = ""; return; }
-
-    let val = v;
+    let val = vRaw;
     try {
-      if (/^[\[{]/.test(v)) val = JSON.parse(v);
-      else if (/^-?\d+(\.\d+)?$/.test(v)) val = Number(v);
-      else if (/^(true|false)$/i.test(v)) val = /true/i.test(v);
-    } catch { /* keep string */ }
+      if (/^[\[{]/.test(vRaw)) val = JSON.parse(vRaw);
+      else if (/^-?\d+(\.\d+)?$/.test(vRaw)) val = Number(vRaw);
+      else if (/^(true|false)$/i.test(vRaw)) val = /true/i.test(vRaw);
+    } catch {
+      /* keep string */
+    }
 
-    obj[k] = val;
+    obj[kRaw] = val;
   });
 
   return obj;
 }
-
-/* --------- Form helpers --------- */
+/* =========================
+   admin-dashboard.js (PART 3/3)
+   Editor open/save, activeDate save, lenders, events, init
+   ========================= */
 
 function collectFormValues() {
   const get = (sel) => document.querySelector(sel)?.value ?? "";
@@ -643,10 +742,7 @@ async function saveActiveDate(slug, isoDate) {
 
   const res = await callUpdate({
     slug: String(listingId),
-    details: {
-      activeDate: isoDate,
-      timezone: tz,
-    },
+    details: { activeDate: isoDate, timezone: tz },
   });
 
   if (!res.ok) {
@@ -655,13 +751,12 @@ async function saveActiveDate(slug, isoDate) {
   }
 
   const data = await res.json().catch(() => ({}));
-  const dom = typeof data.daysOnMarket === "number" ? data.daysOnMarket : null;
 
   // cache latest details if server returned it
-  if (data?.details && typeof data.details === "object") {
-    state.details.set(slug, data.details);
-  }
+  if (data?.details && typeof data.details === "object") state.details.set(slug, data.details);
 
+  // update card dom if server sent it
+  const dom = typeof data.daysOnMarket === "number" ? data.daysOnMarket : null;
   if (dom != null) {
     const card = document.querySelector(`[data-slug="${CSS.escape(slug)}"]`);
     const domEl = card?.querySelector(SELECTORS.domOut);
@@ -669,206 +764,7 @@ async function saveActiveDate(slug, isoDate) {
   }
 }
 
-/* ---------------- Full editor save (DETAILS PATCH mode) ---------------- */
-
-async function saveFullEdit(slug) {
-  const item = state.items.get(slug);
-  let listingId = listingIdFrom(item, slug);
-  if (!listingId) listingId = slug;
-
-  const v = collectFormValues();
-  const extras = collectAdvancedFieldsToObject();
-
-  // Clean extras BEFORE merging
-  for (const k of Object.keys(extras)) {
-    if (k.startsWith("details.")) delete extras[k];
-  }
-  delete extras.bedrooms;
-  delete extras.squareFeet;
-
-  // (recommended) never persist these “UI/server-ish” keys if they appear
-  delete extras.ok;
-  delete extras.id;
-  delete extras.slug;
-  delete extras.lastModified;
-  delete extras.computedDaysOnMarket;
-  delete extras.updatedAt;
-  delete extras._lastEditedBy;
-
-  const detailsPatch = {
-    address: v.address,
-    city: v.city,
-    state: v.state,
-    zip: v.zip,
-
-    listPrice: v.price,
-    price: v.price,
-
-    TotalBedrooms: v.beds,
-    beds: v.beds,
-
-    totalBaths: v.baths,
-    baths: v.baths,
-
-    SqFtTotal: v.sqft,
-    sqft: v.sqft,
-
-    yearBuilt: v.year,
-    status: v.status,
-    activeDate: v.activeDate,
-    timezone: v.timezone,
-
-    publicRemarks: v.desc,
-    remarks: v.desc,
-    agentNotes: v.notes,
-
-    primaryPhoto: v.photo,
-    photo: v.photo,
-
-    ...extras,
-  };
-
-  // hard blocks (double safety)
-  delete detailsPatch.bedrooms;
-  delete detailsPatch.squareFeet;
-  for (const k of Object.keys(detailsPatch)) {
-    if (k.startsWith("details.")) delete detailsPatch[k];
-  }
-
-  // DEBUG (optional)
-  console.log("==== DETAILS PATCH DEBUG ====");
-  console.log("listingId:", listingId);
-  const keys = Object.keys(detailsPatch);
-  console.log("keys:", keys.length);
-  console.log("has details.*:", keys.some(k => k.startsWith("details.")));
-  console.log("has bedrooms:", keys.includes("bedrooms"));
-  console.log("has squareFeet:", keys.includes("squareFeet"));
-  console.log("=============================");
-
-  // PATCH MODE (IMPORTANT): do NOT use replaceDetails true
-  const res = await callUpdate({
-    slug: String(listingId),
-    details: detailsPatch,
-  });
-
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`updateListing failed ${res.status} ${t}`);
-  }
-
-  // per-property lender sync (separate file/store)
-  try {
-    await upsertPerPropertyLender(listingId, v.lenderId, v.lenderOffer);
-  } catch (e) {
-    console.warn("Per-property lender sync failed", e);
-  }
-
-  const saved = await res.json().catch(() => ({}));
-  if (saved?.details && typeof saved.details === "object") {
-    state.details.set(slug, saved.details);
-  }
-
-  // Update local card model
-  const updated = { ...(item || {}) };
-  if (v.address) updated.address = v.address;
-  if (v.price != null) updated.price = v.price;
-  if (v.activeDate !== undefined) updated.activeDate = v.activeDate;
-  if (v.timezone) updated.timezone = v.timezone;
-
-  if (v.photo) {
-    if (isHttpUrl(v.photo)) updated.photoUrl = v.photo;
-    else if (!updated.photoUrl) updated.photoUrl = item?.photoUrl || "";
-  }
-
-  state.items.set(slug, updated);
-
-  // Update card UI
-  const card = document.querySelector(`[data-slug="${CSS.escape(slug)}"]`);
-  if (card) {
-    const addrEl = card.querySelector(".addr");
-    if (addrEl && v.address) addrEl.textContent = v.address;
-
-    const priceEl = card.querySelector(".price");
-    if (priceEl && v.price != null) {
-      priceEl.textContent = v.price
-        ? new Intl.NumberFormat("en-US", {
-            style: "currency",
-            currency: "USD",
-            maximumFractionDigits: 0,
-          }).format(v.price)
-        : "";
-    }
-
-    const img = card.querySelector(".thumb");
-    if (img) {
-      const preview = previewUrlFrom(v.photo || item?.primaryPhoto || "", updated);
-      if (preview) img.src = preview;
-    }
-
-    const input = card.querySelector(SELECTORS.dateInput);
-    if (input && updated.activeDate) input.value = updated.activeDate;
-
-    updateDomForCard(card);
-  }
-
-  reflectSelectedLenderChip();
-  toast("Listing saved");
-}
-
-/* ---- Per-property lender sync ---- */
-
-async function upsertPerPropertyLender(listingId, lenderId, offerStr) {
-  const hasAnything = (lenderId && lenderId.trim()) || (offerStr && offerStr.trim());
-  let revision = null;
-
-  try {
-    const g = await fetch(`${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`, { cache: "no-store" });
-    if (g.ok) {
-      const data = await g.json().catch(() => ({}));
-      revision = data?.revision ?? null;
-      if (!hasAnything && !data?.lender && !data?.offer) return;
-    }
-  } catch { /* ignore */ }
-
-  let lenderObj = null;
-  if (lenderId && lenderId.trim()) {
-    const found = state.lenders.find((l) => l.id === lenderId || l.slug === lenderId || l.email === lenderId);
-    lenderObj = found
-      ? {
-          name: String(found.name || ""),
-          phone: String(found.phone || ""),
-          nmls: String(found.nmls || found.nmlsId || ""),
-          email: String(found.email || ""),
-          link: String(found.link || found.url || ""),
-        }
-      : { name: lenderId };
-  }
-
-  const body = {
-    revision: revision === null ? undefined : revision,
-    lender: lenderObj || undefined,
-    lenderId: lenderId || undefined,
-    offer: hasAnything ? { details: String(offerStr || "") } : undefined,
-  };
-
-  if (!hasAnything) {
-    body.lender = null;
-    body.offer = null;
-  }
-
-  const r = await fetch(`${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(`per-property lenders PUT ${r.status} ${t}`);
-  }
-}
-
-/* ---- Lenders UI helpers ---- */
+/* ---------------- Lenders (same as your current) ---------------- */
 
 function genLenderId(seed) {
   const base = seed.trim().toLowerCase().replace(/[^\w]+/g, "-").replace(/--+/g, "-");
@@ -893,6 +789,25 @@ async function loadLenders() {
   updateLendersMeta();
   renderLendersList();
   updateLenderSelectOptions();
+}
+
+async function collectLendersFromDOM() {
+  const list = document.querySelector(SELECTORS.lendersList);
+  if (!list) return;
+  const rows = Array.from(list.querySelectorAll(".lender-row"));
+
+  state.lenders = rows.map((r, i) => {
+    const prev = state.lenders[i] || {};
+    return ensureLenderId({
+      id: prev.id,
+      name: r.querySelector(".ln-name")?.value?.trim() || "",
+      company: r.querySelector(".ln-company")?.value?.trim() || "",
+      email: r.querySelector(".ln-email")?.value?.trim() || "",
+      phone: r.querySelector(".ln-phone")?.value?.trim() || "",
+      nmls: r.querySelector(".ln-nmls")?.value?.trim() || "",
+      offer: r.querySelector(".ln-offer")?.value?.trim() || "",
+    });
+  });
 }
 
 async function saveLenders() {
@@ -941,14 +856,15 @@ function renderLendersList() {
     return;
   }
 
-  list.innerHTML = state.lenders.map((l, idx) => {
-    const name = l.name || "";
-    const company = l.company || "";
-    const email = l.email || "";
-    const phone = l.phone || "";
-    const nmls = l.nmls || l.nmlsId || "";
-    const offer = l.offer || "";
-    return `
+  list.innerHTML = state.lenders
+    .map((l, idx) => {
+      const name = l.name || "";
+      const company = l.company || "";
+      const email = l.email || "";
+      const phone = l.phone || "";
+      const nmls = l.nmls || l.nmlsId || "";
+      const offer = l.offer || "";
+      return `
       <div class="lender-row" data-idx="${idx}">
         <div class="lender-grid">
           <div class="f col-4"><label>Name</label><input class="ln-name" type="text" value="${escapeHtml(name)}" /></div>
@@ -963,7 +879,8 @@ function renderLendersList() {
         </div>
       </div>
     `;
-  }).join("");
+    })
+    .join("");
 
   list.querySelectorAll(".ln-remove").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -978,29 +895,6 @@ function renderLendersList() {
       reflectSelectedLenderChip();
     });
   });
-}
-
-async function collectLendersFromDOM() {
-  const list = document.querySelector(SELECTORS.lendersList);
-  if (!list) return;
-  const rows = Array.from(list.querySelectorAll(".lender-row"));
-
-  state.lenders = rows.map((r, i) => {
-    const prev = state.lenders[i] || {};
-    return ensureLenderId({
-      id: prev.id,
-      name: r.querySelector(".ln-name")?.value?.trim() || "",
-      company: r.querySelector(".ln-company")?.value?.trim() || "",
-      email: r.querySelector(".ln-email")?.value?.trim() || "",
-      phone: r.querySelector(".ln-phone")?.value?.trim() || "",
-      nmls: r.querySelector(".ln-nmls")?.value?.trim() || "",
-      offer: r.querySelector(".ln-offer")?.value?.trim() || "",
-    });
-  });
-}
-
-function addLenderRow() {
-  state.lenders.push({ id: "", name: "", company: "", email: "", phone: "", nmls: "", offer: "" });
 }
 
 function updateLenderSelectOptions() {
@@ -1020,11 +914,8 @@ function updateLenderSelectOptions() {
       })
       .join("");
 
-  if (current && Array.from(sel.options).some((o) => o.value === current)) {
-    sel.value = current;
-  } else {
-    sel.value = "";
-  }
+  if (current && Array.from(sel.options).some((o) => o.value === current)) sel.value = current;
+  else sel.value = "";
 }
 
 function reflectSelectedLenderChip() {
@@ -1050,147 +941,79 @@ function reflectSelectedLenderChip() {
   }
 }
 
-/* ---------------- Rendering cards ---------------- */
+/* ---- Per-property lender sync (unchanged logic) ---- */
 
-function safeSlugFrom(it) {
-  if (it.slug) return String(it.slug);
-  if (it.id) return String(it.id);
-  if (it.listingId) return String(it.listingId);
-  const addr = (typeof it.address === "string" && it.address) || (typeof it.Address === "string" && it.Address);
-  return addr ? addr.toLowerCase().replace(/[^\w]+/g, "-") : "unknown";
-}
+async function upsertPerPropertyLender(listingId, lenderId, offerStr) {
+  const hasAnything = (lenderId && lenderId.trim()) || (offerStr && offerStr.trim());
+  let revision = null;
 
-function renderListingsIntoGrid(listings) {
-  const grid = document.querySelector(SELECTORS.grid);
-  if (!grid) return console.error("Missing #listingsGrid container");
+  try {
+    const g = await fetch(`${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`, { cache: "no-store" });
+    if (g.ok) {
+      const data = await g.json().catch(() => ({}));
+      revision = data?.revision ?? null;
+      if (!hasAnything && !data?.lender && !data?.offer) return;
+    }
+  } catch {}
 
-  const html = listings.map((l) => {
-    const slug = safeSlugFrom(l);
-    const address =
-      (typeof l.address === "string" && l.address) ||
-      (typeof l.title === "string" && l.title) ||
-      (typeof l.Address === "string" && l.Address) ||
-      slug ||
-      "Address unavailable";
+  let lenderObj = null;
+  if (lenderId && lenderId.trim()) {
+    const found = state.lenders.find((l) => l.id === lenderId || l.slug === lenderId || l.email === lenderId);
+    lenderObj = found
+      ? {
+          name: String(found.name || ""),
+          phone: String(found.phone || ""),
+          nmls: String(found.nmls || found.nmlsId || ""),
+          email: String(found.email || ""),
+          link: String(found.link || found.url || ""),
+        }
+      : { name: lenderId };
+  }
 
-    const iso = typeof l.activeDate === "string" && l.activeDate;
+  const body = {
+    revision: revision === null ? undefined : revision,
+    lender: lenderObj || undefined,
+    lenderId: lenderId || undefined,
+    offer: hasAnything ? { details: String(offerStr || "") } : undefined,
+  };
 
-    const priceVal = l.price ?? l.listPrice ?? l.ListPrice;
-    const priceNum = typeof priceVal === "string" ? Number(priceVal.replace(/[^\d.-]/g, "")) : priceVal;
-    const price =
-      priceNum != null && Number.isFinite(priceNum)
-        ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(priceNum)
-        : "";
+  if (!hasAnything) {
+    body.lender = null;
+    body.offer = null;
+  }
 
-    const photo = (typeof l.photoUrl === "string" && l.photoUrl) || (typeof l.primaryPhoto === "string" && l.primaryPhoto);
-    const mls = getMLSForCard(l);
-    const domValue = typeof l.computedDaysOnMarket === "number" ? l.computedDaysOnMarket : "";
-
-    return `
-      <div class="card-inner" data-slug="${escapeHtml(slug)}">
-        ${photo ? `<img class="thumb" src="${escapeHtml(photo)}" alt="">` : `<div class="thumb"></div>`}
-        <div class="content">
-          <div class="price">${price ? escapeHtml(price) : ""}</div>
-          <div class="addr">${escapeHtml(address)}</div>
-          <div class="meta">
-            <span class="mls">MLS # ${escapeHtml(String(mls || ""))}</span>
-            <span class="dom-badge">DOM <span class="js-daysOnMarket">${domValue}</span></span>
-          </div>
-          <div class="actions actions--date">
-            <label class="mls" style="min-width:auto; margin-right:6px;">Active Date</label>
-            <input class="js-activeDate" type="date" value="${iso ? escapeHtml(iso) : ""}">
-            <button class="js-saveActiveDate" type="button">Save Date</button>
-          </div>
-          <div class="actions actions--footer">
-            <button class="js-editListing" type="button">Edit Listing</button>
-          </div>
-        </div>
-      </div>
-    `;
+  const r = await fetch(`${ENDPOINTS.lenders}?propertyId=${encodeURIComponent(listingId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
 
-  grid.innerHTML = html.join("") || `<div class="empty">No properties found.</div>`;
-
-  listings.forEach((it) => {
-    const slug = safeSlugFrom(it);
-    it.slug = slug;
-    state.items.set(slug, it);
-  });
-
-  updateAllDom();
-}
-/* ---------------- DOM calc per card ---------------- */
-
-function updateDomForCard(card) {
-  const slug = card.dataset.slug;
-  const listing = state.items.get(slug);
-  if (!listing) return;
-
-  const domEl = card.querySelector(SELECTORS.domOut);
-  if (!domEl) return;
-
-  const activeISO = listing.activeDate;
-  if (!activeISO) return (domEl.textContent = "0");
-
-  const activeYMD = parseLooseDate(activeISO);
-  if (!activeYMD) return (domEl.textContent = "0");
-
-  const t = todayYMDInTZ(TZ);
-  domEl.textContent = String(daysBetweenTZ(t.y, t.m, t.d, activeYMD.y, activeYMD.m, activeYMD.d, TZ));
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`per-property lenders PUT ${r.status} ${t}`);
+  }
 }
 
-function updateAllDom() {
-  document.querySelectorAll(SELECTORS.card).forEach(updateDomForCard);
-}
-
-/* ---- Fetch details via updateListing "no change" ---- */
-
-async function fetchDetailsSnapshot(listingId) {
-  const r = await callUpdate({ listingId: String(listingId) });
-  if (!r.ok) return {};
-  const j = await r.json().catch(() => ({}));
-  return (j && j.details && typeof j.details === "object") ? j.details : {};
-}
-
-/* ---- Populate Edit Listing (DETAILS ONLY) ---- */
+/* ---------------- Open listing editor (FIXED details load) ---------------- */
 
 async function openListingEditor(slug, S) {
   const item = S.items.get(slug);
   if (!item) return toast("Listing not found", "error");
 
-  // ensure lenders are loaded so select has options
   if (!state.lenders || state.lenders.length === 0) {
     try { await loadLenders(); } catch {}
   }
 
-  // details.json (prefer item.detailsUrl, fallback to updateListing snapshot)
   if (!S.details.has(slug)) {
-    const listingId = listingIdFrom(item, slug);
-
-    if (item.detailsUrl) {
-      try {
-        const r = await fetch(item.detailsUrl, { cache: "no-store" });
-        S.details.set(slug, r.ok ? await r.json() : {});
-      } catch {
-        S.details.set(slug, {});
-      }
-    } else if (listingId) {
-      try {
-        const det = await fetchDetailsSnapshot(listingId);
-        S.details.set(slug, det || {});
-      } catch {
-        S.details.set(slug, {});
-      }
-    } else {
-      S.details.set(slug, {});
-    }
+    const det = await fetchDetailsForModal(item, slug);
+    S.details.set(slug, det || {});
   }
 
   const det = S.details.get(slug) || {};
   const flatDet = deepFlatten(det || {});
   const src = [det, flatDet, item];
 
-  // ✅ Per-property lender loader (RESET FIRST — prevents carrying last listing)
+  // reset per-property lender UI first
   try {
     const listingId = listingIdFrom(item, slug);
     const sel = document.querySelector(SELECTORS.fLenderSelect);
@@ -1209,14 +1032,8 @@ async function openListingEditor(slug, S) {
         const offer = (ldata?.offer?.details || "").trim();
 
         updateLenderSelectOptions();
-
-        if (sel && lenderId && Array.from(sel.options).some(o => o.value === lenderId)) {
-          sel.value = lenderId;
-        } else if (sel) {
-          sel.value = "";
-        }
+        if (sel && lenderId && Array.from(sel.options).some((o) => o.value === lenderId)) sel.value = lenderId;
         if (offerEl) offerEl.value = offer;
-
         reflectSelectedLenderChip();
       }
     }
@@ -1224,12 +1041,12 @@ async function openListingEditor(slug, S) {
     console.warn("Per-property lender fetch failed", e2);
   }
 
-  // fill form
+  // Fill form
   setValue(SELECTORS.fMLS, pickSmart(src, ALIASES.mls, "mls") || "");
   setValue(SELECTORS.fAddress, pickSmart(src, ALIASES.address, "address") || "");
   setValue(SELECTORS.fCity, pickSmart(src, ALIASES.city, "city") || "");
   setValue(SELECTORS.fState, pickSmart(src, ALIASES.state, "state") || "");
-  setValue(SELECTORS.fZip, pickSmart(src, ALIASES.zip, "zip", false) || "");
+  setValue(SELECTORS.fZip, pickSmart(src, ALIASES.zip, "zip") || "");
 
   setValue(SELECTORS.fPrice, pickSmart(src, ALIASES.price, "price", true) ?? "");
   setValue(SELECTORS.fBeds, pickSmart(src, ALIASES.beds, "beds", true) ?? "");
@@ -1267,7 +1084,7 @@ async function openListingEditor(slug, S) {
     }
   }
 
-  // DOM display
+  // DOM display (timezone-aware)
   const fDomDisplay = document.querySelector(SELECTORS.fDomDisplay);
   if (fDomDisplay) {
     if (activeYMD) {
@@ -1282,7 +1099,115 @@ async function openListingEditor(slug, S) {
   renderAdvancedFieldsFromSource([det, item]);
 }
 
-/* ---------------- ONE set of events ---------------- */
+/* ---------------- Full editor save (CANONICAL WRITES ONLY) ---------------- */
+
+async function saveFullEdit(slug) {
+  const item = state.items.get(slug);
+  let listingId = listingIdFrom(item, slug);
+  if (!listingId) listingId = slug;
+
+  const v = collectFormValues();
+  const extras = collectAdvancedFieldsToObject();
+
+  // Never allow these to be written
+  delete extras.bedrooms;
+  delete extras.squareFeet;
+
+  // canonical-only patch (no duplicate alias writes)
+  const detailsPatch = {
+    mlsNumber: v.mls || "",
+
+    address: v.address || "",
+    city: v.city || "",
+    state: v.state || "",
+    zip: v.zip || "",
+
+    listPrice: v.price ?? "",
+
+    TotalBedrooms: v.beds ?? "",
+    totalBaths: v.baths ?? "",
+
+    SqFtTotal: v.sqft ?? "",
+    YearBuilt: v.year ?? "",
+
+    ListingStatus: v.status || "",
+
+    activeDate: v.activeDate || "",
+    timezone: v.timezone || TZ,
+
+    Remarks: v.desc || "",
+    agentNotes: v.notes || "",
+
+    primaryPhoto: v.photo || "",
+
+    ...extras,
+  };
+
+  const res = await callUpdate({ slug: String(listingId), details: detailsPatch });
+
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`updateListing failed ${res.status} ${t}`);
+  }
+
+  // per-property lender sync
+  try {
+    await upsertPerPropertyLender(listingId, v.lenderId, v.lenderOffer);
+  } catch (e) {
+    console.warn("Per-property lender sync failed", e);
+  }
+
+  const saved = await res.json().catch(() => ({}));
+  if (saved?.details && typeof saved.details === "object") state.details.set(slug, saved.details);
+
+  // Update local card model (minimal)
+  const updated = { ...(item || {}) };
+  if (v.address) updated.address = v.address;
+  if (v.price != null) updated.price = v.price;
+  if (v.activeDate !== undefined) updated.activeDate = v.activeDate;
+  if (v.timezone) updated.timezone = v.timezone;
+
+  if (v.photo) {
+    if (isHttpUrl(v.photo)) updated.photoUrl = v.photo;
+    else if (!updated.photoUrl) updated.photoUrl = item?.photoUrl || "";
+  }
+
+  state.items.set(slug, updated);
+
+  // Update card UI
+  const card = document.querySelector(`[data-slug="${CSS.escape(slug)}"]`);
+  if (card) {
+    const addrEl = card.querySelector(".addr");
+    if (addrEl && v.address) addrEl.textContent = v.address;
+
+    const priceEl = card.querySelector(".price");
+    if (priceEl && v.price != null) {
+      priceEl.textContent = v.price
+        ? new Intl.NumberFormat("en-US", {
+            style: "currency",
+            currency: "USD",
+            maximumFractionDigits: 0,
+          }).format(v.price)
+        : "";
+    }
+
+    const img = card.querySelector(".thumb");
+    if (img) {
+      const preview = previewUrlFrom(v.photo || "", updated);
+      if (preview) img.src = preview;
+    }
+
+    const input = card.querySelector(SELECTORS.dateInput);
+    if (input && updated.activeDate) input.value = updated.activeDate;
+
+    updateDomForCard(card);
+  }
+
+  reflectSelectedLenderChip();
+  toast("Listing saved");
+}
+
+/* ---------------- Events ---------------- */
 
 document.addEventListener("click", async (e) => {
   // Save Active Date
@@ -1322,20 +1247,8 @@ document.addEventListener("click", async (e) => {
     return;
   }
 
-  // Edit Lenders (top button)
-  if (e.target.closest(SELECTORS.btnEditLenders)) {
-    try {
-      if (!state.lenders || state.lenders.length === 0) await loadLenders();
-    } catch (e2) {
-      console.warn(e2);
-      toast("Failed to load lenders", "error");
-    }
-    openModal(SELECTORS.lendersModal);
-    return;
-  }
-
-  // Manage lenders inline (inside listing modal)
-  if (e.target.closest(SELECTORS.btnManageLendersInline)) {
+  // Edit Lenders
+  if (e.target.closest(SELECTORS.btnEditLenders) || e.target.closest(SELECTORS.btnManageLendersInline)) {
     try {
       if (!state.lenders || state.lenders.length === 0) await loadLenders();
     } catch (e2) {
@@ -1386,7 +1299,7 @@ document.addEventListener("click", async (e) => {
   if (e.target.closest(SELECTORS.btnAddLender)) {
     e.preventDefault();
     try { await collectLendersFromDOM(); } catch {}
-    addLenderRow();
+    state.lenders.push({ id: "", name: "", company: "", email: "", phone: "", nmls: "", offer: "" });
     renderLendersList();
     updateLendersMeta();
     updateLenderSelectOptions();
@@ -1435,11 +1348,9 @@ document.addEventListener("click", async (e) => {
   }
 });
 
-// Keep chip in sync when you change dropdown manually
+// Keep chip in sync
 document.addEventListener("change", (e) => {
-  if (e.target?.matches?.(SELECTORS.fLenderSelect)) {
-    reflectSelectedLenderChip();
-  }
+  if (e.target?.matches?.(SELECTORS.fLenderSelect)) reflectSelectedLenderChip();
 });
 
 /* ---------------- Init ---------------- */
@@ -1449,10 +1360,8 @@ async function init() {
     const listings = await fetchListings();
     renderListingsIntoGrid(listings);
 
-    // load lenders once
     try { await loadLenders(); } catch (e) { console.warn(e); }
 
-    console.log("State items", state.items.size);
   } catch (e) {
     console.error(e);
     toast("Failed to load dashboard", "error");

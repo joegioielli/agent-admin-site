@@ -504,11 +504,43 @@ async function fetchDetailsForModal(item, slug) {
 
 /* ---------------- Advanced fields ---------------- */
 
+/* ---------------- Advanced fields ---------------- */
+
 function normalizeKey(k) {
   return String(k).replace(/[^\w]+/g, "").toLowerCase();
 }
 
-// Hide canonical/core fields from Advanced list
+
+// ADD THIS BLOCK HERE ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
+
+const ALWAYS_HIDE_ADMIN_KEYS = new Set([
+  "slug",
+  "id",
+  "listingid",
+  "detailsurl",
+  "lastmodified",
+  "hasnote",
+  "ok",
+  "computeddaysonmarket",
+  "csvdaysonmarket",
+  "daysonmarket",
+  "latitude",
+  "longitude",
+  "officelistcode",
+  "_lasteditedby",
+  "updatedat",
+  "source",
+  "source.csvkey",
+  "source.ingestedat",
+]);
+
+function normAdminKey(k) {
+  return String(k || "").trim().toLowerCase();
+}
+
+
+// THEN your existing code continues ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
+
 const CANON_HIDE = new Set([
   "mls","mlsnumber","listingid",
   "address","city","state","zip","zipcode","postalcode",
@@ -571,13 +603,20 @@ const ADVHIDE = {
 };
 
 function shouldHideAdminKey(originalKey) {
+  const k = String(originalKey || "").trim();
+  if (!k) return true;
+
+  const kc = normAdminKey(k);
+
+  // ✅ hard override: never show these keys, even when “show admin fields” is enabled
+  if (ALWAYS_HIDE_ADMIN_KEYS.has(kc)) return true;
+
+  // Optional toggle: show everything else if enabled
   if (localStorage.getItem("showAdminKeys") === "1") return false;
 
-  const kc = String(originalKey || "").toLowerCase().trim();
-  if (!kc) return true;
-
+  // Otherwise apply normal hides
   if (ADVHIDE.hardCI.has(kc)) return true;
-  return ADVHIDE.patterns.some((rx) => rx.test(originalKey));
+  return ADVHIDE.patterns.some((rx) => rx.test(k));
 }
 
 function rowHTML(k, v) {

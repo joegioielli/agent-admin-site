@@ -1,22 +1,22 @@
-// netlify/functions/chat.js — ESM + global/per-listing lenders + vCard links + rich quick answers + lender extras + correct Days on Market (America/Chicago)
+// netlify/functions/chat.js
+// ESM + global/per-listing lenders + vCard links + rich quick answers + lender extras + correct Days on Market (America/Chicago)
 // Uses getListingDetails first (source of truth), then falls back to listListings.
 // Writes compact JSONL to logs-jsonl/ for Athena + pretty JSON to logs/ for humans.
 //
-// NEW: Supports "text mode" for SMS so users see ONLY the reply string (not JSON).
+// Supports "text mode" for SMS so users see ONLY the reply string (not JSON).
 //   - Add ?format=text  OR  header Accept: text/plain
-// Web chat (chat.html) can keep using JSON (default).
 
 import OpenAI from "openai";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
-// IMPORTANT: instantiate OpenAI INSIDE handler so missing env doesn't crash module init
+/* ------------------------- OpenAI ------------------------- */
 function getOpenAIClient() {
   const key = process.env.OPENAI_API_KEY;
   if (!key) return null;
   return new OpenAI({ apiKey: key });
 }
 
-/* ------------------------- Response formatting (JSON vs plain text) ------------------------- */
+/* ------------------------- Response formatting ------------------------- */
 function wantsPlainText(event) {
   const qs = event?.queryStringParameters || {};
   if (String(qs.format || "").toLowerCase() === "text") return true;
@@ -34,12 +34,6 @@ function corsHeaders(extra = {}) {
 }
 
 function respond(event, payload, statusCode = 200) {
-  // payload can be:
-  //   - string (reply only)
-  //   - object like { reply, listingId, extras }
-  const plain = wantsPlainText(event);
-
-  // If payload is string: always plain
   if (typeof payload === "string") {
     return {
       statusCode,
@@ -48,13 +42,11 @@ function respond(event, payload, statusCode = 200) {
     };
   }
 
-  // If payload is object:
-  if (plain) {
-    const reply = payload?.reply ?? "";
+  if (wantsPlainText(event)) {
     return {
       statusCode,
       headers: corsHeaders({ "Content-Type": "text/plain; charset=utf-8" }),
-      body: String(reply),
+      body: String(payload?.reply ?? ""),
     };
   }
 
@@ -133,7 +125,7 @@ async function logChatEvent({ event, propertyId, message, reply, intent, meta = 
   }
 }
 
-/* ------------------------- utilities ------------------------- */
+/* ------------------------- Utilities ------------------------- */
 function parseBody(event) {
   let raw = event.body || "";
   if (event.isBase64Encoded) {
@@ -142,12 +134,10 @@ function parseBody(event) {
     } catch {}
   }
 
-  // JSON first
   try {
     return JSON.parse(raw);
   } catch {}
 
-  // form / query style
   try {
     const params = new URLSearchParams(raw);
     const obj = {};
@@ -168,8 +158,9 @@ function pick(obj, keys, fallback = undefined) {
 }
 
 function fmtUSD(x) {
-  if (typeof x === "number")
+  if (typeof x === "number") {
     return x.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  }
   const n = Number(String(x ?? "").replace(/[^\d.]/g, ""));
   return Number.isFinite(n)
     ? n.toLocaleString("en-US", { style: "currency", currency: "USD" })
@@ -206,9 +197,9 @@ function zero2(n) {
 
 function chicagoYMDFromDate(d) {
   const parts = CHI_FMT.formatToParts(d);
-  const y = parts.find((p) => p.type === "year").value;
-  const m = parts.find((p) => p.type === "month").value;
-  const dd = parts.find((p) => p.type === "day").value;
+  const y = parts.find((p) => p.type === "year")?.value;
+  const m = parts.find((p) => p.type === "month")?.value;
+  const dd = parts.find((p) => p.type === "day")?.value;
   return `${y}-${m}-${dd}`;
 }
 
@@ -216,10 +207,8 @@ function parseActiveDateToChicagoYMD(activeDateStr) {
   if (!activeDateStr) return null;
   const s = String(activeDateStr).trim();
 
-  // YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
 
-  // MM/DD/YYYY or MM-DD-YY/YY
   if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}$/.test(s)) {
     const parts = s.split(/[\/-]/);
     let m = Number(parts[0]);
@@ -236,7 +225,6 @@ function parseActiveDateToChicagoYMD(activeDateStr) {
     return `${String(y)}-${zero2(m)}-${zero2(d)}`;
   }
 
-  // fallback Date parse
   const asDate = new Date(s);
   if (isNaN(asDate)) return null;
   return chicagoYMDFromDate(asDate);
@@ -246,7 +234,6 @@ function todayChicagoYMD() {
   return chicagoYMDFromDate(new Date());
 }
 
-// Active day counts as 0.
 function daysOnMarketFromActiveDate(activeDateStr) {
   const startYMD = parseActiveDateToChicagoYMD(activeDateStr);
   if (!startYMD) return null;
@@ -257,7 +244,7 @@ function daysOnMarketFromActiveDate(activeDateStr) {
   return diffDays < 0 ? 0 : diffDays;
 }
 
-/* ------------------ Listing loader (getListingDetails first) ------------------ */
+/* ------------------ Base URL helpers ------------------ */
 function baseFromEvent(event) {
   const headers = event?.headers || {};
   const proto = headers["x-forwarded-proto"] || "https";
@@ -265,13 +252,13 @@ function baseFromEvent(event) {
   return `${proto}://${host}`;
 }
 
+/* ------------------ Listing loaders ------------------ */
 async function loadListingViaGetListingDetails(event, propertyId) {
   const base = baseFromEvent(event);
   const id = String(propertyId || "").trim();
   if (!id) return { listing: {}, foundCard: null, fullText: "" };
 
   const url = `${base}/.netlify/functions/getListingDetails?listingId=${encodeURIComponent(id)}`;
-
   const res = await fetch(url, { headers: { "cache-control": "no-store" } });
   if (!res.ok) return { listing: {}, foundCard: null, fullText: "" };
 
@@ -280,7 +267,6 @@ async function loadListingViaGetListingDetails(event, propertyId) {
   return { listing: details || {}, foundCard: null, fullText: "" };
 }
 
-/* ------------------ Listing loader fallback via listListings ------------------ */
 async function loadListingViaListListings(event, propertyId) {
   const base = baseFromEvent(event);
 
@@ -306,12 +292,11 @@ async function loadListingViaListListings(event, propertyId) {
 
   const out = { foundCard: found, listing: {}, fullText: "" };
 
-  // Try detailsUrl if present
   if (found.detailsUrl) {
     try {
       const dRes = await fetch(found.detailsUrl, { headers: { "cache-control": "no-store" } });
       if (dRes.ok) {
-        const detailsResp = await dRes.json();
+        const detailsResp = await dRes.json().catch(() => ({}));
         out.listing = detailsResp.details || detailsResp || {};
       }
     } catch {}
@@ -329,13 +314,11 @@ async function loadListingViaListListings(event, propertyId) {
 }
 
 async function loadListingAny(event, propertyId) {
-  // 1) Prefer getListingDetails (your verified source of truth)
   try {
     const a = await loadListingViaGetListingDetails(event, propertyId);
     if (a?.listing && Object.keys(a.listing).length) return a;
   } catch {}
 
-  // 2) Fallback to listListings
   try {
     return await loadListingViaListListings(event, propertyId);
   } catch {
@@ -343,7 +326,7 @@ async function loadListingAny(event, propertyId) {
   }
 }
 
-/* ------------------------- global lenders ------------------------- */
+/* ------------------ Lender loaders ------------------ */
 async function loadGlobalLenders(event) {
   try {
     const base = baseFromEvent(event);
@@ -351,11 +334,44 @@ async function loadGlobalLenders(event) {
       headers: { "cache-control": "no-store" },
     });
     if (!res.ok) return [];
-    const doc = await res.json();
+    const doc = await res.json().catch(() => ({}));
     const list = Array.isArray(doc.lenders) ? doc.lenders : [];
     return list.filter((l) => l.active !== false).slice(0, 3);
   } catch {
     return [];
+  }
+}
+
+async function loadPropertyLender(event, propertyId) {
+  try {
+    const base = baseFromEvent(event);
+    const id = String(propertyId || "").trim();
+    if (!id) return null;
+
+    const res = await fetch(
+      `${base}/.netlify/functions/lenders?propertyId=${encodeURIComponent(id)}`,
+      { headers: { "cache-control": "no-store" } }
+    );
+
+    if (!res.ok) return null;
+
+    const doc = await res.json().catch(() => null);
+    if (!doc || !doc.lender) return null;
+
+    return {
+      lenderId: String(doc.lenderId || "").trim(),
+      company: "",
+      repName: doc.lender?.name || "",
+      phone: doc.lender?.phone || "",
+      email: doc.lender?.email || "",
+      url: doc.lender?.link || "",
+      title: "Loan Officer",
+      nmls: doc.lender?.nmls || "",
+      offer: doc.offer?.details || "",
+      preferred: true,
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -366,9 +382,17 @@ function isLenderIntent(text = "") {
     s
   );
 }
+
 function isCardIntent(text = "") {
   const s = String(text || "").toLowerCase();
   return /\b(vcard|contact\s*card|save\s+to\s+(?:my|your)\s+phone|download\s+card|add\s+contact)\b/.test(
+    s
+  );
+}
+
+function isAgentIntent(text = "") {
+  const s = String(text || "").toLowerCase();
+  return /\b(talk\s+to\s+(?:an\s+)?agent|talk\s+to\s+someone|contact\s+(?:an\s+)?agent|call\s+(?:an\s+)?agent|speak\s+with\s+(?:an\s+)?agent|human|realtor|listing\s+agent)\b/.test(
     s
   );
 }
@@ -379,30 +403,14 @@ function formatLenderLine(l) {
   if (l.company) bits.push(l.company);
   if (l.repName) bits.push(`— ${l.repName}`);
   if (phone) bits.push(`· ${phone}`);
+  if (l.email) bits.push(`· ${l.email}`);
   if (l.url) bits.push(`· ${l.url}`);
   return bits.join(" ");
 }
 
-/* ---------- build structured lender extras for UI CTA ---------- */
 function normalizeLenderId(v) {
   const s = String(v ?? "").trim();
   return s || "";
-}
-
-function buildVcardUrl(base, lender) {
-  const id = normalizeLenderId(lender.lenderId || lender.id);
-  if (id) {
-    return `${base}/.netlify/functions/vcard?lenderId=${encodeURIComponent(id)}`;
-  }
-  const q = new URLSearchParams({
-    company: lender.company || "",
-    repName: lender.repName || "",
-    phone: lender.phone || "",
-    email: lender.email || "",
-    url: lender.url || "",
-    title: lender.title || "Loan Officer",
-  }).toString();
-  return `${base}/.netlify/functions/vcard?${q}`;
 }
 
 function normalizeLenderRecord(raw) {
@@ -411,87 +419,86 @@ function normalizeLenderRecord(raw) {
   const repName = raw?.repName || raw?.contact || raw?.person || raw?.name2 || "";
   const phone = raw?.phone || raw?.tel || raw?.mobile || "";
   const email = raw?.email || "";
-  const url = raw?.url || raw?.website || "";
+  const url = raw?.url || raw?.website || raw?.link || "";
   const title = raw?.title || "Loan Officer";
-  return { id, lenderId: id, company, repName, phone, email, url, title };
+  const nmls = raw?.nmls || raw?.nmlsId || "";
+  return { id, lenderId: id, company, repName, phone, email, url, title, nmls };
 }
 
-function resolvePreferredFromListing(listing) {
-  const simpleId = pick(listing, ["preferredLenderId", "PreferredLenderId", "preferred_lender_id"]);
-  if (simpleId) return { type: "id", lenderId: String(simpleId).trim() };
+function buildVcardUrl(base, lender) {
+  const q = new URLSearchParams({
+    company: lender.company || "",
+    repName: lender.repName || lender.name || "",
+    phone: lender.phone || "",
+    email: lender.email || "",
+    url: lender.url || "",
+    title: lender.title || "Loan Officer",
+    nmls: lender.nmls || "",
+  }).toString();
 
-  const prefRef = pick(listing, ["preferredLenderRef", "PreferredLenderRef", "preferred_lender_ref"]);
-  if (prefRef && typeof prefRef === "object" && (prefRef.lenderId || prefRef.id)) {
-    return { type: "ref", ...prefRef, lenderId: prefRef.lenderId || prefRef.id };
-  }
-
-  const prefCustom = pick(listing, ["preferredLenderCustom", "PreferredLenderCustom", "preferred_lender_custom"]);
-  if (prefCustom && typeof prefCustom === "object") {
-    return { type: "custom", ...prefCustom };
-  }
-
-  return null;
+  return `${base}/.netlify/functions/vcard?${q}`;
 }
 
-function mergeAndPrepareLenders({ base, globals = [], listing, limit = 3 }) {
-  const preferredRef = resolvePreferredFromListing(listing);
-  const g = Array.isArray(globals) ? globals.map(normalizeLenderRecord) : [];
+function buildAgentVcardUrl(base, agent) {
+  const q = new URLSearchParams({
+    company: agent.company || "",
+    repName: agent.name || "",
+    phone: agent.phone || "",
+    email: agent.email || "",
+    url: agent.url || "",
+    title: agent.title || "Real Estate Agent",
+  }).toString();
 
-  let preferredObj = null;
+  return `${base}/.netlify/functions/vcard?${q}`;
+}
 
-  if (preferredRef?.type === "id" || preferredRef?.type === "ref") {
-    const id = normalizeLenderId(preferredRef.lenderId);
-    const match = g.find((x) => x.lenderId && x.lenderId.toLowerCase() === id.toLowerCase());
-    if (match) {
-      preferredObj = {
-        ...match,
-        phone: preferredRef.phoneOverride || match.phone,
-        url: preferredRef.urlOverride || match.url,
-        offer: preferredRef.offer || "",
-        note: preferredRef.note || "",
-      };
-    }
-  } else if (preferredRef?.type === "custom") {
-    preferredObj = normalizeLenderRecord(preferredRef);
+function buildLenderExtras(base, propertyPreferred, globals = [], limit = 3) {
+  const extras = [];
+
+  if (propertyPreferred) {
+    const preferredName = [propertyPreferred.company, propertyPreferred.repName].filter(Boolean).join(" — ");
+    extras.push({
+      id: propertyPreferred.lenderId || "property-preferred",
+      name: preferredName || propertyPreferred.repName || "Preferred Lender",
+      phone: propertyPreferred.phone || "",
+      email: propertyPreferred.email || "",
+      vcardUrl: buildVcardUrl(base, propertyPreferred),
+      preferred: true,
+      offer: propertyPreferred.offer || "",
+      nmls: propertyPreferred.nmls || "",
+    });
   }
 
-  const list = [];
-  if (preferredObj) list.push(preferredObj);
-  for (const x of g) {
-    if (
-      preferredObj &&
-      x.lenderId &&
-      preferredObj.lenderId &&
-      x.lenderId.toLowerCase() === preferredObj.lenderId.toLowerCase()
-    ) {
-      continue;
-    }
-    list.push(x);
+  for (const g of globals) {
+    const norm = normalizeLenderRecord(g);
+
+    const dup = extras.some((x) => {
+      const a = String(x.email || "").toLowerCase();
+      const b = String(norm.email || "").toLowerCase();
+      return a && b && a === b;
+    });
+    if (dup) continue;
+
+    const label = [norm.company, norm.repName].filter(Boolean).join(" — ");
+    extras.push({
+      id: norm.lenderId || norm.id || label || `lender_${extras.length}`,
+      name: label || norm.company || norm.repName || "Lender",
+      phone: norm.phone || "",
+      email: norm.email || "",
+      vcardUrl: buildVcardUrl(base, norm),
+      preferred: false,
+      offer: "",
+      nmls: norm.nmls || "",
+    });
+
+    if (extras.length >= limit) break;
   }
 
-  const trimmed = list.slice(0, limit);
-
-  const extras = trimmed.map((l, idx) => {
-    const name = [l.company, l.repName].filter(Boolean).join(" — ");
-    const preferred = idx === 0 && preferredObj != null;
-    return {
-      id: l.lenderId || l.id || name || `lender_${idx}`,
-      name,
-      phone: l.phone || "",
-      email: l.email || "",
-      vcardUrl: buildVcardUrl(base, l),
-      preferred,
-    };
-  });
-
-  const preferredLine = preferredObj ? formatLenderLine(preferredObj) : "";
-
-  return { extras, preferredLine };
+  return extras.slice(0, limit);
 }
 
 /* --------------------------- handler -------------------------- */
 export async function handler(event) {
-  // CORS preflight
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 204,
@@ -509,12 +516,10 @@ export async function handler(event) {
   try {
     const body = parseBody(event);
 
-    // Accept old + new param names
     const propertyId =
       body.propertyId || body.listingId || body.pid || body.propertyID || body.ListingId;
 
     const message = body.message || body.text || body.question;
-
     const address1 = body.address1 || body.a1 || "";
     const address2 = body.address2 || body.a2 || "";
 
@@ -526,24 +531,12 @@ export async function handler(event) {
 
     const base = baseFromEvent(event);
 
-    /* ---------- LENDER / VCARD FLOW (works even without listing) ---------- */
+    /* ---------- LENDER / VCARD FLOW ---------- */
     if (isLenderIntent(message) || isCardIntent(message)) {
       const globals = await loadGlobalLenders(event);
+      const propertyPreferred = await loadPropertyLender(event, propertyId);
 
-      let preferredLine = "";
-      let extrasLenders = [];
-
-      try {
-        const data = await loadListingAny(event, propertyId);
-        const listing = data?.listing || {};
-        const merge = mergeAndPrepareLenders({ base, globals, listing, limit: 3 });
-        preferredLine = merge.preferredLine;
-        extrasLenders = merge.extras;
-      } catch {
-        const merge = mergeAndPrepareLenders({ base, globals, listing: {}, limit: 3 });
-        preferredLine = merge.preferredLine;
-        extrasLenders = merge.extras;
-      }
+      const extrasLenders = buildLenderExtras(base, propertyPreferred, globals, 3);
 
       if (isCardIntent(message)) {
         const links = extrasLenders.map((l) => `${l.name || "Lender"}: ${l.vcardUrl}`);
@@ -569,21 +562,38 @@ export async function handler(event) {
         });
       }
 
-      let lines = [];
-      if (preferredLine) {
+      const lines = [];
+
+      if (propertyPreferred) {
+        const preferredBits = [];
+        const preferredName = [propertyPreferred.company, propertyPreferred.repName].filter(Boolean).join(" — ");
+        if (preferredName) preferredBits.push(preferredName);
+        if (propertyPreferred.phone) preferredBits.push(fmtPhoneInline(propertyPreferred.phone));
+        if (propertyPreferred.email) preferredBits.push(propertyPreferred.email);
+
         lines.push("This property has a preferred lender:");
-        lines.push(preferredLine);
+        lines.push(preferredBits.join(" · ") || "Preferred lender is available.");
+
+        if (propertyPreferred.offer) {
+          lines.push(`Offer: ${propertyPreferred.offer}`);
+        }
       }
 
-      if (globals.length) {
-        if (preferredLine) lines.push("\nYou can also talk with any of our preferred lenders:");
-        else lines.push("Here are our preferred lenders:");
-        const globalLabels = extrasLenders.map((e) => e.name).filter(Boolean);
-        globalLabels.forEach((label, idx) => lines.push(`${idx + 1}. ${label}`));
+      if (extrasLenders.length) {
+        const otherLenders = propertyPreferred
+          ? extrasLenders.filter((x) => !x.preferred)
+          : extrasLenders;
+
+        if (otherLenders.length) {
+          lines.push(propertyPreferred ? "\nYou can also talk with these lenders:" : "Here are available lenders:");
+          otherLenders.forEach((l, idx) => {
+            lines.push(`${idx + 1}. ${l.name}`);
+          });
+        }
       }
 
-      if (!preferredLine && !globals.length) {
-        lines = ["I don’t have lender info yet."];
+      if (!propertyPreferred && !extrasLenders.length) {
+        lines.push("I don’t have lender info yet.");
       } else {
         lines.push("\nWould you like the contact info here, or a contact card you can save to your phone?");
       }
@@ -597,7 +607,12 @@ export async function handler(event) {
         message,
         reply,
         intent,
-        meta: { address1, address2, lenders: extrasLenders.length },
+        meta: {
+          address1,
+          address2,
+          lenders: extrasLenders.length,
+          hasPropertyPreferred: !!propertyPreferred,
+        },
       });
 
       return respond(event, {
@@ -616,12 +631,10 @@ export async function handler(event) {
     if (!Object.keys(listing).length && !fullText && !foundCard?.price) {
       const reply = "I couldn't find listing data for this property yet.";
       await logChatEvent({ event, propertyId, message, reply, intent: "no_listing_data" });
-
       return respond(event, { reply, listingId: String(propertyId) });
     }
 
     /* ------------------ Compute correct Days on Market ------------------ */
-    // Prefer explicit activeDate overrides, but fall back to ListDate if that's all we have.
     const activeDate = pick(listing, [
       "activeDate",
       "ActiveDate",
@@ -643,7 +656,6 @@ export async function handler(event) {
     const q = String(message).toLowerCase();
     const reAny = (arr) => arr.some((rx) => rx.test(q));
 
-    // IMPORTANT: include your CSV keys like TotalBedrooms and SqFtTotal
     const price = pick(listing, ["listPrice", "ListPrice", "price", "Price", "list_price"]);
     const bedsRaw = pick(listing, [
       "beds",
@@ -680,6 +692,12 @@ export async function handler(event) {
     const yearBuiltRaw = pick(listing, ["YearBuilt", "yearBuilt", "builtYear", "BuiltYear"]);
     const garageSpacesRaw = pick(listing, ["GarageSpaces", "garageSpaces", "ParkingTotal", "parkingTotal"]);
 
+    const agentName = pick(listing, ["AgentListName", "agentName", "listingAgentName"]);
+    const agentPhone = pick(listing, ["AgentListPhone", "agentPhone", "listingAgentPhone", "OfficeListPhone"]);
+    const officeName = pick(listing, ["OfficeListName", "officeName"]);
+    const officePhone = pick(listing, ["OfficeListPhone", "officePhone"]);
+    const address = pick(listing, ["address", "Address"], [address1, address2].filter(Boolean).join(" "));
+
     const isBeds = reAny([/\bbeds?\b/i, /\bbedrooms?\b/i, /\bhow\s+many\s+beds?\b/i]);
     const isBaths = reAny([/\bbaths?\b/i, /\bbathrooms?\b/i, /\bhow\s+many\s+baths?\b/i]);
     const isSqft = reAny([/\bsq\s?ft\b/i, /\bsquare\s?feet\b/i, /\bsquare\s?footage\b/i, /\bliving\s+area\b/i]);
@@ -703,8 +721,38 @@ export async function handler(event) {
     }
 
     let quick = null;
+    let extras = { listingId: String(propertyId) };
 
-    if (isBeds && bedsRaw !== undefined) {
+    if (isAgentIntent(message)) {
+      const pieces = [];
+      if (agentName) pieces.push(`The listing agent is ${agentName}.`);
+      if (agentPhone) pieces.push(`You can call or text ${fmtPhoneInline(agentPhone)}.`);
+      else if (officePhone) pieces.push(`You can reach the office at ${fmtPhoneInline(officePhone)}.`);
+      if (officeName) pieces.push(`${officeName}.`);
+
+      quick = pieces.length
+        ? pieces.join(" ")
+        : "I don’t have agent contact info for this property yet.";
+
+      const agent = {
+        name: agentName || "Listing Agent",
+        phone: agentPhone || officePhone || "",
+        company: officeName || "",
+        title: "Real Estate Agent",
+        url: "",
+      };
+
+      if (agent.phone || agent.name) {
+        extras.agent = {
+          name: agent.name,
+          phone: agent.phone,
+          company: agent.company,
+          vcardUrl: buildAgentVcardUrl(base, agent),
+        };
+      }
+
+      intent = "agent_contact";
+    } else if (isBeds && bedsRaw !== undefined) {
       const b = toNum(bedsRaw);
       quick = `This property has ${fmtNum(bedsRaw)} bedroom${b === 1 ? "" : "s"}.`;
       intent = "beds";
@@ -741,9 +789,8 @@ export async function handler(event) {
         intent = "price";
       }
     } else if (/\baddress\b/i.test(q)) {
-      const addr = pick(listing, ["address", "Address"]);
-      if (addr || address1 || address2) {
-        quick = `The address is ${[addr, address1, address2].filter(Boolean).join(" ")}`.trim();
+      if (address) {
+        quick = `The address is ${address}`.trim();
         intent = "address";
       }
     }
@@ -755,15 +802,18 @@ export async function handler(event) {
       if (activeYMD) meta.activeDateChicagoYMD = activeYMD;
 
       await logChatEvent({ event, propertyId, message, reply: quick, intent, meta });
-
-      return respond(event, { reply: quick, listingId: String(propertyId) });
+      return respond(event, {
+        reply: quick,
+        listingId: String(propertyId),
+        extras,
+      });
     }
 
     /* -------------------- LLM fallback -------------------- */
     const client = getOpenAIClient();
     if (!client) {
       const reply =
-        "AI is not configured yet (missing OPENAI_API_KEY). I can answer basic questions like price/beds/baths/sqft, but I can’t do deeper AI responses right now.";
+        "AI is not configured yet (missing OPENAI_API_KEY). I can answer basic questions like price, beds, baths, square footage, lender info, and agent contact, but I can’t do deeper AI responses right now.";
       await logChatEvent({
         event,
         propertyId,
@@ -840,7 +890,6 @@ export async function handler(event) {
       reply,
       intent: "server_error",
     });
-    // Keep status 200 so frontends don't choke; still return readable reply
     return respond(event, { reply });
   }
 }

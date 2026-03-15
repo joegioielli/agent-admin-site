@@ -22,6 +22,27 @@
     .msg { max-width:80%; padding:10px 12px; border-radius:14px; line-height:1.4; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.06); word-wrap:break-word; }
     .user { align-self:flex-end; background:#e6f4ea; }
     .ai   { align-self:flex-start; background:#e8f0fe; }
+    .ai-actions { margin-top:8px; display:flex; flex-direction:column; gap:6px; }
+    .mini-card { margin-top:8px; padding:10px; border-radius:10px; background:#fff; border:1px solid #d9e6fb; }
+    .mini-card strong { display:block; margin-bottom:4px; }
+    .mini-links { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .mini-link {
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      text-decoration:none;
+      background:var(--brand);
+      color:#fff;
+      border-radius:9999px;
+      padding:7px 12px;
+      font-size:.88rem;
+      border:1px solid #e05500;
+      box-shadow:0 1px 2px rgba(0,0,0,.12);
+      transition: transform .2s, filter .15s;
+    }
+    .mini-link:hover { transform: translateY(-1px); filter: brightness(1.05); }
+    .mini-link:active { transform: translateY(0); filter: brightness(0.98); }
+
     #typing { font-size:.85rem; color:#666; padding:6px 12px; display:none; }
 
     #ctaBar { background:#fff; padding:6px 8px; border-top:1px solid #eee; display:flex; justify-content:center; }
@@ -56,12 +77,13 @@
     .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:9999}
     .modal.open{display:flex}
     .modal-card{position:relative;background:#fff;max-width:420px;width:92%;border-radius:12px;padding:20px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
-    .actions{display:flex;gap:12px;margin-top:8px}
-    .btn{ padding:10px 14px; border:none; border-radius:10px; cursor:pointer; font-size:.95rem; transition: transform .2s, filter .15s; }
+    .actions{display:flex;gap:12px;margin-top:8px;flex-wrap:wrap}
+    .btn{ padding:10px 14px; border:none; border-radius:10px; cursor:pointer; font-size:.95rem; transition: transform .2s, filter .15s; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
     .btn:hover { transform: translateY(-1px); filter: brightness(1.05); }
     .btn:active { transform: translateY(0); filter: brightness(0.98); }
     .btn-call{background:#f97316;color:#fff}
     .btn-email{background:#10b981;color:#fff}
+    .btn-vcard{background:#2563eb;color:#fff}
     .modal-close{position:absolute;top:6px;right:10px;background:transparent;border:none;font-size:20px;line-height:1;cursor:pointer}
   </style>
 </head>
@@ -97,9 +119,10 @@
       <p style="margin:0 0 12px;color:#555">How would you like to reach the agent?</p>
       <div class="actions">
         <a id="callAgentAction" class="btn btn-call" href="#">📞 Call Agent</a>
-        <button id="emailAgentAction" class="btn btn-email" type="button">✉️ Send Message</button>
+        <button id="textAgentAction" class="btn btn-email" type="button">💬 Text Agent</button>
+        <a id="saveAgentCardAction" class="btn btn-vcard" href="#" target="_blank" rel="noopener" style="display:none;">👤 Save Contact</a>
       </div>
-      <div id="noPhoneMsg" style="display:none;margin-top:10px;color:#666">No direct phone on file for this listing — you can still send a message.</div>
+      <div id="noPhoneMsg" style="display:none;margin-top:10px;color:#666">No direct phone on file for this listing — you can still save the contact card if available.</div>
     </div>
   </div>
 
@@ -128,16 +151,27 @@
 
     const contactModal = document.getElementById('contactActions');
     const callAction   = document.getElementById('callAgentAction');
-    const emailAction  = document.getElementById('emailAgentAction');
+    const textAction   = document.getElementById('textAgentAction');
+    const saveAgentCardAction = document.getElementById('saveAgentCardAction');
     const closeModalBtn= document.getElementById('contactActionsClose');
     const noPhoneMsg   = document.getElementById('noPhoneMsg');
+
+    const state = {
+      lastChatMeta: {},
+      agent: null,
+      lenders: [],
+    };
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
 
-    function syncSpacer(){ if(!leftGroup||!rightSpacer) return; rightSpacer.style.width = leftGroup.offsetWidth + 'px'; }
-    window.addEventListener('resize', syncSpacer); setTimeout(syncSpacer, 0);
+    function syncSpacer() {
+      if (!leftGroup || !rightSpacer) return;
+      rightSpacer.style.width = leftGroup.offsetWidth + 'px';
+    }
+    window.addEventListener('resize', syncSpacer);
+    setTimeout(syncSpacer, 0);
 
     const DEBUG_CONTACT = false;
     const debugContact = (...a) => { if (DEBUG_CONTACT) console.log('[ContactAgent]', ...a); };
@@ -153,15 +187,40 @@
       }
       return fallback;
     }
+
     function cleanPhone(p) {
       const digits = String(p || '').replace(/[^0-9]/g, '');
       if (digits.length === 11 && digits.startsWith('1')) return '+' + digits;
       if (digits.length === 10) return '+1' + digits;
       return digits.length >= 7 ? digits : '';
     }
-    function normText(s){ return String(s||'').toLowerCase().replace(/[^\w\s]/g,' ').replace(/\s+/g,' ').trim(); }
-    function isYes(s){ s=normText(s); return ['y','yes','yeah','yep','sure','ok','okay','yup','affirmative','yes please'].includes(s); }
-    function isNo(s){ s=normText(s); return ['n','no','nope','nah','not really','im good','i am good','i\'m good','no thanks','no thank you','not now'].includes(s); }
+
+    function smsHrefFromPhone(p) {
+      const cleaned = cleanPhone(p);
+      if (!cleaned) return '';
+      return `sms:${cleaned.replace(/^\+/, '')}`;
+    }
+
+    function normText(s) {
+      return String(s || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+    function isYes(s) {
+      s = normText(s);
+      return ['y','yes','yeah','yep','sure','ok','okay','yup','affirmative','yes please'].includes(s);
+    }
+    function isNo(s) {
+      s = normText(s);
+      return ['n','no','nope','nah','not really','im good','i am good','i\'m good','no thanks','no thank you','not now'].includes(s);
+    }
+
+    function escapeHtml(s) {
+      return String(s || '')
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;')
+        .replace(/'/g,'&#39;');
+    }
 
     function linkifyAI(text) {
       let html = String(text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -180,6 +239,112 @@
       if (has(['agent','realtor','broker','talk to agent','speak to agent','connect me','connect agent','call agent','human','contact me','contact agent'])) return 'agent';
       if (has(['showing','tour','schedule','walkthrough','viewing','see it','book','set up a showing','set a showing'])) return 'showing';
       return null;
+    }
+
+    function renderExtraCard(title, bodyHtml, links = []) {
+      const div = document.createElement('div');
+      div.className = 'msg ai';
+      div.innerHTML = `
+        <div>${bodyHtml}</div>
+        ${links.length ? `
+          <div class="mini-links">
+            ${links.map(link => `
+              <a
+                class="mini-link"
+                href="${escapeHtml(link.href)}"
+                ${link.newTab ? 'target="_blank" rel="noopener"' : ''}
+              >${escapeHtml(link.label)}</a>
+            `).join('')}
+          </div>
+        ` : ''}
+      `;
+      chatDiv.appendChild(div);
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+      return div;
+    }
+
+    function updateContactButtonFromAgent(agent) {
+      if (!agent || typeof agent !== 'object') return;
+
+      state.agent = {
+        name: agent.name || '',
+        phone: agent.phone || '',
+        company: agent.company || '',
+        vcardUrl: agent.vcardUrl || '',
+      };
+
+      const cleaned = cleanPhone(agent.phone || '');
+      if (cleaned) {
+        contactBtn.dataset.tel = 'tel:' + cleaned;
+        contactBtn.classList.remove('disabled');
+        contactBtn.removeAttribute('aria-disabled');
+      }
+
+      if (agent.vcardUrl) {
+        contactBtn.dataset.agentVcard = agent.vcardUrl;
+        saveAgentCardAction.href = agent.vcardUrl;
+        saveAgentCardAction.style.display = '';
+      } else {
+        contactBtn.dataset.agentVcard = '';
+        saveAgentCardAction.removeAttribute('href');
+        saveAgentCardAction.style.display = 'none';
+      }
+
+      contactBtn.classList.add('attn');
+      setTimeout(() => contactBtn.classList.remove('attn'), 6000);
+    }
+
+    function handleChatExtras(extras) {
+      if (!extras || typeof extras !== 'object') return;
+
+      if (Array.isArray(extras.lenders) && extras.lenders.length) {
+        state.lenders = extras.lenders.slice();
+
+        const preferred = extras.lenders.find(l => l && l.preferred);
+        const lines = extras.lenders.map((l) => {
+          const name = l.name || 'Lender';
+          const label = l.preferred ? `Preferred Lender: ${name}` : name;
+          const infoBits = [];
+          if (l.phone) infoBits.push(escapeHtml(l.phone));
+          if (l.email) infoBits.push(escapeHtml(l.email));
+          const offer = l.offer ? `<div style="margin-top:4px;color:#444;"><em>${escapeHtml(l.offer)}</em></div>` : '';
+          const info = infoBits.length ? `<div style="margin-top:4px;color:#555;">${infoBits.join(' • ')}</div>` : '';
+          return `
+            <div class="mini-card">
+              <strong>${escapeHtml(label)}</strong>
+              ${info}
+              ${offer}
+              <div class="mini-links">
+                ${l.vcardUrl ? `<a class="mini-link" href="${escapeHtml(l.vcardUrl)}" target="_blank" rel="noopener">Save Contact</a>` : ''}
+                ${l.phone ? `<a class="mini-link" href="tel:${escapeHtml(cleanPhone(l.phone))}">Call</a>` : ''}
+                ${l.phone ? `<a class="mini-link" href="${escapeHtml(smsHrefFromPhone(l.phone))}">Text</a>` : ''}
+              </div>
+            </div>
+          `;
+        });
+
+        renderExtraCard(
+          'Lenders',
+          `${preferred ? `<div style="margin-bottom:8px;"><strong>This property has a preferred lender.</strong></div>` : ''}${lines.join('')}`
+        );
+      }
+
+      if (extras.agent && typeof extras.agent === 'object') {
+        updateContactButtonFromAgent(extras.agent);
+
+        const agent = extras.agent;
+        const bits = [];
+        if (agent.name) bits.push(`<strong>${escapeHtml(agent.name)}</strong>`);
+        if (agent.company) bits.push(`<div style="color:#555;">${escapeHtml(agent.company)}</div>`);
+        if (agent.phone) bits.push(`<div style="margin-top:4px;">${escapeHtml(agent.phone)}</div>`);
+
+        const links = [];
+        if (agent.phone) links.push({ label: 'Call Agent', href: `tel:${cleanPhone(agent.phone)}` });
+        if (agent.phone) links.push({ label: 'Text Agent', href: smsHrefFromPhone(agent.phone) });
+        if (agent.vcardUrl) links.push({ label: 'Save Contact', href: agent.vcardUrl, newTab: true });
+
+        renderExtraCard('Agent', bits.join(''), links);
+      }
     }
 
     // Voice input
@@ -230,17 +395,34 @@
           'ListAgentPreferredPhone','officePhone','OfficePhone'
         ], '');
 
+        let agentName = pick(found || {}, [
+          'AgentListName','listingAgentName','agentName','AgentName','ListAgentName'
+        ], '');
+
+        let officeName = pick(found || {}, ['OfficeListName','officeName','OfficeName'], '');
+
         const detailsUrl = pick(found || {}, ['detailsUrl','details','detailsURL'], '');
-        if (!phone && detailsUrl) {
+        if ((!phone || !agentName || !officeName) && detailsUrl) {
           const dRes = await fetch(detailsUrl, { cache: 'no-store' });
           if (dRes.ok) {
-            const details = await dRes.json();
-            phone = pick(details || {}, [
+            const payload = await dRes.json().catch(() => ({}));
+            const details = payload?.details || payload || {};
+
+            phone = phone || pick(details || {}, [
               'AgentListPhone','listingAgentPhone','listing_agent_phone',
               'agentPhone','agent_phone','ListAgentPhone','ListingAgentPhone',
               'AgentDirect','AgentCell','Agent_Phone','AgentDirectPhone',
               'LaPhone','La_Phone','ListAgentPreferredPhone','officePhone','OfficePhone'
             ], '');
+
+            agentName = agentName || pick(details || {}, [
+              'AgentListName','listingAgentName','agentName','AgentName','ListAgentName'
+            ], '');
+
+            officeName = officeName || pick(details || {}, [
+              'OfficeListName','officeName','OfficeName'
+            ], '');
+
             if (!phone && details && details.agent && typeof details.agent === 'object') {
               phone = pick(details.agent, ['phone','cell','direct','mobile','Phone','Cell','Direct','Mobile'], '');
             }
@@ -248,12 +430,13 @@
         }
 
         const cleaned = cleanPhone(phone);
-        if (cleaned) {
-          contactBtn.dataset.tel = 'tel:' + cleaned;
-          contactBtn.classList.remove('disabled');
-          contactBtn.removeAttribute('aria-disabled');
-          contactBtn.classList.add('attn');
-          setTimeout(() => contactBtn.classList.remove('attn'), 6000);
+        if (cleaned || agentName) {
+          updateContactButtonFromAgent({
+            name: agentName,
+            phone: cleaned || phone,
+            company: officeName,
+            vcardUrl: contactBtn.dataset.agentVcard || '',
+          });
         }
       } catch (e) {
         debugContact('error', e);
@@ -261,8 +444,14 @@
     }
 
     const KEY = `chat:${pid}`;
-    function loadHistory() { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } }
-    function saveHistory(arr){ try { localStorage.setItem(KEY, JSON.stringify(arr)); } catch {} }
+    function loadHistory() {
+      try { return JSON.parse(localStorage.getItem(KEY) || '[]'); }
+      catch { return []; }
+    }
+    function saveHistory(arr) {
+      try { localStorage.setItem(KEY, JSON.stringify(arr)); }
+      catch {}
+    }
     const history = loadHistory();
 
     function addMessage(sender, text = '') {
@@ -271,7 +460,6 @@
       if (sender === 'You') {
         div.textContent = text;
       } else {
-        // AI: render rich text, but no quick-reply pills by default
         div.innerHTML = linkifyAI(text);
       }
       chatDiv.appendChild(div);
@@ -281,7 +469,6 @@
       return div;
     }
 
-    // non-streaming call that reads JSON and displays only reply
     async function callChat(message) {
       const recentHistory = history
         .slice(-10)
@@ -302,7 +489,6 @@
         })
       });
 
-      // Handle non-200 gracefully
       if (!res.ok) {
         let msg = `Sorry — I hit an error (${res.status}).`;
         try {
@@ -320,13 +506,16 @@
           ? data.reply.trim()
           : "Sorry — I’m not sure.";
 
-      // window.__lastChatMeta = data; // keep extras if needed later
+      state.lastChatMeta = data || {};
 
-      return replyText;
+      return {
+        reply: replyText,
+        extras: data?.extras || {},
+        raw: data || {}
+      };
     }
 
     // --- Nudges / intro ---
-    let leadOpen = false;
     let nudge1Timer = null, nudge2Timer = null, nudgeCount = 0, lastPrompt = 'none';
 
     function cancelAllNudges() {
@@ -370,24 +559,39 @@
         if (isNo(message)) {
           addMessage('You', message);
           addMessage('AI', "No problem—would you like me to connect you with an agent or share our preferred lenders?");
-          lastPrompt='nudge2'; input.value=''; cancelAllNudges(); return;
+          lastPrompt='nudge2';
+          input.value='';
+          cancelAllNudges();
+          return;
         }
         if (isYes(message)) {
           addMessage('You', message);
           addMessage('AI', "Great—what would you like to know? I can help with price, schools, lenders, or scheduling a showing.");
-          lastPrompt='none'; input.value=''; cancelAllNudges(); scheduleIdleNudges(); return;
+          lastPrompt='none';
+          input.value='';
+          cancelAllNudges();
+          scheduleIdleNudges();
+          return;
         }
       }
+
       if (lastPrompt === 'nudge2') {
         if (isNo(message)) {
           addMessage('You', message);
           addMessage('AI', "All good—if anything comes up, I'm here. You can also tap Contact Agent anytime.");
-          lastPrompt='none'; input.value=''; cancelAllNudges(); return;
+          lastPrompt='none';
+          input.value='';
+          cancelAllNudges();
+          return;
         }
         if (isYes(message)) {
           addMessage('You', message);
           addMessage('AI', "Got it—what would you prefer: speak with an agent or learn about our preferred lenders?");
-          lastPrompt='none'; input.value=''; cancelAllNudges(); scheduleIdleNudges(); return;
+          lastPrompt='none';
+          input.value='';
+          cancelAllNudges();
+          scheduleIdleNudges();
+          return;
         }
       }
 
@@ -395,7 +599,10 @@
       if (intent === 'agent' || intent === 'showing') {
         addMessage('You', message);
         openContactChooser();
-        lastPrompt='none'; input.value=''; cancelAllNudges(); scheduleIdleNudges();
+        lastPrompt='none';
+        input.value='';
+        cancelAllNudges();
+        scheduleIdleNudges();
         return;
       }
 
@@ -404,8 +611,9 @@
       cancelAllNudges();
 
       try {
-        const reply = await callChat(message);
-        addMessage('AI', reply);
+        const result = await callChat(message);
+        addMessage('AI', result.reply);
+        handleChatExtras(result.extras || {});
       } catch (err) {
         typingEl.style.display = 'none';
         addMessage('AI', "Sorry — something went wrong. Please try again.");
@@ -418,8 +626,12 @@
 
     sendBtn.addEventListener('click', sendMessage);
     input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }
-      else cancelAllNudges();
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendMessage();
+      } else {
+        cancelAllNudges();
+      }
     });
     input.addEventListener('input', cancelAllNudges);
 
@@ -428,28 +640,57 @@
     function openContactChooser() {
       const telHref = contactBtn.dataset.tel || '';
       const hasTel = /^tel:/.test(telHref);
+
       if (hasTel) {
         callAction.href = telHref;
         callAction.style.display = '';
         noPhoneMsg.style.display = 'none';
       } else {
+        callAction.removeAttribute('href');
         callAction.style.display = 'none';
         noPhoneMsg.style.display = '';
       }
+
+      const agentVcard = contactBtn.dataset.agentVcard || '';
+      if (agentVcard) {
+        saveAgentCardAction.href = agentVcard;
+        saveAgentCardAction.style.display = '';
+      } else {
+        saveAgentCardAction.removeAttribute('href');
+        saveAgentCardAction.style.display = 'none';
+      }
+
       contactModal.classList.add('open');
       contactModal.setAttribute('aria-hidden','false');
     }
+
     function closeContactChooser() {
       contactModal.classList.remove('open');
       contactModal.setAttribute('aria-hidden','true');
     }
+
     closeModalBtn.addEventListener('click', closeContactChooser);
-    contactModal.addEventListener('click', (e) => { if (e.target === contactModal) closeContactChooser(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeContactChooser(); });
+    contactModal.addEventListener('click', (e) => {
+      if (e.target === contactModal) closeContactChooser();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeContactChooser();
+    });
     callAction.addEventListener('click', closeContactChooser);
-    emailAction.addEventListener('click', () => {
+
+    textAction.addEventListener('click', () => {
+      const telHref = contactBtn.dataset.tel || '';
       closeContactChooser();
-      addMessage('AI', "[Lead form shown]");
+
+      if (/^tel:/.test(telHref)) {
+        const smsHref = smsHrefFromPhone(telHref.replace(/^tel:/, ''));
+        if (smsHref) {
+          window.location.href = smsHref;
+          return;
+        }
+      }
+
+      addMessage('AI', "I don’t have a text number for this listing yet.");
     });
 
     setTimeout(() => input.focus(), 300);

@@ -566,10 +566,11 @@ export async function handler(event) {
 
     /* ---------- LENDER / VCARD FLOW ---------- */
     if (isLenderIntent(message) || isCardIntent(message)) {
-      const globals = await loadGlobalLenders(event);
       const propertyPreferred = await loadPropertyLender(event, propertyId);
-
-      const extrasLenders = buildLenderExtras(base, propertyPreferred, globals, 3);
+      const globals = propertyPreferred ? [] : await loadGlobalLenders(event);
+      const extrasLenders = propertyPreferred
+        ? buildLenderExtras(base, propertyPreferred, [], 1)
+        : buildLenderExtras(base, null, globals, 3);
 
       if (isCardIntent(message)) {
         const links = extrasLenders.map((l) => `${l.name || "Lender"}: ${l.vcardUrl}`);

@@ -33,12 +33,34 @@ function corsHeaders(extra = {}) {
   };
 }
 
+function text(value) {
+  return String(value ?? "")
+    .replace(/â€™/g, "'")
+    .replace(/â€œ|â€\x9d/g, '"')
+    .replace(/â€”/g, "-")
+    .replace(/â€¢/g, "*")
+    .replace(/Â·/g, " - ")
+    .replace(/Â/g, "")
+    .trim();
+}
+
+function normalizeForOutput(value) {
+  if (typeof value === "string") return text(value);
+  if (Array.isArray(value)) return value.map(normalizeForOutput);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, normalizeForOutput(entry)])
+    );
+  }
+  return value;
+}
+
 function respond(event, payload, statusCode = 200) {
   if (typeof payload === "string") {
     return {
       statusCode,
       headers: corsHeaders({ "Content-Type": "text/plain; charset=utf-8" }),
-      body: payload,
+      body: text(payload),
     };
   }
 
@@ -46,14 +68,16 @@ function respond(event, payload, statusCode = 200) {
     return {
       statusCode,
       headers: corsHeaders({ "Content-Type": "text/plain; charset=utf-8" }),
-      body: String(payload?.reply ?? ""),
+      body: text(payload?.reply ?? ""),
     };
   }
+
+  const normalizedPayload = normalizeForOutput(payload ?? {});
 
   return {
     statusCode,
     headers: corsHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify(payload ?? {}),
+    body: JSON.stringify(normalizedPayload),
   };
 }
 
@@ -104,22 +128,24 @@ async function logChatEvent({ event, propertyId, message, reply, intent, meta = 
   const jsonlKey = `logs-jsonl/${day}/${shortTs}_${pid}.jsonl`;
 
   try {
-    await s3.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: jsonlKey,
-        Body: JSON.stringify(record) + "\n",
-        ContentType: "application/json; charset=utf-8",
-      })
-    );
-    await s3.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: prettyKey,
-        Body: JSON.stringify(record, null, 2) + "\n",
-        ContentType: "application/json; charset=utf-8",
-      })
-    );
+    await Promise.all([
+      s3.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: jsonlKey,
+          Body: JSON.stringify(record) + "\n",
+          ContentType: "application/json; charset=utf-8",
+        })
+      ),
+      s3.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: prettyKey,
+          Body: JSON.stringify(record, null, 2) + "\n",
+          ContentType: "application/json; charset=utf-8",
+        })
+      ),
+    ]);
   } catch {
     // never break chat on logging errors
   }
@@ -248,7 +274,14 @@ function daysOnMarketFromActiveDate(activeDateStr) {
 function baseFromEvent(event) {
   const headers = event?.headers || {};
   const proto = headers["x-forwarded-proto"] || "https";
-  const host = headers.host;
+  const host =
+    headers.host ||
+    headers.Host ||
+    process.env.URL?.replace(/^https?:\/\//, "") ||
+    process.env.DEPLOY_URL?.replace(/^https?:\/\//, "");
+  if (!host) {
+    throw new Error("Missing request host for internal function calls.");
+  }
   return `${proto}://${host}`;
 }
 
@@ -742,7 +775,7 @@ export async function handler(event) {
         url: "",
       };
 
-      if (agent.phone || agent.name) {
+      if (agentPhone || officePhone || agentName || officeName) {
         extras.agent = {
           name: agent.name,
           phone: agent.phone,
@@ -890,6 +923,6 @@ export async function handler(event) {
       reply,
       intent: "server_error",
     });
-    return respond(event, { reply });
+    return respond(event, { reply }, 500);
   }
 }

@@ -579,18 +579,24 @@ export async function handler(event) {
           ? `Here are contact cards you can save:\n${links.map((x) => `• ${x}`).join("\n")}`
           : `I couldn’t build a contact card right now.`;
 
+        const displayReply = extrasLenders.length
+          ? extrasLenders.length === 1
+            ? "I added the contact card below. Tap Save Contact to download it."
+            : "I added contact cards below. Tap Save Contact on the one you want."
+          : "I couldn't build a contact card right now.";
+
         intent = "lender_vcard";
         await logChatEvent({
           event,
           propertyId,
           message,
-          reply,
+          reply: displayReply,
           intent,
           meta: { address1, address2, lenders: extrasLenders.length },
         });
 
         return respond(event, {
-          reply,
+          reply: displayReply,
           listingId: String(propertyId),
           extras: { listingId: String(propertyId), lenders: extrasLenders },
         });

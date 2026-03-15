@@ -48,6 +48,7 @@ export async function handler(event) {
     });
 
     if (match && match.url) {
+      const location = normalizeRedirectUrl(match.url, event);
       // 🔥 LOG HIT TO ANALYTICS (non-blocking)
       try {
         const siteUrl = process.env.URL;
@@ -80,7 +81,7 @@ export async function handler(event) {
       return {
         statusCode: 302,
         headers: { 
-          Location: match.url,
+          Location: location,
           "Cache-Control": "no-cache, no-store, must-revalidate",
           "Netlify-CDN-Cache-Control": "no-cache, no-store, must-revalidate",
           "Pragma": "no-cache",
@@ -115,4 +116,23 @@ export async function handler(event) {
       body: "QR redirect service error"
     };
   }
+}
+
+function normalizeRedirectUrl(rawUrl, event) {
+  const value = String(rawUrl || "").trim();
+  if (!value) return value;
+
+  if (/^https?:\/\//i.test(value)) return value;
+
+  const proto = event.headers["x-forwarded-proto"] || "https";
+  const host =
+    event.headers.host ||
+    event.headers.Host ||
+    process.env.URL?.replace(/^https?:\/\//, "");
+
+  if (!host) return value;
+  if (value.startsWith("//")) return `${proto}:${value}`;
+  if (value.startsWith("/")) return `${proto}://${host}${value}`;
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(?:[/:?#]|$)/i.test(value)) return `https://${value}`;
+  return `${proto}://${host}/${value.replace(/^\/+/, "")}`;
 }

@@ -24,7 +24,7 @@ export async function handler(event) {
   const qs = event.queryStringParameters || {};
   const mode = qs.mode;
   const name = qs.name;
-  const url = qs.url;
+  const url = normalizeRedirectInput(qs.url);
 
   if (!mode) {
     return { statusCode: 400, body: "Missing mode" };
@@ -146,4 +146,14 @@ function json(obj) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(obj),
   };
+}
+
+function normalizeRedirectInput(rawUrl) {
+  const value = String(rawUrl || "").trim();
+  if (!value) return value;
+  if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith("//")) return `https:${value}`;
+  if (value.startsWith("/")) return value;
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(?:[/:?#]|$)/i.test(value)) return `https://${value}`;
+  return `/${value.replace(/^\/+/, "")}`;
 }

@@ -416,6 +416,11 @@ function isLenderIntent(text = "") {
   );
 }
 
+function wantsAdditionalLenders(text = "") {
+  const s = String(text || "").toLowerCase();
+  return /\b(additional|other|more|else|another|extra)\b/.test(s) && /\b(lenders?|loan officers?|mortgage)\b/.test(s);
+}
+
 function isCardIntent(text = "") {
   const s = String(text || "").toLowerCase();
   return /\b(vcard|contact\s*card|save\s+to\s+(?:my|your)\s+phone|download\s+card|add\s+contact)\b/.test(
@@ -567,9 +572,10 @@ export async function handler(event) {
     /* ---------- LENDER / VCARD FLOW ---------- */
     if (isLenderIntent(message) || isCardIntent(message)) {
       const propertyPreferred = await loadPropertyLender(event, propertyId);
-      const globals = propertyPreferred ? [] : await loadGlobalLenders(event);
+      const includeGlobalLenders = !propertyPreferred || wantsAdditionalLenders(message);
+      const globals = includeGlobalLenders ? await loadGlobalLenders(event) : [];
       const extrasLenders = propertyPreferred
-        ? buildLenderExtras(base, propertyPreferred, [], 1)
+        ? buildLenderExtras(base, propertyPreferred, globals, includeGlobalLenders ? 4 : 1)
         : buildLenderExtras(base, null, globals, 3);
 
       if (isCardIntent(message)) {

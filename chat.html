@@ -57,7 +57,7 @@
     #sendBtn { background:#28a745; color:#fff; }
     #sendBtn:hover { transform: translateY(-1px); filter: brightness(1.05); }
     #sendBtn:active { transform: translateY(0); filter: brightness(0.98); }
-    #voiceBtn { background:#6c757d; color:#fff; font-size:1.1rem; min-width:48px; }
+    #voiceBtn { background:#6c757d; color:#fff; min-width:56px; }
     #voiceBtn:hover:not(.listening) { background:#5a6268; transform: translateY(-1px); }
     #voiceBtn:active:not(.listening) { transform: translateY(0); }
     #voiceBtn.listening { background:#dc3545; animation: pulse 1.5s infinite; }
@@ -90,39 +90,39 @@
 <body>
   <header>
     <div class="left-group">
-      <a id="backLink" href="/listings.html">← Back to homes</a>
+      <a id="backLink" href="/listings.html">&larr; Back to homes</a>
     </div>
     <div class="title">
-      <span class="l1" id="addr1">Loading…</span>
+      <span class="l1" id="addr1">Loading...</span>
       <span class="l2" id="addr2"></span>
     </div>
     <div class="right-spacer" aria-hidden="true"></div>
   </header>
 
   <div id="chat"></div>
-  <div id="typing">AI is typing…</div>
+  <div id="typing">AI is typing...</div>
 
   <div id="ctaBar">
     <button id="contactBtn" class="cta-btn disabled" type="button" aria-disabled="true">Contact Agent</button>
   </div>
 
   <div id="inputBar">
-    <input id="msgInput" placeholder="Ask about price, beds, schools, features…" />
-    <button id="voiceBtn" title="Voice input">🎤</button>
+    <input id="msgInput" placeholder="Ask about price, beds, schools, features..." />
+    <button id="voiceBtn" title="Voice input">Mic</button>
     <button id="sendBtn">Send</button>
   </div>
 
   <div id="contactActions" class="modal" aria-hidden="true">
     <div class="modal-card">
-      <button class="modal-close" id="contactActionsClose" aria-label="Close">×</button>
+      <button class="modal-close" id="contactActionsClose" aria-label="Close">&times;</button>
       <h3 style="margin:0 0 6px">Contact Agent</h3>
       <p style="margin:0 0 12px;color:#555">How would you like to reach the agent?</p>
       <div class="actions">
-        <a id="callAgentAction" class="btn btn-call" href="#">📞 Call Agent</a>
-        <button id="textAgentAction" class="btn btn-email" type="button">💬 Text Agent</button>
-        <a id="saveAgentCardAction" class="btn btn-vcard" href="#" target="_blank" rel="noopener" style="display:none;">👤 Save Contact</a>
+        <a id="callAgentAction" class="btn btn-call" href="#">Call Agent</a>
+        <button id="textAgentAction" class="btn btn-email" type="button">Text Agent</button>
+        <a id="saveAgentCardAction" class="btn btn-vcard" href="#" target="_blank" rel="noopener" style="display:none;">Save Contact</a>
       </div>
-      <div id="noPhoneMsg" style="display:none;margin-top:10px;color:#666">No direct phone on file for this listing — you can still save the contact card if available.</div>
+      <div id="noPhoneMsg" style="display:none;margin-top:10px;color:#666">No direct phone on file for this listing - you can still save the contact card if available.</div>
     </div>
   </div>
 
@@ -137,24 +137,24 @@
     const a1 = decodeURIComponent(qs.get('a1') || '');
     const a2 = decodeURIComponent(qs.get('a2') || '');
 
-    const chatDiv   = document.getElementById('chat');
-    const input     = document.getElementById('msgInput');
-    const sendBtn   = document.getElementById('sendBtn');
-    const voiceBtn  = document.getElementById('voiceBtn');
-    const typingEl  = document.getElementById('typing');
-    const addr1El   = document.getElementById('addr1');
-    const addr2El   = document.getElementById('addr2');
-    const backLink  = document.getElementById('backLink');
+    const chatDiv = document.getElementById('chat');
+    const input = document.getElementById('msgInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const voiceBtn = document.getElementById('voiceBtn');
+    const typingEl = document.getElementById('typing');
+    const addr1El = document.getElementById('addr1');
+    const addr2El = document.getElementById('addr2');
+    const backLink = document.getElementById('backLink');
     const leftGroup = document.querySelector('.left-group');
     const rightSpacer = document.querySelector('.right-spacer');
     const contactBtn = document.getElementById('contactBtn');
 
     const contactModal = document.getElementById('contactActions');
-    const callAction   = document.getElementById('callAgentAction');
-    const textAction   = document.getElementById('textAgentAction');
+    const callAction = document.getElementById('callAgentAction');
+    const textAction = document.getElementById('textAgentAction');
     const saveAgentCardAction = document.getElementById('saveAgentCardAction');
-    const closeModalBtn= document.getElementById('contactActionsClose');
-    const noPhoneMsg   = document.getElementById('noPhoneMsg');
+    const closeModalBtn = document.getElementById('contactActionsClose');
+    const noPhoneMsg = document.getElementById('noPhoneMsg');
 
     const state = {
       lastChatMeta: {},
@@ -178,9 +178,9 @@
 
     addr1El.textContent = a1 || `MLS #${pid}`;
     addr2El.textContent = a2 || '';
-    backLink.href = `/select.html?mls=${encodeURIComponent(pid)}&address=${encodeURIComponent([a1,a2].filter(Boolean).join(' '))}`;
+    backLink.href = `/select.html?mls=${encodeURIComponent(pid)}&address=${encodeURIComponent([a1, a2].filter(Boolean).join(' '))}`;
 
-    function pick(obj, keys, fallback='') {
+    function pick(obj, keys, fallback = '') {
       for (const k of keys) {
         if (obj && obj[k] != null && String(obj[k]).trim?.() !== '') return obj[k];
         if (obj && obj[k] != null && typeof obj[k] !== 'string') return obj[k];
@@ -204,40 +204,45 @@
     function normText(s) {
       return String(s || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
     }
+
     function isYes(s) {
       s = normText(s);
-      return ['y','yes','yeah','yep','sure','ok','okay','yup','affirmative','yes please'].includes(s);
+      return ['y', 'yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'yup', 'affirmative', 'yes please'].includes(s);
     }
+
     function isNo(s) {
       s = normText(s);
-      return ['n','no','nope','nah','not really','im good','i am good','i\'m good','no thanks','no thank you','not now'].includes(s);
+      return ['n', 'no', 'nope', 'nah', 'not really', 'im good', 'i am good', "i'm good", 'no thanks', 'no thank you', 'not now'].includes(s);
     }
 
     function escapeHtml(s) {
       return String(s || '')
-        .replace(/&/g,'&amp;')
-        .replace(/</g,'&lt;')
-        .replace(/>/g,'&gt;')
-        .replace(/"/g,'&quot;')
-        .replace(/'/g,'&#39;');
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
     function linkifyAI(text) {
-      let html = String(text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      let html = String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
       html = html.replace(/https?:\/\/[^\s)]+/g, (m) => `<a href="${m}" target="_blank" rel="noopener">${m}</a>`);
       html = html.replace(/(\+?1[-.\s]?)?(\(?\d{3}\)?)[-.\s]?\d{3}[-.\s]?\d{4}/g, (m) => {
-        const digits = m.replace(/[^0-9]/g,'');
+        const digits = m.replace(/[^0-9]/g, '');
         const tel = digits.length === 11 && digits.startsWith('1') ? `+${digits}` : digits.length === 10 ? `+1${digits}` : digits;
         return `<a href="tel:${tel}">${m}</a>`;
       });
-      return html.replace(/\n/g,'<br>');
+      return html.replace(/\n/g, '<br>');
     }
 
     function detectIntent(s) {
       const t = ' ' + normText(s) + ' ';
-      const has = kws => kws.some(k => t.includes(' ' + k + ' '));
-      if (has(['agent','realtor','broker','talk to agent','speak to agent','connect me','connect agent','call agent','human','contact me','contact agent'])) return 'agent';
-      if (has(['showing','tour','schedule','walkthrough','viewing','see it','book','set up a showing','set a showing'])) return 'showing';
+      const has = (kws) => kws.some((k) => t.includes(' ' + k + ' '));
+      if (has(['agent', 'realtor', 'broker', 'talk to agent', 'speak to agent', 'connect me', 'connect agent', 'call agent', 'human', 'contact me', 'contact agent'])) return 'agent';
+      if (has(['showing', 'tour', 'schedule', 'walkthrough', 'viewing', 'see it', 'book', 'set up a showing', 'set a showing'])) return 'showing';
       return null;
     }
 
@@ -248,12 +253,15 @@
         <div>${bodyHtml}</div>
         ${links.length ? `
           <div class="mini-links">
-            ${links.map(link => `
-              <a
-                class="mini-link"
-                href="${escapeHtml(link.href)}"
-                ${link.newTab ? 'target="_blank" rel="noopener"' : ''}
-              >${escapeHtml(link.label)}</a>
+            ${links.map((link) => `
+              ${link.download
+                ? `<button class="mini-link" type="button" data-vcard="${escapeHtml(link.href)}" data-vcard-name="${escapeHtml((link.name || link.label || 'contact').replace(/[^a-z0-9._-]+/gi, '_').toLowerCase())}">${escapeHtml(link.label)}</button>`
+                : `<a
+                    class="mini-link"
+                    href="${escapeHtml(link.href)}"
+                    ${link.newTab ? 'target="_blank" rel="noopener"' : ''}
+                  >${escapeHtml(link.label)}</a>`
+              }
             `).join('')}
           </div>
         ` : ''}
@@ -261,6 +269,32 @@
       chatDiv.appendChild(div);
       chatDiv.scrollTop = chatDiv.scrollHeight;
       return div;
+    }
+
+    async function downloadVcard(url, fallbackName = 'contact.vcf') {
+      const res = await fetch(url, { credentials: 'same-origin' });
+      if (!res.ok) throw new Error(`Failed to download vCard (${res.status})`);
+
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = fallbackName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    }
+
+    function setContactButtonState(enabled) {
+      if (enabled) {
+        contactBtn.classList.remove('disabled');
+        contactBtn.removeAttribute('aria-disabled');
+      } else {
+        contactBtn.classList.add('disabled');
+        contactBtn.setAttribute('aria-disabled', 'true');
+      }
     }
 
     function updateContactButtonFromAgent(agent) {
@@ -276,8 +310,8 @@
       const cleaned = cleanPhone(agent.phone || '');
       if (cleaned) {
         contactBtn.dataset.tel = 'tel:' + cleaned;
-        contactBtn.classList.remove('disabled');
-        contactBtn.removeAttribute('aria-disabled');
+      } else {
+        contactBtn.dataset.tel = '';
       }
 
       if (agent.vcardUrl) {
@@ -290,6 +324,7 @@
         saveAgentCardAction.style.display = 'none';
       }
 
+      setContactButtonState(Boolean(cleaned || agent.vcardUrl));
       contactBtn.classList.add('attn');
       setTimeout(() => contactBtn.classList.remove('attn'), 6000);
     }
@@ -300,7 +335,11 @@
       if (Array.isArray(extras.lenders) && extras.lenders.length) {
         state.lenders = extras.lenders.slice();
 
-        const preferred = extras.lenders.find(l => l && l.preferred);
+        const preferred = extras.lenders.find((l) => l && l.preferred);
+        const intro = preferred
+          ? '<div style="margin-bottom:8px;"><strong>This property has a preferred lender.</strong></div>'
+          : '<div style="margin-bottom:8px;"><strong>Available lenders</strong></div>';
+
         const lines = extras.lenders.map((l) => {
           const name = l.name || 'Lender';
           const label = l.preferred ? `Preferred Lender: ${name}` : name;
@@ -308,14 +347,14 @@
           if (l.phone) infoBits.push(escapeHtml(l.phone));
           if (l.email) infoBits.push(escapeHtml(l.email));
           const offer = l.offer ? `<div style="margin-top:4px;color:#444;"><em>${escapeHtml(l.offer)}</em></div>` : '';
-          const info = infoBits.length ? `<div style="margin-top:4px;color:#555;">${infoBits.join(' • ')}</div>` : '';
+          const info = infoBits.length ? `<div style="margin-top:4px;color:#555;">${infoBits.join(' | ')}</div>` : '';
           return `
             <div class="mini-card">
               <strong>${escapeHtml(label)}</strong>
               ${info}
               ${offer}
               <div class="mini-links">
-                ${l.vcardUrl ? `<a class="mini-link" href="${escapeHtml(l.vcardUrl)}" target="_blank" rel="noopener">Save Contact</a>` : ''}
+                ${l.vcardUrl ? `<button class="mini-link" type="button" data-vcard="${escapeHtml(l.vcardUrl)}" data-vcard-name="${escapeHtml((l.name || 'contact').replace(/[^a-z0-9._-]+/gi, '_').toLowerCase() || 'contact')}">Save Contact</button>` : ''}
                 ${l.phone ? `<a class="mini-link" href="tel:${escapeHtml(cleanPhone(l.phone))}">Call</a>` : ''}
                 ${l.phone ? `<a class="mini-link" href="${escapeHtml(smsHrefFromPhone(l.phone))}">Text</a>` : ''}
               </div>
@@ -323,10 +362,7 @@
           `;
         });
 
-        renderExtraCard(
-          'Lenders',
-          `${preferred ? `<div style="margin-bottom:8px;"><strong>This property has a preferred lender.</strong></div>` : ''}${lines.join('')}`
-        );
+        renderExtraCard('Lenders', `${intro}${lines.join('')}`);
       }
 
       if (extras.agent && typeof extras.agent === 'object') {
@@ -341,13 +377,12 @@
         const links = [];
         if (agent.phone) links.push({ label: 'Call Agent', href: `tel:${cleanPhone(agent.phone)}` });
         if (agent.phone) links.push({ label: 'Text Agent', href: smsHrefFromPhone(agent.phone) });
-        if (agent.vcardUrl) links.push({ label: 'Save Contact', href: agent.vcardUrl, newTab: true });
+        if (agent.vcardUrl) links.push({ label: 'Save Contact', href: agent.vcardUrl, download: true, name: agent.name || 'agent-contact' });
 
         renderExtraCard('Agent', bits.join(''), links);
       }
     }
 
-    // Voice input
     let recognition;
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
@@ -357,18 +392,18 @@
 
       voiceBtn.addEventListener('click', () => {
         recognition.start();
-        voiceBtn.textContent = '🔴';
+        voiceBtn.textContent = 'Stop';
         voiceBtn.classList.add('listening');
       });
 
       recognition.onresult = (e) => {
         input.value = e.results[0][0].transcript;
-        voiceBtn.textContent = '🎤';
+        voiceBtn.textContent = 'Mic';
         voiceBtn.classList.remove('listening');
       };
 
       recognition.onerror = recognition.onend = () => {
-        voiceBtn.textContent = '🎤';
+        voiceBtn.textContent = 'Mic';
         voiceBtn.classList.remove('listening');
       };
     } else {
@@ -383,25 +418,25 @@
         const json = await res.json();
         const items = Array.isArray(json) ? json : (json.items || json.listings || json.files || []);
 
-        const found = items.find(it => {
+        const found = items.find((it) => {
           const cand = String(it.listingId || it.mls || it.id || '').trim();
           return cand && cand === pid;
         });
 
         let phone = pick(found || {}, [
-          'AgentListPhone','listingAgentPhone','listing_agent_phone',
-          'agentPhone','agent_phone','ListAgentPhone','ListingAgentPhone',
-          'AgentPhone','AgentCell','Agent_Cell','LaPhone','La_Phone',
-          'ListAgentPreferredPhone','officePhone','OfficePhone'
+          'AgentListPhone', 'listingAgentPhone', 'listing_agent_phone',
+          'agentPhone', 'agent_phone', 'ListAgentPhone', 'ListingAgentPhone',
+          'AgentPhone', 'AgentCell', 'Agent_Cell', 'LaPhone', 'La_Phone',
+          'ListAgentPreferredPhone', 'officePhone', 'OfficePhone'
         ], '');
 
         let agentName = pick(found || {}, [
-          'AgentListName','listingAgentName','agentName','AgentName','ListAgentName'
+          'AgentListName', 'listingAgentName', 'agentName', 'AgentName', 'ListAgentName'
         ], '');
 
-        let officeName = pick(found || {}, ['OfficeListName','officeName','OfficeName'], '');
+        let officeName = pick(found || {}, ['OfficeListName', 'officeName', 'OfficeName'], '');
 
-        const detailsUrl = pick(found || {}, ['detailsUrl','details','detailsURL'], '');
+        const detailsUrl = pick(found || {}, ['detailsUrl', 'details', 'detailsURL'], '');
         if ((!phone || !agentName || !officeName) && detailsUrl) {
           const dRes = await fetch(detailsUrl, { cache: 'no-store' });
           if (dRes.ok) {
@@ -409,22 +444,22 @@
             const details = payload?.details || payload || {};
 
             phone = phone || pick(details || {}, [
-              'AgentListPhone','listingAgentPhone','listing_agent_phone',
-              'agentPhone','agent_phone','ListAgentPhone','ListingAgentPhone',
-              'AgentDirect','AgentCell','Agent_Phone','AgentDirectPhone',
-              'LaPhone','La_Phone','ListAgentPreferredPhone','officePhone','OfficePhone'
+              'AgentListPhone', 'listingAgentPhone', 'listing_agent_phone',
+              'agentPhone', 'agent_phone', 'ListAgentPhone', 'ListingAgentPhone',
+              'AgentDirect', 'AgentCell', 'Agent_Phone', 'AgentDirectPhone',
+              'LaPhone', 'La_Phone', 'ListAgentPreferredPhone', 'officePhone', 'OfficePhone'
             ], '');
 
             agentName = agentName || pick(details || {}, [
-              'AgentListName','listingAgentName','agentName','AgentName','ListAgentName'
+              'AgentListName', 'listingAgentName', 'agentName', 'AgentName', 'ListAgentName'
             ], '');
 
             officeName = officeName || pick(details || {}, [
-              'OfficeListName','officeName','OfficeName'
+              'OfficeListName', 'officeName', 'OfficeName'
             ], '');
 
             if (!phone && details && details.agent && typeof details.agent === 'object') {
-              phone = pick(details.agent, ['phone','cell','direct','mobile','Phone','Cell','Direct','Mobile'], '');
+              phone = pick(details.agent, ['phone', 'cell', 'direct', 'mobile', 'Phone', 'Cell', 'Direct', 'Mobile'], '');
             }
           }
         }
@@ -454,7 +489,7 @@
     }
     const history = loadHistory();
 
-    function addMessage(sender, text = '') {
+    function renderMessage(sender, text = '') {
       const div = document.createElement('div');
       div.className = `msg ${sender === 'You' ? 'user' : 'ai'}`;
       if (sender === 'You') {
@@ -464,6 +499,11 @@
       }
       chatDiv.appendChild(div);
       chatDiv.scrollTop = chatDiv.scrollHeight;
+      return div;
+    }
+
+    function addMessage(sender, text = '') {
+      const div = renderMessage(sender, text);
       history.push({ t: Date.now(), who: sender, text });
       saveHistory(history.slice(-50));
       return div;
@@ -472,8 +512,8 @@
     async function callChat(message) {
       const recentHistory = history
         .slice(-10)
-        .filter(m => m.who !== 'AI' || !String(m.text || '').includes('[Lead form shown]'));
-      const context = recentHistory.map(m => `${m.who}: ${m.text}`).join('\n').substring(0, 4000);
+        .filter((m) => m.who !== 'AI' || !String(m.text || '').includes('[Lead form shown]'));
+      const context = recentHistory.map((m) => `${m.who}: ${m.text}`).join('\n').substring(0, 4000);
 
       typingEl.style.display = 'block';
 
@@ -490,7 +530,7 @@
       });
 
       if (!res.ok) {
-        let msg = `Sorry — I hit an error (${res.status}).`;
+        let msg = `Sorry - I hit an error (${res.status}).`;
         try {
           const maybe = await res.json();
           if (maybe && maybe.reply) msg = String(maybe.reply);
@@ -504,7 +544,7 @@
       const replyText =
         (data && typeof data.reply === 'string' && data.reply.trim())
           ? data.reply.trim()
-          : "Sorry — I’m not sure.";
+          : "Sorry - I'm not sure.";
 
       state.lastChatMeta = data || {};
 
@@ -515,8 +555,10 @@
       };
     }
 
-    // --- Nudges / intro ---
-    let nudge1Timer = null, nudge2Timer = null, nudgeCount = 0, lastPrompt = 'none';
+    let nudge1Timer = null;
+    let nudge2Timer = null;
+    let nudgeCount = 0;
+    let lastPrompt = 'none';
 
     function cancelAllNudges() {
       if (nudge1Timer) clearTimeout(nudge1Timer);
@@ -529,13 +571,13 @@
       cancelAllNudges();
       if (nudgeCount >= 2) return;
       nudge1Timer = setTimeout(() => {
-        addMessage('AI', "If you’d like, I can help you connect with an agent or talk about financing options.");
+        addMessage('AI', 'If you would like, I can help you connect with an agent or talk about financing options.');
         lastPrompt = 'nudge1';
         nudgeCount++;
       }, 45000);
       nudge2Timer = setTimeout(() => {
         if (lastPrompt === 'none') return;
-        addMessage('AI', "Still there? You can ask me about price, schools, showings, or tap Contact Agent anytime.");
+        addMessage('AI', 'Still there? You can ask me about price, schools, showings, or tap Contact Agent anytime.');
         lastPrompt = 'nudge2';
         nudgeCount++;
       }, 90000);
@@ -543,12 +585,14 @@
 
     function startIntroIfFresh() {
       if (!history.length) {
-        addMessage('AI', "Hi, I’m a real estate assistant for this property. Ask about price, schools, features, or schedule a showing.");
+        addMessage('AI', 'Hi, I am a real estate assistant for this property. Ask about price, schools, features, or schedule a showing.');
         scheduleIdleNudges();
-      } else {
-        chatDiv.innerHTML = '';
-        history.forEach(m => addMessage(m.who, m.text));
+        return;
       }
+
+      chatDiv.innerHTML = '';
+      history.forEach((m) => renderMessage(m.who, m.text));
+      chatDiv.scrollTop = chatDiv.scrollHeight;
     }
 
     async function sendMessage() {
@@ -558,17 +602,17 @@
       if (lastPrompt === 'nudge1') {
         if (isNo(message)) {
           addMessage('You', message);
-          addMessage('AI', "No problem—would you like me to connect you with an agent or share our preferred lenders?");
-          lastPrompt='nudge2';
-          input.value='';
+          addMessage('AI', 'No problem - would you like me to connect you with an agent or share our preferred lenders?');
+          lastPrompt = 'nudge2';
+          input.value = '';
           cancelAllNudges();
           return;
         }
         if (isYes(message)) {
           addMessage('You', message);
-          addMessage('AI', "Great—what would you like to know? I can help with price, schools, lenders, or scheduling a showing.");
-          lastPrompt='none';
-          input.value='';
+          addMessage('AI', 'Great - what would you like to know? I can help with price, schools, lenders, or scheduling a showing.');
+          lastPrompt = 'none';
+          input.value = '';
           cancelAllNudges();
           scheduleIdleNudges();
           return;
@@ -578,17 +622,17 @@
       if (lastPrompt === 'nudge2') {
         if (isNo(message)) {
           addMessage('You', message);
-          addMessage('AI', "All good—if anything comes up, I'm here. You can also tap Contact Agent anytime.");
-          lastPrompt='none';
-          input.value='';
+          addMessage('AI', "All good - if anything comes up, I'm here. You can also tap Contact Agent anytime.");
+          lastPrompt = 'none';
+          input.value = '';
           cancelAllNudges();
           return;
         }
         if (isYes(message)) {
           addMessage('You', message);
-          addMessage('AI', "Got it—what would you prefer: speak with an agent or learn about our preferred lenders?");
-          lastPrompt='none';
-          input.value='';
+          addMessage('AI', 'Got it - what would you prefer: speak with an agent or learn about our preferred lenders?');
+          lastPrompt = 'none';
+          input.value = '';
           cancelAllNudges();
           scheduleIdleNudges();
           return;
@@ -599,8 +643,8 @@
       if (intent === 'agent' || intent === 'showing') {
         addMessage('You', message);
         openContactChooser();
-        lastPrompt='none';
-        input.value='';
+        lastPrompt = 'none';
+        input.value = '';
         cancelAllNudges();
         scheduleIdleNudges();
         return;
@@ -616,16 +660,16 @@
         handleChatExtras(result.extras || {});
       } catch (err) {
         typingEl.style.display = 'none';
-        addMessage('AI', "Sorry — something went wrong. Please try again.");
+        addMessage('AI', 'Sorry - something went wrong. Please try again.');
         console.error(err);
       }
 
-      lastPrompt='none';
+      lastPrompt = 'none';
       scheduleIdleNudges();
     }
 
     sendBtn.addEventListener('click', sendMessage);
-    input.addEventListener('keydown', e => {
+    input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         sendMessage();
@@ -638,6 +682,8 @@
     contactBtn.addEventListener('click', openContactChooser);
 
     function openContactChooser() {
+      if (contactBtn.classList.contains('disabled')) return;
+
       const telHref = contactBtn.dataset.tel || '';
       const hasTel = /^tel:/.test(telHref);
 
@@ -661,13 +707,29 @@
       }
 
       contactModal.classList.add('open');
-      contactModal.setAttribute('aria-hidden','false');
+      contactModal.setAttribute('aria-hidden', 'false');
     }
 
     function closeContactChooser() {
       contactModal.classList.remove('open');
-      contactModal.setAttribute('aria-hidden','true');
+      contactModal.setAttribute('aria-hidden', 'true');
     }
+
+    chatDiv.addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-vcard]');
+      if (!btn) return;
+
+      e.preventDefault();
+      const url = btn.getAttribute('data-vcard');
+      const name = `${btn.getAttribute('data-vcard-name') || 'contact'}.vcf`;
+
+      try {
+        await downloadVcard(url, name);
+      } catch (err) {
+        console.error(err);
+        addMessage('AI', 'Sorry - I could not download the contact card right now.');
+      }
+    });
 
     closeModalBtn.addEventListener('click', closeContactChooser);
     contactModal.addEventListener('click', (e) => {
@@ -677,6 +739,20 @@
       if (e.key === 'Escape') closeContactChooser();
     });
     callAction.addEventListener('click', closeContactChooser);
+
+    saveAgentCardAction.addEventListener('click', async (e) => {
+      const href = saveAgentCardAction.getAttribute('href');
+      if (!href) return;
+
+      e.preventDefault();
+      try {
+        await downloadVcard(href, 'agent-contact.vcf');
+        closeContactChooser();
+      } catch (err) {
+        console.error(err);
+        addMessage('AI', 'Sorry - I could not download the contact card right now.');
+      }
+    });
 
     textAction.addEventListener('click', () => {
       const telHref = contactBtn.dataset.tel || '';
@@ -690,7 +766,7 @@
         }
       }
 
-      addMessage('AI', "I don’t have a text number for this listing yet.");
+      addMessage('AI', "I don't have a text number for this listing yet.");
     });
 
     setTimeout(() => input.focus(), 300);

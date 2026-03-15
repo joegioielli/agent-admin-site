@@ -5,244 +5,491 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Choose a Home</title>
   <style>
+    :root {
+      --bg: #f3efe8;
+      --panel: rgba(255, 255, 255, 0.82);
+      --card: #fffdf9;
+      --line: rgba(36, 29, 24, 0.12);
+      --text: #1f1a17;
+      --muted: #6b625c;
+      --accent: #cf5f1b;
+      --accent-deep: #9f4310;
+      --shadow: 0 22px 60px rgba(62, 41, 19, 0.12);
+      --radius-xl: 28px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
     body {
-      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-      color: #1a1a1a;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-      padding: 24px 16px;
-      text-align: center;
       margin: 0;
       min-height: 100vh;
+      color: var(--text);
+      font-family: Georgia, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at top left, rgba(207, 95, 27, 0.16), transparent 28rem),
+        linear-gradient(180deg, #f7f2eb 0%, #efe7dc 54%, #f8f4ee 100%);
     }
-    h1 { 
-      font-size: 2.2rem; 
-      font-weight: 800;
-      margin: 0 0 12px;
-      background: linear-gradient(135deg, #111, #333);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+
+    .shell {
+      width: min(1180px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 26px 0 40px;
     }
-    h2 { 
-      font-weight: 500; 
-      margin: 0 0 28px; 
-      font-size: 1.1rem; 
-      color: #666;
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 28px 26px;
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      border-radius: var(--radius-xl);
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.88), rgba(255,250,244,0.76)),
+        rgba(255,255,255,0.75);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -6rem -7rem auto;
+      width: 18rem;
+      height: 18rem;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(207,95,27,0.18), transparent 68%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent-deep);
+      font: 700 0.78rem/1.2 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 3.35rem);
+      line-height: 0.98;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+    }
+
+    .hero-copy {
+      max-width: 42rem;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font: 500 1.04rem/1.6 "Segoe UI", Arial, sans-serif;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin: 18px 0 18px;
+      padding: 0 4px;
+    }
+
+    .status {
+      color: var(--muted);
+      font: 600 0.94rem/1.4 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.01em;
+    }
+
+    .hint {
+      color: var(--muted);
+      font: 500 0.88rem/1.4 "Segoe UI", Arial, sans-serif;
+      text-align: right;
     }
 
     .listing-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 20px;
-      max-width: 1200px;
-      margin: 0 auto;
+      grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
+      gap: 18px;
     }
+
     .listing-card {
-      background: #fff;
-      color: #111;
-      border-radius: 16px;
+      width: 100%;
+      padding: 0;
       overflow: hidden;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      text-align: left;
       cursor: pointer;
-      transition: all .25s ease;
-      display: flex;
-      flex-direction: column;
-      outline: 2px solid transparent;
-      position: relative;
+      border: 1px solid rgba(72, 51, 33, 0.08);
+      border-radius: var(--radius-lg);
+      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(250,245,239,0.96));
+      box-shadow: 0 16px 34px rgba(58, 38, 20, 0.09);
+      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
     }
-    .listing-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: linear-gradient(135deg, #ff6600, #e55a00);
-      opacity: 0;
-      transition: opacity .25s ease;
-      z-index: 0;
+
+    .listing-card:hover,
+    .listing-card:focus-visible {
+      transform: translateY(-3px);
+      border-color: rgba(207, 95, 27, 0.28);
+      box-shadow: 0 24px 44px rgba(58, 38, 20, 0.14);
+      outline: none;
     }
-    .listing-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 40px rgba(0,0,0,0.15);
-      outline-color: rgba(255,102,0,0.3);
-    }
-    .listing-card:hover::before {
-      opacity: 0.08;
-    }
+
     .listing-card:active {
       transform: translateY(-1px);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
     }
 
-    .listing-card > * {
+    .listing-media {
       position: relative;
-      z-index: 1;
+      aspect-ratio: 4 / 3;
+      overflow: hidden;
+      background: linear-gradient(135deg, #ebe4da, #f7f3ed);
     }
 
-    .listing-card img {
+    .listing-media img {
       width: 100%;
-      height: 180px;
-      object-fit: cover;
-      background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+      height: 100%;
       display: block;
+      object-fit: cover;
     }
 
-    .mls-line {
-      font-weight: 700;
-      color: #333;
-      font-size: 0.85rem;
-      padding: 12px 14px 0;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+    .price-chip {
+      position: absolute;
+      left: 14px;
+      bottom: 14px;
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border-radius: 999px;
+      color: #fff;
+      background: rgba(22, 18, 14, 0.76);
+      backdrop-filter: blur(10px);
+      font: 700 0.9rem/1 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.01em;
     }
 
-    .address {
-      padding: 12px 14px 16px;
-      text-align: center;
+    .listing-body {
+      padding: 16px 16px 18px;
+    }
+
+    .meta-row {
       display: flex;
-      flex-direction: column;
-      gap: 4px;
-      flex: 1;
-    }
-    .addr1 {
-      font-weight: 700;
-      font-size: 1rem;
-      color: #111;
-      line-height: 1.3;
-    }
-    .addr2 {
-      font-weight: 500;
-      font-size: 0.9rem;
-      color: #666;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
     }
 
-    @media (max-width: 500px) {
-      body { padding: 20px 12px; }
-      h1 { font-size: 1.8rem; }
-      h2 { font-size: 1rem; }
-      .listing-grid { gap: 16px; }
+    .meta-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: #f3ebe2;
+      color: #5f5146;
+      font: 700 0.73rem/1 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .address-line {
+      margin: 0;
+      font-size: 1.08rem;
+      line-height: 1.32;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .address-sub {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font: 500 0.94rem/1.45 "Segoe UI", Arial, sans-serif;
+    }
+
+    .card-footer {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(36, 29, 24, 0.08);
+      color: var(--accent-deep);
+      font: 700 0.86rem/1.3 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .state-card,
+    .empty-state {
+      grid-column: 1 / -1;
+      padding: 34px 22px;
+      text-align: center;
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(66, 48, 32, 0.1);
+      background: var(--panel);
+      box-shadow: 0 16px 38px rgba(58, 38, 20, 0.08);
+      color: var(--muted);
+      font: 600 1rem/1.5 "Segoe UI", Arial, sans-serif;
+    }
+
+    .skeleton-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
+      gap: 18px;
+    }
+
+    .skeleton-card {
+      overflow: hidden;
+      border-radius: var(--radius-lg);
+      background: rgba(255,255,255,0.72);
+      border: 1px solid rgba(72, 51, 33, 0.08);
+      box-shadow: 0 12px 28px rgba(58, 38, 20, 0.06);
+    }
+
+    .skeleton-media,
+    .skeleton-line,
+    .skeleton-pill {
+      background: linear-gradient(90deg, rgba(233,226,217,0.85), rgba(249,246,241,0.95), rgba(233,226,217,0.85));
+      background-size: 220% 100%;
+      animation: shimmer 1.15s linear infinite;
+    }
+
+    .skeleton-media {
+      aspect-ratio: 4 / 3;
+    }
+
+    .skeleton-body {
+      padding: 16px;
+    }
+
+    .skeleton-meta {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .skeleton-pill {
+      width: 78px;
+      height: 26px;
+      border-radius: 999px;
+    }
+
+    .skeleton-line {
+      height: 14px;
+      border-radius: 999px;
+      margin-bottom: 10px;
+    }
+
+    .skeleton-line.long { width: 86%; height: 16px; }
+    .skeleton-line.mid { width: 64%; }
+    .skeleton-line.short { width: 44%; margin-bottom: 0; }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        width: min(100% - 20px, 1180px);
+        padding-top: 18px;
+      }
+
+      .hero {
+        padding: 22px 18px;
+        border-radius: 22px;
+      }
+
+      .toolbar {
+        flex-direction: column;
+        align-items: flex-start;
+        margin-top: 14px;
+      }
+
+      .hint {
+        text-align: left;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>Choose a home</h1>
-  <h2>Tap the photo of the home you're interested in.</h2>
+  <main class="shell">
+    <section class="hero" aria-labelledby="pageTitle">
+      <p class="eyebrow">Available Listings</p>
+      <h1 id="pageTitle">Choose the home you want to explore.</h1>
+      <p class="hero-copy">
+        Tap a listing to continue. We load the property list first so clients can get in quickly without waiting on extra detail requests.
+      </p>
+    </section>
 
-  <div id="listings" class="listing-grid">Loading properties…</div>
+    <section class="toolbar" aria-live="polite">
+      <div id="statusText" class="status">Loading homes...</div>
+      <div class="hint">Fastest on mobile: one tap takes you straight to the property details flow.</div>
+    </section>
+
+    <section id="listings" class="listing-grid" aria-label="Available homes"></section>
+  </main>
 
   <script>
-    function joinCityStateZip(city, state, zip) {
-      const parts = [];
-      if (city && state) parts.push(`${city}, ${state}`);
-      else if (city) parts.push(city);
-      else if (state) parts.push(state);
-      if (zip) parts.push(zip);
-      return parts.join(' ');
+    const listingsEl = document.getElementById("listings");
+    const statusTextEl = document.getElementById("statusText");
+    const placeholderImage =
+      "data:image/svg+xml;charset=UTF-8," +
+      encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480">
+          <defs>
+            <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0%" stop-color="#efe7dc"/>
+              <stop offset="100%" stop-color="#f8f4ee"/>
+            </linearGradient>
+          </defs>
+          <rect width="640" height="480" fill="url(#g)"/>
+          <g fill="none" stroke="#b9a693" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" opacity="0.9">
+            <path d="M120 318l92-88 72 64 116-122 120 146"/>
+            <path d="M194 206h252v154H194z"/>
+            <path d="M246 360v-76h64v76"/>
+            <path d="M230 206l90-62 102 62"/>
+          </g>
+        </svg>
+      `);
+
+    function formatPrice(value) {
+      if (typeof value === "number") {
+        return value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+      }
+
+      const text = String(value || "").trim();
+      if (!text) return "";
+      const number = Number(text.replace(/[^\d.]/g, ""));
+      return Number.isFinite(number) && number > 0
+        ? number.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
+        : text;
     }
 
-    function pick(obj, keys, fallback = '') {
-      for (const k of keys) {
-        if (obj && obj[k] != null && String(obj[k]).trim?.() !== '') return obj[k];
-        if (obj && obj[k] != null && typeof obj[k] !== 'string') return obj[k];
+    function formatDom(value) {
+      if (value == null || value === "") return "";
+      const num = Number(value);
+      if (!Number.isFinite(num)) return "";
+      return `${num} day${num === 1 ? "" : "s"} on market`;
+    }
+
+    function splitAddress(rawAddress) {
+      const address = String(rawAddress || "").trim();
+      if (!address) return { primary: "Address unavailable", secondary: "" };
+
+      const parts = address.split(",").map((part) => part.trim()).filter(Boolean);
+      if (parts.length <= 1) {
+        return { primary: address, secondary: "" };
       }
-      return fallback;
+
+      return {
+        primary: parts[0],
+        secondary: parts.slice(1).join(", "),
+      };
+    }
+
+    function showSkeleton(count = 6) {
+      listingsEl.className = "skeleton-grid";
+      listingsEl.innerHTML = Array.from({ length: count }, () => `
+        <article class="skeleton-card" aria-hidden="true">
+          <div class="skeleton-media"></div>
+          <div class="skeleton-body">
+            <div class="skeleton-meta">
+              <div class="skeleton-pill"></div>
+              <div class="skeleton-pill" style="width: 96px;"></div>
+            </div>
+            <div class="skeleton-line long"></div>
+            <div class="skeleton-line mid"></div>
+            <div class="skeleton-line short"></div>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    function showState(message, className = "state-card") {
+      listingsEl.className = "listing-grid";
+      listingsEl.innerHTML = `<div class="${className}">${message}</div>`;
+    }
+
+    function buildCard(item) {
+      const listingId = item.listingId || item.mls || item.slug || "";
+      const address = splitAddress(item.address);
+      const price = formatPrice(item.price);
+      const dom = formatDom(item.computedDaysOnMarket);
+      const imageUrl = item.photoUrl || item.primaryPhotoUrl || placeholderImage;
+      const addressParam = [address.primary, address.secondary].filter(Boolean).join(" ");
+
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "listing-card";
+      card.setAttribute("aria-label", `Open listing ${address.primary}`);
+
+      card.innerHTML = `
+        <div class="listing-media">
+          <img src="${imageUrl}" alt="${address.primary}" loading="lazy" decoding="async" />
+          ${price ? `<div class="price-chip">${price}</div>` : ""}
+        </div>
+        <div class="listing-body">
+          <div class="meta-row">
+            <span class="meta-pill">${listingId ? `MLS #${listingId}` : "Listing"}</span>
+            ${dom ? `<span class="meta-pill">${dom}</span>` : ""}
+          </div>
+          <p class="address-line">${address.primary}</p>
+          ${address.secondary ? `<p class="address-sub">${address.secondary}</p>` : ""}
+          <div class="card-footer">View property</div>
+        </div>
+      `;
+
+      const img = card.querySelector("img");
+      img.addEventListener("error", () => {
+        img.src = placeholderImage;
+      }, { once: true });
+
+      card.addEventListener("click", () => {
+        if (!listingId) return;
+        try {
+          localStorage.setItem("selectedListingId", listingId);
+        } catch {}
+        const params = new URLSearchParams({ mls: listingId, address: addressParam });
+        window.location.href = `/select.html?${params.toString()}`;
+      });
+
+      return card;
     }
 
     async function loadListings() {
-      const container = document.getElementById('listings');
-      container.textContent = 'Loading properties…';
+      showSkeleton();
+      statusTextEl.textContent = "Loading homes...";
 
       try {
-        const res = await fetch('/.netlify/functions/listListings', { cache: 'no-store' });
-        if (!res.ok) throw new Error('Failed to load listings');
+        const res = await fetch("/.netlify/functions/listListings", { cache: "no-store" });
+        if (!res.ok) throw new Error(`Failed to load listings (${res.status})`);
 
         const json = await res.json();
-        // Accept both shapes: array OR wrapped object { items: [] } / { files: [] } / { listings: [] }
         const items = Array.isArray(json) ? json : (json.items || json.files || json.listings || []);
 
         if (!items.length) {
-          container.textContent = 'No properties found.';
+          statusTextEl.textContent = "No homes available right now";
+          showState("No properties found.", "empty-state");
           return;
         }
 
-        // Sort newest first by lastModified (if present)
         items.sort((a, b) => {
           const ad = a.lastModified ? Date.parse(a.lastModified) : 0;
           const bd = b.lastModified ? Date.parse(b.lastModified) : 0;
           if (ad !== bd) return bd - ad;
-          return String(b.key || '').localeCompare(String(a.key || ''));
+          return String(b.listingId || b.slug || "").localeCompare(String(a.listingId || a.slug || ""));
         });
 
-        container.innerHTML = '';
-        for (const it of items) {
-          const mls   = it.listingId || it.mls || it.slug || '';
-          const addr1 = it.address || 'Address unavailable';
-          const photo = it.photoUrl || it.primaryPhotoUrl || 'https://placehold.co/400x300?text=No+Photo';
+        const fragment = document.createDocumentFragment();
+        items.forEach((item) => {
+          fragment.appendChild(buildCard(item));
+        });
 
-          const card = document.createElement('div');
-          card.className = 'listing-card';
-          card.dataset.mls = mls;
-
-          const imgEl = document.createElement('img');
-          imgEl.src = photo;
-          imgEl.alt = addr1;
-          imgEl.onerror = () => {
-            imgEl.src = 'https://placehold.co/400x300?text=No+Photo';
-          };
-
-          const mlsEl = document.createElement('div');
-          mlsEl.className = 'mls-line';
-          mlsEl.textContent = mls ? `MLS #${mls}` : 'MLS #—';
-
-          const addressWrap = document.createElement('div');
-          addressWrap.className = 'address';
-
-          const addr1El = document.createElement('div');
-          addr1El.className = 'addr1';
-          addr1El.textContent = addr1;
-
-          const addr2El = document.createElement('div');
-          addr2El.className = 'addr2';
-          addr2El.textContent = ''; // will fill from details.json if available
-
-          addressWrap.append(addr1El, addr2El);
-
-          // Click: store selection and redirect to select.html
-          card.onclick = () => {
-            if (!mls) return; // guard against missing MLS
-            const line2 = addr2El.textContent || '';
-            const fullAddr = line2 ? `${addr1} ${line2}` : addr1;
-            try {
-              localStorage.setItem('selectedListingId', mls);
-            } catch {}
-            const params = new URLSearchParams({ mls, address: fullAddr });
-            window.location.href = `/select.html?${params.toString()}`;
-          };
-
-          card.append(imgEl, mlsEl, addressWrap);
-          container.appendChild(card);
-
-          // Enrich city/state/zip if we have a signed detailsUrl
-          if (it.detailsUrl) {
-            try {
-              const detRes = await fetch(it.detailsUrl, { cache: 'no-store' });
-              if (detRes.ok) {
-                const details = await detRes.json();
-                const city  = pick(details, ['city', 'City'], '');
-                const state = pick(details, ['state', 'State'], '');
-                const zip   = pick(details, ['zip', 'Zip', 'postalCode'], '');
-                const line2 = joinCityStateZip(city, state, zip);
-                if (line2) addr2El.textContent = line2;
-              }
-            } catch {
-              // ignore enrichment errors
-            }
-          }
-        }
+        listingsEl.className = "listing-grid";
+        listingsEl.innerHTML = "";
+        listingsEl.appendChild(fragment);
+        statusTextEl.textContent = `${items.length} home${items.length === 1 ? "" : "s"} available`;
       } catch (err) {
         console.error(err);
-        container.textContent = 'Error loading listings.';
+        statusTextEl.textContent = "Unable to load homes";
+        showState("We couldn't load the listings right now. Please try again in a moment.");
       }
     }
 

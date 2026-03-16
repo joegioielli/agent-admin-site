@@ -131,7 +131,7 @@
     .metrics, .estimate-grid, .comp-meta { display: grid; gap: 10px; }
     .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; }
     .estimate-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
-    .metric, .estimate-card, .comp-card, .comp-meta div { padding: 12px; border-radius: 12px; border: 1px solid var(--border-subtle); background: #f8fafc; }
+    .metric, .estimate-card, .comp-card, .comp-meta div, .strategy-card { padding: 12px; border-radius: 12px; border: 1px solid var(--border-subtle); background: #f8fafc; }
     .metric span, .estimate-label, .comp-meta span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 700; }
     .metric strong, .estimate-value, .comp-meta strong { display: block; margin-top: 6px; font-size: 16px; font-weight: 700; }
     .estimate-footnote, .comp-notes { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--text-muted); }
@@ -140,6 +140,9 @@
     .comp-address { font-size: 16px; font-weight: 700; }
     .comp-status.active { background: linear-gradient(135deg, var(--success), #245740); color: #fff; }
     .comp-meta { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-top: 12px; }
+    .strategy-grid { display: grid; gap: 10px; margin-top: 12px; }
+    .strategy-card strong { display: block; font-size: 14px; }
+    .strategy-card p { margin-top: 6px; font-size: 13px; line-height: 1.45; color: var(--text-muted); }
     .report-shell[data-ready="false"] .print-toolbar, .report-shell[data-ready="false"] .report-grid { display: none; }
     @media (max-width: 1080px) { .layout { grid-template-columns: 1fr; } }
     @media (max-width: 960px) {
@@ -197,9 +200,9 @@
       <section class="main-content">
         <section class="hero">
           <div class="hero-eyebrow">Comparative Market Analysis</div>
-          <h1 class="hero-title">Build a clean pricing report with live comps and room for more valuation sources later.</h1>
+          <h1 class="hero-title">Build a clean pricing report with live comps and agent-friendly pricing guidance.</h1>
           <p class="hero-copy">
-            The CMA form below uses your subject property input and currently pulls nearby RentCast sale listings through your Netlify function.
+            The CMA form below uses your subject property input, searches a broader comparable pool, and ranks the best matches before building the pricing recommendation.
           </p>
         </section>
 
@@ -207,7 +210,7 @@
           <section class="card">
             <div class="section-label">Input</div>
             <h2 class="section-title">Subject property and search setup</h2>
-            <p class="section-copy">Fixed defaults always apply. The adjustable search values are saved in the report now, and we can wire them into the search behavior next.</p>
+            <p class="section-copy">Use the subject property fields when you have them. The CMA engine blends those details with live comparable data and a ranked scoring model.</p>
 
             <form id="cmaForm" class="form-stack">
               <div class="field">
@@ -219,6 +222,30 @@
                 <label for="specialDetails">Special details that may affect value</label>
                 <textarea id="specialDetails" name="specialDetails" placeholder="Example: new roof in 2024, updated kitchen, corner lot, fresh paint, new HVAC, covered patio..."></textarea>
               </div>
+
+              <section class="sub-card">
+                <div class="section-label">Subject Details</div>
+                <h3 class="section-title">Property facts to strengthen the comp search</h3>
+                <div class="field-grid two-col" style="margin-top: 12px;">
+                  <div class="field"><label for="subjectSqft">Square footage</label><input id="subjectSqft" name="subjectSqft" type="number" min="0" step="1" placeholder="2180" /></div>
+                  <div class="field"><label for="subjectPropertyType">Property type</label><input id="subjectPropertyType" name="subjectPropertyType" type="text" placeholder="Single Family, Condo, Townhome..." /></div>
+                  <div class="field"><label for="subjectBeds">Bedrooms</label><input id="subjectBeds" name="subjectBeds" type="number" min="0" max="20" step="1" placeholder="4" /></div>
+                  <div class="field"><label for="subjectBaths">Bathrooms</label><input id="subjectBaths" name="subjectBaths" type="number" min="0" max="20" step="0.5" placeholder="3" /></div>
+                  <div class="field"><label for="subjectYearBuilt">Year built</label><input id="subjectYearBuilt" name="subjectYearBuilt" type="number" min="1800" max="2100" step="1" placeholder="2014" /></div>
+                  <div class="field"><label for="subjectLotSize">Lot size (acres)</label><input id="subjectLotSize" name="subjectLotSize" type="number" min="0" step="0.01" placeholder="0.23" /></div>
+                  <div class="field"><label for="subjectSubdivision">Subdivision</label><input id="subjectSubdivision" name="subjectSubdivision" type="text" placeholder="Willow Creek" /></div>
+                  <div class="field"><label for="subjectStoryCount">Story count</label><input id="subjectStoryCount" name="subjectStoryCount" type="text" placeholder="1 story, 2 story..." /></div>
+                  <div class="field"><label for="subjectGarageParking">Garage / parking</label><input id="subjectGarageParking" name="subjectGarageParking" type="text" placeholder="2-car garage" /></div>
+                  <div class="field"><label for="priorAppraisalValue">Prior appraisal value</label><input id="priorAppraisalValue" name="priorAppraisalValue" type="number" min="0" step="1000" placeholder="245000" /></div>
+                  <div class="field"><label for="priorAppraisalDate">Prior appraisal date</label><input id="priorAppraisalDate" name="priorAppraisalDate" type="text" placeholder="2024-04-15" /></div>
+                  <div class="field"><label for="priorPurchasePrice">Prior purchase price</label><input id="priorPurchasePrice" name="priorPurchasePrice" type="number" min="0" step="1000" placeholder="238000" /></div>
+                  <div class="field"><label for="priorPurchaseDate">Prior purchase date</label><input id="priorPurchaseDate" name="priorPurchaseDate" type="text" placeholder="2023-09-01" /></div>
+                </div>
+                <div class="field" style="margin-top: 12px;">
+                  <label for="conditionNotes">Condition notes</label>
+                  <textarea id="conditionNotes" name="conditionNotes" placeholder="Example: dated baths, backs to greenbelt, strong curb appeal, busy road, fenced yard, deferred maintenance..."></textarea>
+                </div>
+              </section>
 
               <section class="sub-card">
                 <div class="section-label">Fixed Search Parameters</div>
@@ -283,6 +310,8 @@
                 <section class="report-card span-5"><div class="section-label">Special Details</div><h3 class="section-title">Value-impact notes</h3><p class="section-copy" id="specialDetailsOutput">No special details entered yet.</p></section>
                 <section class="report-card span-7"><div class="section-label">CMA Summary</div><h3 class="section-title">Pricing takeaway</h3><p class="section-copy" id="summaryText"></p></section>
                 <section class="report-card span-5"><div class="section-label">Search Summary</div><h3 class="section-title">Parameters used</h3><ul class="search-list" id="searchSummaryList"></ul></section>
+                <section class="report-card span-7"><div class="section-label">PPSF Support</div><h3 class="section-title">Price per square foot and market read</h3><div class="metrics" id="ppsfMetrics"></div><p class="muted-text" id="marketTrendText"></p></section>
+                <section class="report-card span-5"><div class="section-label">Pricing Strategy</div><h3 class="section-title">Recommended positioning</h3><p class="section-copy" id="strategyNoteText"></p><div class="strategy-grid" id="strategyOptions"></div></section>
                 <section class="report-card"><div class="section-label">Value Guidance</div><h3 class="section-title">Pricing recommendation</h3><div class="estimate-grid" id="estimateGrid"></div></section>
                 <section class="report-card"><div class="section-label">Comparable Sales</div><h3 class="section-title">Closed comparable properties</h3><p class="muted-text">These cards prefer sold comps first, then fill from the live result set if the API comes back light.</p><div class="comp-grid" id="soldCompGrid"></div></section>
                 <section class="report-card"><div class="section-label">Competitive Listing</div><h3 class="section-title">Active comparable property</h3><p class="muted-text">This card shows the best active benchmark available from the current live search.</p><div class="comp-grid" id="activeCompGrid"></div></section>

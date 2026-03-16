@@ -162,7 +162,7 @@
       grid-template-columns: minmax(0, 1fr) 280px;
       gap: 14px;
       margin-top: 14px;
-      align-items: start;
+      align-items: stretch;
     }
 
     .chat-panel,
@@ -178,6 +178,7 @@
       display: flex;
       flex-direction: column;
       min-height: calc(100vh - 140px);
+      min-height: calc(100dvh - 140px);
       overflow: hidden;
     }
 
@@ -582,9 +583,17 @@
     }
 
     @media (max-width: 640px) {
+      html, body {
+        height: 100%;
+        overflow: hidden;
+      }
+
       .shell {
         width: min(100% - 10px, 1080px);
         padding-top: 6px;
+        height: 100dvh;
+        display: flex;
+        flex-direction: column;
       }
 
       .hero,
@@ -628,12 +637,17 @@
       }
 
       .app {
+        flex: 1;
+        min-height: 0;
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(0, 1fr) auto;
         gap: 10px;
         margin-top: 10px;
       }
 
       .chat-panel {
-        min-height: calc(100svh - 98px);
+        min-height: 0;
+        height: 100%;
       }
 
       #chat {
@@ -677,6 +691,7 @@
 
       .side-panel {
         order: 2;
+        min-height: 0;
         padding: 4px 0 0;
         background: transparent;
         border: none;
@@ -811,6 +826,7 @@
     const a2 = decodeURIComponent(qs.get('a2') || '');
 
     const chatDiv = document.getElementById('chat');
+    const chatPanel = document.querySelector('.chat-panel');
     const input = document.getElementById('msgInput');
     const sendBtn = document.getElementById('sendBtn');
     const voiceBtn = document.getElementById('voiceBtn');
@@ -835,6 +851,8 @@
       lenders: [],
     };
 
+    const isCompactViewport = () => window.matchMedia('(max-width: 640px)').matches;
+
     const defer = window.requestIdleCallback
       ? (fn) => window.requestIdleCallback(fn, { timeout: 1500 })
       : (fn) => setTimeout(fn, 250);
@@ -849,6 +867,18 @@
       if (!leftGroup || !rightSpacer) return;
       rightSpacer.style.width = leftGroup.offsetWidth + 'px';
     }
+
+    function keepLatestMessageVisible() {
+      if (!isCompactViewport()) return;
+      requestAnimationFrame(() => {
+        const last = chatDiv.lastElementChild;
+        if (last) last.scrollIntoView({ block: 'end' });
+        chatDiv.scrollTop = chatDiv.scrollHeight;
+        if (chatPanel) chatPanel.scrollIntoView({ block: 'start' });
+        window.scrollTo(0, 0);
+      });
+    }
+
     window.addEventListener('resize', syncSpacer);
     setTimeout(syncSpacer, 0);
 
@@ -1185,6 +1215,7 @@
       const div = renderMessage(sender, text);
       history.push({ t: Date.now(), who: sender, text });
       saveHistory(history.slice(-50));
+      keepLatestMessageVisible();
       return div;
     }
 
@@ -1357,6 +1388,14 @@
       }
     });
     input.addEventListener('input', cancelAllNudges);
+    input.addEventListener('focus', () => {
+      setTimeout(keepLatestMessageVisible, 50);
+      setTimeout(keepLatestMessageVisible, 250);
+    });
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', keepLatestMessageVisible);
+    }
 
     document.querySelectorAll('[data-prompt]').forEach((btn) => {
       btn.addEventListener('click', () => {

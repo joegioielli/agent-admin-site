@@ -421,6 +421,12 @@ function wantsAdditionalLenders(text = "") {
   return /\b(additional|other|more|else|another|extra)\b/.test(s) && /\b(lenders?|loan officers?|mortgage)\b/.test(s);
 }
 
+function isLenderContactIntent(text = "") {
+  const s = String(text || "").toLowerCase();
+  return /\b(contact\s*info|contact\b|phone\b|number\b|email\b|call\b|text\b|reach\b|reaching\b)\b/.test(s) &&
+    /\b(lenders?|lender|loan officers?|loan officer|mortgage|preferred)\b/.test(s);
+}
+
 function isCardIntent(text = "") {
   const s = String(text || "").toLowerCase();
   return /\b(vcard|contact\s*card|save\s+to\s+(?:my|your)\s+phone|download\s+card|add\s+contact)\b/.test(
@@ -577,6 +583,7 @@ export async function handler(event) {
       const extrasLenders = propertyPreferred
         ? buildLenderExtras(base, propertyPreferred, globals, includeGlobalLenders ? 4 : 1)
         : buildLenderExtras(base, null, globals, 3);
+      const wantsLenderContactInfo = isLenderContactIntent(message);
 
       if (isCardIntent(message)) {
         const links = extrasLenders.map((l) => `${l.name || "Lender"}: ${l.vcardUrl}`);
@@ -603,6 +610,58 @@ export async function handler(event) {
 
         return respond(event, {
           reply: displayReply,
+          listingId: String(propertyId),
+          extras: { listingId: String(propertyId), lenders: extrasLenders },
+        });
+      }
+
+      if (wantsLenderContactInfo) {
+        const lines = [];
+
+        if (propertyPreferred) {
+          lines.push("Here is the preferred lender contact info for this property:");
+          lines.push(formatLenderLine(propertyPreferred) || "Preferred lender is available.");
+          if (propertyPreferred.offer) {
+            lines.push(`Offer: ${propertyPreferred.offer}`);
+          }
+        }
+
+        const otherLenders = propertyPreferred
+          ? extrasLenders.filter((x) => !x.preferred)
+          : extrasLenders;
+
+        if (otherLenders.length) {
+          lines.push(propertyPreferred ? "\nAdditional lenders:" : "Here is the lender contact info I have:");
+          otherLenders.forEach((l, idx) => {
+            lines.push(`${idx + 1}. ${formatLenderLine(l) || l.name}`);
+          });
+        }
+
+        if (!lines.length) {
+          lines.push("I don't have lender contact info yet.");
+        } else {
+          lines.push("\nI added the lender contacts below as well.");
+        }
+
+        const reply = lines.join("\n");
+        intent = "lender_contact_info";
+
+        await logChatEvent({
+          event,
+          propertyId,
+          message,
+          reply,
+          intent,
+          meta: {
+            address1,
+            address2,
+            lenders: extrasLenders.length,
+            hasPropertyPreferred: !!propertyPreferred,
+          },
+        });
+
+        return respond(event, {
+          reply,
           listingId: String(propertyId),
           extras: { listingId: String(propertyId), lenders: extrasLenders },
         });
@@ -664,7 +723,7 @@ export async function handler(event) {
       return respond(event, {
         reply,
         listingId: String(propertyId),
-        extras: { listingId: String(propertyId), lenders: extrasLenders },
+        extras: { listingId: String(propertyId) },
       });
     }
 

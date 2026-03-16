@@ -868,14 +868,27 @@
       rightSpacer.style.width = leftGroup.offsetWidth + 'px';
     }
 
+    function resetViewportTop() {
+      const root = document.scrollingElement || document.documentElement;
+      if (root) root.scrollTop = 0;
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      window.scrollTo(0, 0);
+    }
+
     function keepLatestMessageVisible() {
       if (!isCompactViewport()) return;
       requestAnimationFrame(() => {
-        const last = chatDiv.lastElementChild;
-        if (last) last.scrollIntoView({ block: 'end' });
         chatDiv.scrollTop = chatDiv.scrollHeight;
-        if (chatPanel) chatPanel.scrollIntoView({ block: 'start' });
-        window.scrollTo(0, 0);
+        if (chatPanel) chatPanel.scrollTop = 0;
+        resetViewportTop();
+      });
+    }
+
+    function scheduleViewportReset(delays = [0, 80, 220, 420]) {
+      if (!isCompactViewport()) return;
+      delays.forEach((delay) => {
+        setTimeout(keepLatestMessageVisible, delay);
       });
     }
 
@@ -1305,9 +1318,14 @@
       chatDiv.scrollTop = chatDiv.scrollHeight;
     }
 
-    async function sendMessage() {
+    async function sendMessage(source = 'button') {
       const message = (input.value || '').trim();
       if (!message) return;
+
+      if (source === 'keyboard' && isCompactViewport()) {
+        input.blur();
+        scheduleViewportReset();
+      }
 
       if (lastPrompt === 'nudge1') {
         if (isNo(message)) {
@@ -1368,33 +1386,38 @@
         const result = await callChat(message);
         addMessage('AI', result.reply);
         handleChatExtras(result.extras || {});
+        scheduleViewportReset();
       } catch (err) {
         typingEl.style.display = 'none';
         addMessage('AI', 'Sorry - something went wrong. Please try again.');
         console.error(err);
+        scheduleViewportReset();
       }
 
       lastPrompt = 'none';
       scheduleIdleNudges();
     }
 
-    sendBtn.addEventListener('click', sendMessage);
+    sendBtn.addEventListener('click', () => sendMessage('button'));
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        sendMessage();
+        sendMessage('keyboard');
+        scheduleViewportReset();
       } else {
         cancelAllNudges();
       }
     });
     input.addEventListener('input', cancelAllNudges);
     input.addEventListener('focus', () => {
-      setTimeout(keepLatestMessageVisible, 50);
-      setTimeout(keepLatestMessageVisible, 250);
+      scheduleViewportReset([50, 250]);
+    });
+    input.addEventListener('blur', () => {
+      scheduleViewportReset([0, 120, 280]);
     });
 
     if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', keepLatestMessageVisible);
+      window.visualViewport.addEventListener('resize', () => scheduleViewportReset([0, 120, 260]));
     }
 
     document.querySelectorAll('[data-prompt]').forEach((btn) => {

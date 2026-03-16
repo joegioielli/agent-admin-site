@@ -314,13 +314,12 @@
       <p class="eyebrow">Available Listings</p>
       <h1 id="pageTitle">Choose the home you want to explore.</h1>
       <p class="hero-copy">
-        Tap a listing to continue. We load the property list first so clients can get in quickly without waiting on extra detail requests.
+        Tap a listing to continue.
       </p>
     </section>
 
     <section class="toolbar" aria-live="polite">
       <div id="statusText" class="status">Loading homes...</div>
-      <div class="hint">Fastest on mobile: one tap takes you straight to the property details flow.</div>
     </section>
 
     <section id="listings" class="listing-grid" aria-label="Available homes"></section>
@@ -360,13 +359,6 @@
       return Number.isFinite(number) && number > 0
         ? number.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
         : text;
-    }
-
-    function formatDom(value) {
-      if (value == null || value === "") return "";
-      const num = Number(value);
-      if (!Number.isFinite(num)) return "";
-      return `${num} day${num === 1 ? "" : "s"} on market`;
     }
 
     function splitAddress(rawAddress) {
@@ -411,7 +403,6 @@
       const listingId = item.listingId || item.mls || item.slug || "";
       const address = splitAddress(item.address);
       const price = formatPrice(item.price);
-      const dom = formatDom(item.computedDaysOnMarket);
       const imageUrl = item.photoUrl || item.primaryPhotoUrl || placeholderImage;
       const addressParam = [address.primary, address.secondary].filter(Boolean).join(" ");
 
@@ -428,7 +419,6 @@
         <div class="listing-body">
           <div class="meta-row">
             <span class="meta-pill">${listingId ? `MLS #${listingId}` : "Listing"}</span>
-            ${dom ? `<span class="meta-pill">${dom}</span>` : ""}
           </div>
           <p class="address-line">${address.primary}</p>
           ${address.secondary ? `<p class="address-sub">${address.secondary}</p>` : ""}

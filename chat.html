@@ -6,7 +6,1379 @@
   <meta name="theme-color" content="#cf5f1b">
   <link rel="manifest" href="/manifest.json">
   <title>Chat about this Home</title>
+  <style>
+    :root {
+      --panel: rgba(255, 255, 255, 0.86);
+      --line: rgba(52, 38, 27, 0.1);
+      --text: #1f1b18;
+      --muted: #6d6259;
+      --accent: #cf5f1b;
+      --accent-deep: #9f4310;
+      --support: #244c87;
+      --support-deep: #18375f;
+      --shadow: 0 24px 60px rgba(61, 40, 21, 0.13);
+      --radius-xl: 28px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+      --radius-sm: 12px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      min-height: 100%;
+      margin: 0;
+    }
+
+    body {
+      color: var(--text);
+      font-family: Georgia, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at top left, rgba(207, 95, 27, 0.16), transparent 24rem),
+        linear-gradient(180deg, #f8f4ee 0%, #efe7dc 52%, #f6f1ea 100%);
+    }
+
+    .shell {
+      width: min(1120px, calc(100% - 20px));
+      margin: 0 auto;
+      padding: 14px 0 18px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 18px 18px 16px;
+      border-radius: var(--radius-xl);
+      border: 1px solid rgba(255, 255, 255, 0.56);
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.9), rgba(255,250,244,0.76)),
+        rgba(255,255,255,0.76);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -5rem;
+      bottom: -7rem;
+      width: 16rem;
+      height: 16rem;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(207,95,27,0.18), transparent 68%);
+      pointer-events: none;
+    }
+
+    header {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      column-gap: 12px;
+    }
+
+    .left-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    header a {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+      padding: 0 14px;
+      border-radius: 999px;
+      text-decoration: none;
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+      box-shadow: 0 10px 24px rgba(159, 67, 16, 0.22);
+      font: 700 0.84rem/1 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+    }
+
+    header a:hover,
+    header a:focus-visible {
+      transform: translateY(-1px);
+      filter: brightness(1.02);
+      box-shadow: 0 14px 28px rgba(159, 67, 16, 0.28);
+      outline: none;
+    }
+
+    .title {
+      min-width: 0;
+      text-align: center;
+    }
+
+    .title .eyebrow {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--accent-deep);
+      font: 700 0.72rem/1.2 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    header .title .l1 {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: clamp(1.25rem, 3vw, 1.9rem);
+      line-height: 1;
+      letter-spacing: -0.03em;
+      font-weight: 700;
+    }
+
+    header .title .l2 {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font: 500 0.94rem/1.35 "Segoe UI", Arial, sans-serif;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .right-spacer {
+      visibility: hidden;
+    }
+
+    .hero-copy {
+      position: relative;
+      z-index: 1;
+      margin: 14px 0 0;
+      max-width: 38rem;
+      color: var(--muted);
+      font: 500 0.96rem/1.6 "Segoe UI", Arial, sans-serif;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 308px;
+      gap: 18px;
+      margin-top: 18px;
+      align-items: start;
+    }
+
+    .chat-panel,
+    .side-panel {
+      border-radius: var(--radius-xl);
+      border: 1px solid rgba(64, 48, 32, 0.09);
+      background: var(--panel);
+      box-shadow: 0 18px 40px rgba(61, 40, 21, 0.09);
+      backdrop-filter: blur(12px);
+    }
+
+    .chat-panel {
+      display: flex;
+      flex-direction: column;
+      min-height: calc(100vh - 170px);
+      overflow: hidden;
+    }
+
+    .chat-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,0.64);
+    }
+
+    .chat-head-copy {
+      min-width: 0;
+    }
+
+    .chat-head-title {
+      display: block;
+      font: 700 1rem/1.1 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.01em;
+    }
+
+    .chat-head-sub {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font: 500 0.86rem/1.35 "Segoe UI", Arial, sans-serif;
+    }
+
+    #typing {
+      display: none;
+      min-height: 34px;
+      padding: 0 12px;
+      border-radius: 999px;
+      color: var(--accent-deep);
+      background: rgba(255, 245, 236, 0.96);
+      font: 700 0.8rem/34px "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    #chat {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.42), rgba(255,249,243,0.62));
+    }
+
+    .msg {
+      max-width: min(82%, 720px);
+      padding: 13px 14px;
+      border-radius: 20px;
+      line-height: 1.55;
+      word-wrap: break-word;
+      box-shadow: 0 12px 24px rgba(49, 35, 21, 0.06);
+      font: 500 0.98rem/1.55 "Segoe UI", Arial, sans-serif;
+    }
+
+    .msg a {
+      color: inherit;
+      font-weight: 700;
+    }
+
+    .user {
+      align-self: flex-end;
+      border-bottom-right-radius: 8px;
+      color: #201925;
+      background: linear-gradient(135deg, #efe7ff, #dfd0ff);
+    }
+
+    .ai {
+      align-self: flex-start;
+      border-bottom-left-radius: 8px;
+      color: #2b241f;
+      background: linear-gradient(135deg, #fffaf4, #fff1de);
+    }
+
+    .mini-card {
+      margin-top: 10px;
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(162, 114, 70, 0.14);
+      background: rgba(255,255,255,0.78);
+    }
+
+    .mini-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font: 700 0.94rem/1.35 "Segoe UI", Arial, sans-serif;
+    }
+
+    .mini-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .mini-link,
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+      box-shadow: 0 10px 20px rgba(159, 67, 16, 0.18);
+      font: 700 0.82rem/1 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+    }
+
+    .mini-link:hover,
+    .mini-link:focus-visible,
+    .btn:hover,
+    .btn:focus-visible,
+    .cta-btn:hover,
+    .cta-btn:focus-visible,
+    #sendBtn:hover,
+    #sendBtn:focus-visible,
+    #voiceBtn:hover:not(.listening),
+    #voiceBtn:focus-visible:not(.listening) {
+      transform: translateY(-1px);
+      filter: brightness(1.02);
+      outline: none;
+    }
+
+    .mini-link:active,
+    .btn:active,
+    .cta-btn:active,
+    #sendBtn:active,
+    #voiceBtn:active:not(.listening) {
+      transform: translateY(0);
+    }
+
+    .side-panel {
+      padding: 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .side-card {
+      padding: 16px;
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(64, 48, 32, 0.08);
+      background: rgba(255,255,255,0.7);
+    }
+
+    .side-label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--accent-deep);
+      font: 700 0.72rem/1.2 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    .side-title {
+      margin: 0;
+      font-size: 1.18rem;
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+      font-weight: 700;
+    }
+
+    .side-copy {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font: 500 0.9rem/1.55 "Segoe UI", Arial, sans-serif;
+    }
+
+    #ctaBar {
+      padding: 0;
+      background: transparent;
+      border: none;
+      display: block;
+    }
+
+    .cta-btn {
+      width: 100%;
+      min-height: 54px;
+      padding: 0 18px;
+      border: none;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      color: #fff;
+      background: linear-gradient(135deg, var(--support), var(--support-deep));
+      box-shadow: 0 14px 28px rgba(24, 55, 95, 0.2);
+      font: 700 0.92rem/1 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+    }
+
+    .cta-btn.disabled {
+      opacity: 0.52;
+      pointer-events: none;
+      box-shadow: none;
+    }
+
+    .cta-btn.attn {
+      animation: glowBtn 1.8s ease-in-out 3, pulseBtn 1.8s ease-in-out 3;
+    }
+
+    @keyframes pulseBtn {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes glowBtn {
+      0% { box-shadow: 0 0 0 rgba(36,76,135,0); }
+      50% { box-shadow: 0 0 24px rgba(36,76,135,0.34); }
+      100% { box-shadow: 0 0 0 rgba(36,76,135,0); }
+    }
+
+    .side-tip {
+      color: var(--muted);
+      font: 500 0.84rem/1.5 "Segoe UI", Arial, sans-serif;
+    }
+
+    #inputBar {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      padding: 14px 16px 16px;
+      border-top: 1px solid var(--line);
+      background: rgba(255,255,255,0.72);
+    }
+
+    #msgInput {
+      flex: 1;
+      min-height: 56px;
+      padding: 16px 16px;
+      border: 1px solid rgba(83, 62, 43, 0.12);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.94);
+      color: var(--text);
+      font: 500 0.98rem/1.3 "Segoe UI", Arial, sans-serif;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.45);
+    }
+
+    #msgInput::placeholder {
+      color: #8b7f76;
+    }
+
+    #msgInput:focus {
+      outline: none;
+      border-color: rgba(207, 95, 27, 0.4);
+      box-shadow: 0 0 0 4px rgba(207, 95, 27, 0.1);
+    }
+
+    #sendBtn,
+    #voiceBtn {
+      min-width: 54px;
+      min-height: 54px;
+      padding: 0 18px;
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      color: #fff;
+      font: 700 0.88rem/1 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+    }
+
+    #sendBtn {
+      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+      box-shadow: 0 12px 24px rgba(159, 67, 16, 0.18);
+    }
+
+    #voiceBtn {
+      background: linear-gradient(135deg, #665f5a, #4a4440);
+      box-shadow: 0 12px 24px rgba(74, 68, 64, 0.16);
+    }
+
+    #voiceBtn.listening {
+      background: linear-gradient(135deg, #b93434, #962525);
+      animation: pulse 1.35s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.04); }
+    }
+
+    .quick-replies {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .quick-reply {
+      border: none;
+      border-radius: 999px;
+      padding: 7px 12px;
+      background: #efe7dc;
+      color: #5f5146;
+      cursor: pointer;
+      font: 700 0.78rem/1 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(23, 18, 14, 0.48);
+      z-index: 9999;
+    }
+
+    .modal.open {
+      display: flex;
+    }
+
+    .modal-card {
+      position: relative;
+      width: min(100%, 430px);
+      padding: 22px 20px 20px;
+      border-radius: 24px;
+      background: rgba(255, 252, 247, 0.98);
+      box-shadow: 0 28px 50px rgba(23, 18, 14, 0.22);
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 50%;
+      background: transparent;
+      color: #6e6258;
+      cursor: pointer;
+      font-size: 1.4rem;
+      line-height: 1;
+    }
+
+    .modal-card h3 {
+      margin: 0;
+      font-size: 1.38rem;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+    }
+
+    .modal-card p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font: 500 0.94rem/1.5 "Segoe UI", Arial, sans-serif;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .btn-call {
+      background: linear-gradient(135deg, var(--support), var(--support-deep));
+    }
+
+    .btn-email {
+      background: linear-gradient(135deg, #2f8f5f, #1f6f47);
+    }
+
+    .btn-vcard {
+      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+    }
+
+    #noPhoneMsg {
+      display: none;
+      margin-top: 12px;
+      color: var(--muted);
+      font: 500 0.86rem/1.5 "Segoe UI", Arial, sans-serif;
+    }
+
+    @media (max-width: 940px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .side-panel {
+        order: -1;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .shell {
+        width: min(100% - 14px, 1120px);
+        padding-top: 10px;
+      }
+
+      .hero,
+      .chat-panel,
+      .side-panel {
+        border-radius: 22px;
+      }
+
+      .hero {
+        padding: 16px 14px 14px;
+      }
+
+      header {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .title {
+        text-align: left;
+      }
+
+      .right-spacer {
+        display: none;
+      }
+
+      .chat-panel {
+        min-height: calc(100vh - 230px);
+      }
+
+      #chat {
+        padding: 14px;
+      }
+
+      .msg {
+        max-width: 92%;
+      }
+
+      #inputBar {
+        padding: 12px 12px 14px;
+      }
+
+      #msgInput {
+        min-height: 52px;
+      }
+    }
+  </style>
 </head>
 <body>
-</body>
+  <main class="shell">
+    <section class="hero">
+      <header>
+        <div class="left-group">
+          <a id="backLink" href="/listings.html">&larr; Back to home</a>
+        </div>
+        <div class="title">
+          <span class="eyebrow">Property Assistant</span>
+          <span class="l1" id="addr1">Loading...</span>
+          <span class="l2" id="addr2"></span>
+        </div>
+        <div class="right-spacer" aria-hidden="true"></div>
+      </header>
+      <p class="hero-copy">
+        Ask about price, square footage, features, lenders, or scheduling. The assistant is already tied to this home.
+      </p>
+    </section>
+
+    <section class="app">
+      <section class="chat-panel" aria-label="Property chat">
+        <div class="chat-head">
+          <div class="chat-head-copy">
+            <span class="chat-head-title">Live property chat</span>
+            <span class="chat-head-sub">Fast answers for this listing, plus agent and lender actions when available.</span>
+          </div>
+          <div id="typing">Assistant typing</div>
+        </div>
+
+        <div id="chat"></div>
+
+        <div id="inputBar">
+          <input id="msgInput" placeholder="Ask about price, features, lenders, showings..." />
+          <button id="voiceBtn" title="Voice input">Mic</button>
+          <button id="sendBtn">Send</button>
+        </div>
+      </section>
+
+      <aside class="side-panel">
+        <div class="side-card">
+          <span class="side-label">Need Help Fast?</span>
+          <h2 class="side-title">Connect with the listing team</h2>
+          <p class="side-copy">
+            If the agent details are available, you can call, text, or save the contact card from here.
+          </p>
+        </div>
+
+        <div id="ctaBar">
+          <button id="contactBtn" class="cta-btn disabled" type="button" aria-disabled="true">Contact Agent</button>
+        </div>
+
+        <div class="side-card">
+          <span class="side-label">What You Can Ask</span>
+          <p class="side-copy">
+            Try price, bedrooms, bathrooms, square footage, lot size, year built, garage, lender options, or showing requests.
+          </p>
+          <div class="quick-replies">
+            <button class="quick-reply" type="button" data-prompt="What is the price?">Price</button>
+            <button class="quick-reply" type="button" data-prompt="How many bedrooms and bathrooms?">Beds & Baths</button>
+            <button class="quick-reply" type="button" data-prompt="Do you have lender info?">Lenders</button>
+            <button class="quick-reply" type="button" data-prompt="Can I talk to an agent?">Agent</button>
+          </div>
+        </div>
+
+        <div class="side-tip">
+          Returning visitors keep the last few messages on this device so conversations feel continuous.
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <div id="contactActions" class="modal" aria-hidden="true">
+    <div class="modal-card">
+      <button class="modal-close" id="contactActionsClose" aria-label="Close">&times;</button>
+      <h3>Contact Agent</h3>
+      <p>How would you like to reach the listing contact?</p>
+      <div class="actions">
+        <a id="callAgentAction" class="btn btn-call" href="#">Call Agent</a>
+        <button id="textAgentAction" class="btn btn-email" type="button">Text Agent</button>
+        <a id="saveAgentCardAction" class="btn btn-vcard" href="#" target="_blank" rel="noopener" style="display:none;">Save Contact</a>
+      </div>
+      <div id="noPhoneMsg">No direct phone is on file for this listing yet, but you can still save the contact card if available.</div>
+    </div>
+  </div>
+  <script>
+    const qs = new URLSearchParams(window.location.search);
+    const pid = (qs.get('pid') || '').trim();
+    if (!pid) {
+      window.location.href = '/listings.html';
+      throw new Error('No property selected');
+    }
+
+    const a1 = decodeURIComponent(qs.get('a1') || '');
+    const a2 = decodeURIComponent(qs.get('a2') || '');
+
+    const chatDiv = document.getElementById('chat');
+    const input = document.getElementById('msgInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const voiceBtn = document.getElementById('voiceBtn');
+    const typingEl = document.getElementById('typing');
+    const addr1El = document.getElementById('addr1');
+    const addr2El = document.getElementById('addr2');
+    const backLink = document.getElementById('backLink');
+    const leftGroup = document.querySelector('.left-group');
+    const rightSpacer = document.querySelector('.right-spacer');
+    const contactBtn = document.getElementById('contactBtn');
+
+    const contactModal = document.getElementById('contactActions');
+    const callAction = document.getElementById('callAgentAction');
+    const textAction = document.getElementById('textAgentAction');
+    const saveAgentCardAction = document.getElementById('saveAgentCardAction');
+    const closeModalBtn = document.getElementById('contactActionsClose');
+    const noPhoneMsg = document.getElementById('noPhoneMsg');
+
+    const state = {
+      lastChatMeta: {},
+      agent: null,
+      lenders: [],
+    };
+
+    const defer = window.requestIdleCallback
+      ? (fn) => window.requestIdleCallback(fn, { timeout: 1500 })
+      : (fn) => setTimeout(fn, 250);
+
+    if ('serviceWorker' in navigator) {
+      defer(() => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+
+    function syncSpacer() {
+      if (!leftGroup || !rightSpacer) return;
+      rightSpacer.style.width = leftGroup.offsetWidth + 'px';
+    }
+    window.addEventListener('resize', syncSpacer);
+    setTimeout(syncSpacer, 0);
+
+    const DEBUG_CONTACT = false;
+    const debugContact = (...a) => { if (DEBUG_CONTACT) console.log('[ContactAgent]', ...a); };
+
+    addr1El.textContent = a1 || `MLS #${pid}`;
+    addr2El.textContent = a2 || '';
+    backLink.href = `/select.html?mls=${encodeURIComponent(pid)}&address=${encodeURIComponent([a1, a2].filter(Boolean).join(' '))}`;
+
+    function pick(obj, keys, fallback = '') {
+      for (const k of keys) {
+        if (obj && obj[k] != null && String(obj[k]).trim?.() !== '') return obj[k];
+        if (obj && obj[k] != null && typeof obj[k] !== 'string') return obj[k];
+      }
+      return fallback;
+    }
+
+    function cleanPhone(p) {
+      const digits = String(p || '').replace(/[^0-9]/g, '');
+      if (digits.length === 11 && digits.startsWith('1')) return '+' + digits;
+      if (digits.length === 10) return '+1' + digits;
+      return digits.length >= 7 ? digits : '';
+    }
+
+    function smsHrefFromPhone(p) {
+      const cleaned = cleanPhone(p);
+      if (!cleaned) return '';
+      return `sms:${cleaned.replace(/^\+/, '')}`;
+    }
+
+    function normText(s) {
+      return String(s || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    function isYes(s) {
+      s = normText(s);
+      return ['y', 'yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'yup', 'affirmative', 'yes please'].includes(s);
+    }
+
+    function isNo(s) {
+      s = normText(s);
+      return ['n', 'no', 'nope', 'nah', 'not really', 'im good', 'i am good', "i'm good", 'no thanks', 'no thank you', 'not now'].includes(s);
+    }
+
+    function escapeHtml(s) {
+      return String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function linkifyAI(text) {
+      let html = String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      html = html.replace(/https?:\/\/[^\s)]+/g, (m) => `<a href="${m}" target="_blank" rel="noopener">${m}</a>`);
+      html = html.replace(/(\+?1[-.\s]?)?(\(?\d{3}\)?)[-.\s]?\d{3}[-.\s]?\d{4}/g, (m) => {
+        const digits = m.replace(/[^0-9]/g, '');
+        const tel = digits.length === 11 && digits.startsWith('1') ? `+${digits}` : digits.length === 10 ? `+1${digits}` : digits;
+        return `<a href="tel:${tel}">${m}</a>`;
+      });
+      return html.replace(/\n/g, '<br>');
+    }
+
+    function detectIntent(s) {
+      const t = ' ' + normText(s) + ' ';
+      const has = (kws) => kws.some((k) => t.includes(' ' + k + ' '));
+      if (has(['agent', 'realtor', 'broker', 'talk to agent', 'speak to agent', 'connect me', 'connect agent', 'call agent', 'human', 'contact me', 'contact agent'])) return 'agent';
+      if (has(['showing', 'tour', 'schedule', 'walkthrough', 'viewing', 'see it', 'book', 'set up a showing', 'set a showing'])) return 'showing';
+      return null;
+    }
+
+    function renderExtraCard(title, bodyHtml, links = []) {
+      const div = document.createElement('div');
+      div.className = 'msg ai';
+      div.innerHTML = `
+        <div>${bodyHtml}</div>
+        ${links.length ? `
+          <div class="mini-links">
+            ${links.map((link) => `
+              ${link.download
+                ? `<button class="mini-link" type="button" data-vcard="${escapeHtml(link.href)}" data-vcard-name="${escapeHtml((link.name || link.label || 'contact').replace(/[^a-z0-9._-]+/gi, '_').toLowerCase())}">${escapeHtml(link.label)}</button>`
+                : `<a
+                    class="mini-link"
+                    href="${escapeHtml(link.href)}"
+                    ${link.newTab ? 'target="_blank" rel="noopener"' : ''}
+                  >${escapeHtml(link.label)}</a>`
+              }
+            `).join('')}
+          </div>
+        ` : ''}
+      `;
+      chatDiv.appendChild(div);
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+      return div;
+    }
+
+    async function downloadVcard(url, fallbackName = 'contact.vcf') {
+      const res = await fetch(url, { credentials: 'same-origin' });
+      if (!res.ok) throw new Error(`Failed to download vCard (${res.status})`);
+
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = fallbackName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    }
+
+    function setContactButtonState(enabled) {
+      if (enabled) {
+        contactBtn.classList.remove('disabled');
+        contactBtn.removeAttribute('aria-disabled');
+      } else {
+        contactBtn.classList.add('disabled');
+        contactBtn.setAttribute('aria-disabled', 'true');
+      }
+    }
+
+    function updateContactButtonFromAgent(agent) {
+      if (!agent || typeof agent !== 'object') return;
+
+      state.agent = {
+        name: agent.name || '',
+        phone: agent.phone || '',
+        company: agent.company || '',
+        vcardUrl: agent.vcardUrl || '',
+      };
+
+      const cleaned = cleanPhone(agent.phone || '');
+      if (cleaned) {
+        contactBtn.dataset.tel = 'tel:' + cleaned;
+      } else {
+        contactBtn.dataset.tel = '';
+      }
+
+      if (agent.vcardUrl) {
+        contactBtn.dataset.agentVcard = agent.vcardUrl;
+        saveAgentCardAction.href = agent.vcardUrl;
+        saveAgentCardAction.style.display = '';
+      } else {
+        contactBtn.dataset.agentVcard = '';
+        saveAgentCardAction.removeAttribute('href');
+        saveAgentCardAction.style.display = 'none';
+      }
+
+      setContactButtonState(Boolean(cleaned || agent.vcardUrl));
+      contactBtn.classList.add('attn');
+      setTimeout(() => contactBtn.classList.remove('attn'), 6000);
+    }
+
+    function handleChatExtras(extras) {
+      if (!extras || typeof extras !== 'object') return;
+
+      if (Array.isArray(extras.lenders) && extras.lenders.length) {
+        state.lenders = extras.lenders.slice();
+
+        const preferred = extras.lenders.find((l) => l && l.preferred);
+        const intro = preferred
+          ? '<div style="margin-bottom:8px;"><strong>This property has a preferred lender.</strong></div>'
+          : '<div style="margin-bottom:8px;"><strong>Available lenders</strong></div>';
+
+        const lines = extras.lenders.map((l) => {
+          const name = l.name || 'Lender';
+          const label = l.preferred ? `Preferred Lender: ${name}` : name;
+          const infoBits = [];
+          if (l.phone) infoBits.push(escapeHtml(l.phone));
+          if (l.email) infoBits.push(escapeHtml(l.email));
+          const offer = l.offer ? `<div style="margin-top:4px;color:#444;"><em>${escapeHtml(l.offer)}</em></div>` : '';
+          const info = infoBits.length ? `<div style="margin-top:4px;color:#555;">${infoBits.join(' | ')}</div>` : '';
+          return `
+            <div class="mini-card">
+              <strong>${escapeHtml(label)}</strong>
+              ${info}
+              ${offer}
+              <div class="mini-links">
+                ${l.vcardUrl ? `<button class="mini-link" type="button" data-vcard="${escapeHtml(l.vcardUrl)}" data-vcard-name="${escapeHtml((l.name || 'contact').replace(/[^a-z0-9._-]+/gi, '_').toLowerCase() || 'contact')}">Save Contact</button>` : ''}
+                ${l.phone ? `<a class="mini-link" href="tel:${escapeHtml(cleanPhone(l.phone))}">Call</a>` : ''}
+                ${l.phone ? `<a class="mini-link" href="${escapeHtml(smsHrefFromPhone(l.phone))}">Text</a>` : ''}
+              </div>
+            </div>
+          `;
+        });
+
+        renderExtraCard('Lenders', `${intro}${lines.join('')}`);
+      }
+
+      if (extras.agent && typeof extras.agent === 'object') {
+        updateContactButtonFromAgent(extras.agent);
+
+        const agent = extras.agent;
+        const bits = [];
+        if (agent.name) bits.push(`<strong>${escapeHtml(agent.name)}</strong>`);
+        if (agent.company) bits.push(`<div style="color:#555;">${escapeHtml(agent.company)}</div>`);
+        if (agent.phone) bits.push(`<div style="margin-top:4px;">${escapeHtml(agent.phone)}</div>`);
+
+        const links = [];
+        if (agent.phone) links.push({ label: 'Call Agent', href: `tel:${cleanPhone(agent.phone)}` });
+        if (agent.phone) links.push({ label: 'Text Agent', href: smsHrefFromPhone(agent.phone) });
+        if (agent.vcardUrl) links.push({ label: 'Save Contact', href: agent.vcardUrl, download: true, name: agent.name || 'agent-contact' });
+
+        renderExtraCard('Agent', bits.join(''), links);
+      }
+    }
+
+    let recognition;
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      voiceBtn.addEventListener('click', () => {
+        recognition.start();
+        voiceBtn.textContent = 'Stop';
+        voiceBtn.classList.add('listening');
+      });
+
+      recognition.onresult = (e) => {
+        input.value = e.results[0][0].transcript;
+        voiceBtn.textContent = 'Mic';
+        voiceBtn.classList.remove('listening');
+      };
+
+      recognition.onerror = recognition.onend = () => {
+        voiceBtn.textContent = 'Mic';
+        voiceBtn.classList.remove('listening');
+      };
+    } else {
+      voiceBtn.style.display = 'none';
+    }
+
+    async function loadAgentPhone() {
+      debugContact('start', { pid });
+      try {
+        const res = await fetch('/.netlify/functions/listListings', { cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed to load listings');
+        const json = await res.json();
+        const items = Array.isArray(json) ? json : (json.items || json.listings || json.files || []);
+
+        const found = items.find((it) => {
+          const cand = String(it.listingId || it.mls || it.id || '').trim();
+          return cand && cand === pid;
+        });
+
+        let phone = pick(found || {}, [
+          'AgentListPhone', 'listingAgentPhone', 'listing_agent_phone',
+          'agentPhone', 'agent_phone', 'ListAgentPhone', 'ListingAgentPhone',
+          'AgentPhone', 'AgentCell', 'Agent_Cell', 'LaPhone', 'La_Phone',
+          'ListAgentPreferredPhone', 'officePhone', 'OfficePhone'
+        ], '');
+
+        let agentName = pick(found || {}, [
+          'AgentListName', 'listingAgentName', 'agentName', 'AgentName', 'ListAgentName'
+        ], '');
+
+        let officeName = pick(found || {}, ['OfficeListName', 'officeName', 'OfficeName'], '');
+
+        const detailsUrl = pick(found || {}, ['detailsUrl', 'details', 'detailsURL'], '');
+        if ((!phone || !agentName || !officeName) && detailsUrl) {
+          const dRes = await fetch(detailsUrl, { cache: 'no-store' });
+          if (dRes.ok) {
+            const payload = await dRes.json().catch(() => ({}));
+            const details = payload?.details || payload || {};
+
+            phone = phone || pick(details || {}, [
+              'AgentListPhone', 'listingAgentPhone', 'listing_agent_phone',
+              'agentPhone', 'agent_phone', 'ListAgentPhone', 'ListingAgentPhone',
+              'AgentDirect', 'AgentCell', 'Agent_Phone', 'AgentDirectPhone',
+              'LaPhone', 'La_Phone', 'ListAgentPreferredPhone', 'officePhone', 'OfficePhone'
+            ], '');
+
+            agentName = agentName || pick(details || {}, [
+              'AgentListName', 'listingAgentName', 'agentName', 'AgentName', 'ListAgentName'
+            ], '');
+
+            officeName = officeName || pick(details || {}, [
+              'OfficeListName', 'officeName', 'OfficeName'
+            ], '');
+
+            if (!phone && details && details.agent && typeof details.agent === 'object') {
+              phone = pick(details.agent, ['phone', 'cell', 'direct', 'mobile', 'Phone', 'Cell', 'Direct', 'Mobile'], '');
+            }
+          }
+        }
+
+        const cleaned = cleanPhone(phone);
+        if (cleaned || agentName) {
+          updateContactButtonFromAgent({
+            name: agentName,
+            phone: cleaned || phone,
+            company: officeName,
+            vcardUrl: contactBtn.dataset.agentVcard || '',
+          });
+        }
+      } catch (e) {
+        debugContact('error', e);
+      }
+    }
+
+    const KEY = `chat:${pid}`;
+    function loadHistory() {
+      try { return JSON.parse(localStorage.getItem(KEY) || '[]'); }
+      catch { return []; }
+    }
+    function saveHistory(arr) {
+      try { localStorage.setItem(KEY, JSON.stringify(arr)); }
+      catch {}
+    }
+    const history = loadHistory();
+
+    function renderMessage(sender, text = '') {
+      const div = document.createElement('div');
+      div.className = `msg ${sender === 'You' ? 'user' : 'ai'}`;
+      if (sender === 'You') {
+        div.textContent = text;
+      } else {
+        div.innerHTML = linkifyAI(text);
+      }
+      chatDiv.appendChild(div);
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+      return div;
+    }
+
+    function addMessage(sender, text = '') {
+      const div = renderMessage(sender, text);
+      history.push({ t: Date.now(), who: sender, text });
+      saveHistory(history.slice(-50));
+      return div;
+    }
+
+    async function callChat(message) {
+      const recentHistory = history
+        .slice(-10)
+        .filter((m) => m.who !== 'AI' || !String(m.text || '').includes('[Lead form shown]'));
+      const context = recentHistory.map((m) => `${m.who}: ${m.text}`).join('\n').substring(0, 4000);
+
+      typingEl.style.display = 'block';
+
+      const res = await fetch('/.netlify/functions/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          propertyId: pid,
+          message,
+          address1: a1,
+          address2: a2,
+          history: context
+        })
+      });
+
+      if (!res.ok) {
+        let msg = `Sorry - I hit an error (${res.status}).`;
+        try {
+          const maybe = await res.json();
+          if (maybe && maybe.reply) msg = String(maybe.reply);
+        } catch {}
+        throw new Error(msg);
+      }
+
+      const data = await res.json().catch(() => ({}));
+      typingEl.style.display = 'none';
+
+      const replyText =
+        (data && typeof data.reply === 'string' && data.reply.trim())
+          ? data.reply.trim()
+          : "Sorry - I'm not sure.";
+
+      state.lastChatMeta = data || {};
+
+      return {
+        reply: replyText,
+        extras: data?.extras || {},
+        raw: data || {}
+      };
+    }
+
+    let nudge1Timer = null;
+    let nudge2Timer = null;
+    let nudgeCount = 0;
+    let lastPrompt = 'none';
+
+    function cancelAllNudges() {
+      if (nudge1Timer) clearTimeout(nudge1Timer);
+      if (nudge2Timer) clearTimeout(nudge2Timer);
+      nudge1Timer = null;
+      nudge2Timer = null;
+    }
+
+    function scheduleIdleNudges() {
+      cancelAllNudges();
+      if (nudgeCount >= 2) return;
+      nudge1Timer = setTimeout(() => {
+        addMessage('AI', 'If you would like, I can help you connect with an agent or talk about financing options.');
+        lastPrompt = 'nudge1';
+        nudgeCount++;
+      }, 45000);
+      nudge2Timer = setTimeout(() => {
+        if (lastPrompt === 'none') return;
+        addMessage('AI', 'Still there? You can ask me about price, schools, showings, or tap Contact Agent anytime.');
+        lastPrompt = 'nudge2';
+        nudgeCount++;
+      }, 90000);
+    }
+
+    function startIntroIfFresh() {
+      if (!history.length) {
+        addMessage('AI', 'Hi, I am a real estate assistant for this property. Ask about price, schools, features, or schedule a showing.');
+        scheduleIdleNudges();
+        return;
+      }
+
+      chatDiv.innerHTML = '';
+      history.forEach((m) => renderMessage(m.who, m.text));
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const message = (input.value || '').trim();
+      if (!message) return;
+
+      if (lastPrompt === 'nudge1') {
+        if (isNo(message)) {
+          addMessage('You', message);
+          addMessage('AI', 'No problem - would you like me to connect you with an agent or share our preferred lenders?');
+          lastPrompt = 'nudge2';
+          input.value = '';
+          cancelAllNudges();
+          return;
+        }
+        if (isYes(message)) {
+          addMessage('You', message);
+          addMessage('AI', 'Great - what would you like to know? I can help with price, schools, lenders, or scheduling a showing.');
+          lastPrompt = 'none';
+          input.value = '';
+          cancelAllNudges();
+          scheduleIdleNudges();
+          return;
+        }
+      }
+
+      if (lastPrompt === 'nudge2') {
+        if (isNo(message)) {
+          addMessage('You', message);
+          addMessage('AI', "All good - if anything comes up, I'm here. You can also tap Contact Agent anytime.");
+          lastPrompt = 'none';
+          input.value = '';
+          cancelAllNudges();
+          return;
+        }
+        if (isYes(message)) {
+          addMessage('You', message);
+          addMessage('AI', 'Got it - what would you prefer: speak with an agent or learn about our preferred lenders?');
+          lastPrompt = 'none';
+          input.value = '';
+          cancelAllNudges();
+          scheduleIdleNudges();
+          return;
+        }
+      }
+
+      const intent = detectIntent(message);
+      if (intent === 'agent' || intent === 'showing') {
+        addMessage('You', message);
+        openContactChooser();
+        lastPrompt = 'none';
+        input.value = '';
+        cancelAllNudges();
+        scheduleIdleNudges();
+        return;
+      }
+
+      addMessage('You', message);
+      input.value = '';
+      cancelAllNudges();
+
+      try {
+        const result = await callChat(message);
+        addMessage('AI', result.reply);
+        handleChatExtras(result.extras || {});
+      } catch (err) {
+        typingEl.style.display = 'none';
+        addMessage('AI', 'Sorry - something went wrong. Please try again.');
+        console.error(err);
+      }
+
+      lastPrompt = 'none';
+      scheduleIdleNudges();
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendMessage();
+      } else {
+        cancelAllNudges();
+      }
+    });
+    input.addEventListener('input', cancelAllNudges);
+
+    document.querySelectorAll('[data-prompt]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        input.value = btn.getAttribute('data-prompt') || '';
+        input.focus();
+      });
+    });
+
+    contactBtn.addEventListener('click', openContactChooser);
+
+    function openContactChooser() {
+      if (contactBtn.classList.contains('disabled')) return;
+
+      const telHref = contactBtn.dataset.tel || '';
+      const hasTel = /^tel:/.test(telHref);
+
+      if (hasTel) {
+        callAction.href = telHref;
+        callAction.style.display = '';
+        noPhoneMsg.style.display = 'none';
+      } else {
+        callAction.removeAttribute('href');
+        callAction.style.display = 'none';
+        noPhoneMsg.style.display = '';
+      }
+
+      const agentVcard = contactBtn.dataset.agentVcard || '';
+      if (agentVcard) {
+        saveAgentCardAction.href = agentVcard;
+        saveAgentCardAction.style.display = '';
+      } else {
+        saveAgentCardAction.removeAttribute('href');
+        saveAgentCardAction.style.display = 'none';
+      }
+
+      contactModal.classList.add('open');
+      contactModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeContactChooser() {
+      contactModal.classList.remove('open');
+      contactModal.setAttribute('aria-hidden', 'true');
+    }
+
+    chatDiv.addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-vcard]');
+      if (!btn) return;
+
+      e.preventDefault();
+      const url = btn.getAttribute('data-vcard');
+      const name = `${btn.getAttribute('data-vcard-name') || 'contact'}.vcf`;
+
+      try {
+        await downloadVcard(url, name);
+      } catch (err) {
+        console.error(err);
+        addMessage('AI', 'Sorry - I could not download the contact card right now.');
+      }
+    });
+
+    closeModalBtn.addEventListener('click', closeContactChooser);
+    contactModal.addEventListener('click', (e) => {
+      if (e.target === contactModal) closeContactChooser();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeContactChooser();
+    });
+    callAction.addEventListener('click', closeContactChooser);
+
+    saveAgentCardAction.addEventListener('click', async (e) => {
+      const href = saveAgentCardAction.getAttribute('href');
+      if (!href) return;
+
+      e.preventDefault();
+      try {
+        await downloadVcard(href, 'agent-contact.vcf');
+        closeContactChooser();
+      } catch (err) {
+        console.error(err);
+        addMessage('AI', 'Sorry - I could not download the contact card right now.');
+      }
+    });
+
+    textAction.addEventListener('click', () => {
+      const telHref = contactBtn.dataset.tel || '';
+      closeContactChooser();
+
+      if (/^tel:/.test(telHref)) {
+        const smsHref = smsHrefFromPhone(telHref.replace(/^tel:/, ''));
+        if (smsHref) {
+          window.location.href = smsHref;
+          return;
+        }
+      }
+
+      addMessage('AI', "I don't have a text number for this listing yet.");
+    });
+
+    setTimeout(() => input.focus(), 300);
+    startIntroIfFresh();
+    defer(() => {
+      loadAgentPhone();
+    });
+  </script>
 </html>

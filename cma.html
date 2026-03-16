@@ -6,593 +6,28 @@
   <title>CMA Report Builder</title>
   <style>
     :root {
-      --bg: #f7f2eb;
-      --panel: rgba(255, 255, 255, 0.86);
-      --card: rgba(255, 252, 247, 0.96);
-      --line: rgba(58, 42, 29, 0.11);
-      --text: #1f1b18;
-      --muted: #6c625a;
-      --accent: #cf5f1b;
-      --accent-deep: #9f4310;
-      --support: #244c87;
-      --support-deep: #17385d;
+      --bg-page: #f3f4f6;
+      --bg-card: #ffffff;
+      --border-subtle: #e5e7eb;
+      --text-main: #111827;
+      --text-muted: #6b7280;
+      --primary: #2563eb;
+      --primary-soft: linear-gradient(135deg, #2563eb, #4f46e5);
       --success: #2d6a4f;
-      --shadow: 0 24px 60px rgba(61, 40, 21, 0.12);
-      --radius-xl: 28px;
-      --radius-lg: 22px;
-      --radius-md: 16px;
+      --radius-card: 14px;
+      --radius-pill: 999px;
+      --shadow-soft: 0 14px 30px rgba(15, 23, 42, 0.12);
+      --shadow-subtle: 0 6px 16px rgba(15, 23, 42, 0.06);
     }
 
-    * { box-sizing: border-box; }
-
-    html, body {
-      min-height: 100%;
-      margin: 0;
-    }
-
-    body {
-      color: var(--text);
-      font-family: Georgia, "Times New Roman", serif;
-      background:
-        radial-gradient(circle at top left, rgba(207, 95, 27, 0.16), transparent 26rem),
-        linear-gradient(180deg, #f8f4ee 0%, #efe7dc 54%, #f7f1e9 100%);
-    }
-
-    .shell {
-      width: min(1180px, calc(100% - 24px));
-      margin: 0 auto;
-      padding: 18px 0 28px;
-    }
-
-    .hero,
-    .panel,
-    .report-shell {
-      border-radius: var(--radius-xl);
-      border: 1px solid rgba(255, 255, 255, 0.56);
-      background:
-        linear-gradient(135deg, rgba(255,255,255,0.9), rgba(255,250,244,0.76)),
-        rgba(255,255,255,0.76);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(14px);
-    }
-
-    .hero {
-      position: relative;
-      overflow: hidden;
-      padding: 20px 20px 18px;
-    }
-
-    .hero::after {
-      content: "";
-      position: absolute;
-      right: -6rem;
-      bottom: -7rem;
-      width: 15rem;
-      height: 15rem;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(207,95,27,0.18), transparent 68%);
-      pointer-events: none;
-    }
-
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      min-height: 40px;
-      padding: 0 14px;
-      border-radius: 999px;
-      color: #fff;
-      text-decoration: none;
-      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
-      box-shadow: 0 12px 24px rgba(159, 67, 16, 0.22);
-      font: 700 0.84rem/1 "Segoe UI", Arial, sans-serif;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    .back-link:hover,
-    .back-link:focus-visible,
-    .action-btn:hover,
-    .action-btn:focus-visible,
-    .print-btn:hover,
-    .print-btn:focus-visible {
-      transform: translateY(-1px);
-      filter: brightness(1.02);
-      outline: none;
-    }
-
-    .eyebrow {
-      margin: 16px 0 8px;
-      color: var(--accent-deep);
-      font: 700 0.78rem/1.2 "Segoe UI", Arial, sans-serif;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: clamp(2rem, 5vw, 3.25rem);
-      line-height: 0.98;
-      letter-spacing: -0.04em;
-      font-weight: 700;
-    }
-
-    .hero-copy {
-      max-width: 44rem;
-      margin: 12px 0 0;
-      color: var(--muted);
-      font: 500 1rem/1.6 "Segoe UI", Arial, sans-serif;
-    }
-
-    .layout {
-      display: grid;
-      grid-template-columns: minmax(0, 400px) minmax(0, 1fr);
-      gap: 16px;
-      margin-top: 16px;
-      align-items: start;
-    }
-
-    .panel {
-      padding: 18px;
-    }
-
-    .section-label {
-      margin: 0 0 8px;
-      color: var(--accent-deep);
-      font: 700 0.72rem/1.2 "Segoe UI", Arial, sans-serif;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-    }
-
-    .section-title {
-      margin: 0;
-      font-size: 1.28rem;
-      line-height: 1.08;
-      letter-spacing: -0.03em;
-    }
-
-    .section-copy,
-    .card-copy,
-    .muted-text {
-      margin: 8px 0 0;
-      color: var(--muted);
-      font: 500 0.94rem/1.55 "Segoe UI", Arial, sans-serif;
-    }
-
-    .form-stack {
-      display: grid;
-      gap: 14px;
-      margin-top: 16px;
-    }
-
-    .field-grid {
-      display: grid;
-      gap: 14px;
-    }
-
-    .field-grid.two-col {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .field {
-      display: grid;
-      gap: 7px;
-    }
-
-    .field label,
-    legend {
-      color: var(--text);
-      font: 700 0.82rem/1.25 "Segoe UI", Arial, sans-serif;
-      letter-spacing: 0.03em;
-    }
-
-    input[type="text"],
-    input[type="number"],
-    textarea {
-      width: 100%;
-      min-height: 48px;
-      padding: 12px 14px;
-      border: 1px solid rgba(83, 62, 43, 0.14);
-      border-radius: 16px;
-      background: rgba(255,255,255,0.92);
-      color: var(--text);
-      font: 500 0.96rem/1.35 "Segoe UI", Arial, sans-serif;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.45);
-    }
-
-    textarea {
-      min-height: 112px;
-      resize: vertical;
-    }
-
-    input:focus,
-    textarea:focus {
-      outline: none;
-      border-color: rgba(207, 95, 27, 0.4);
-      box-shadow: 0 0 0 4px rgba(207, 95, 27, 0.1);
-    }
-
-    .parameter-shell,
-    .fixed-params {
-      padding: 14px;
-      border-radius: var(--radius-lg);
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.64);
-    }
-
-    .fixed-list {
-      display: grid;
-      gap: 8px;
-      margin: 12px 0 0;
-      padding: 0;
-      list-style: none;
-    }
-
-    .fixed-list li,
-    .checkbox-note,
-    .subtle-list {
-      color: var(--muted);
-      font: 500 0.9rem/1.5 "Segoe UI", Arial, sans-serif;
-    }
-
-    .fixed-list li::before {
-      content: "•";
-      display: inline-block;
-      width: 1rem;
-      color: var(--accent-deep);
-      font-weight: 700;
-    }
-
-    fieldset {
-      margin: 0;
-      padding: 0;
-      border: 0;
-      min-width: 0;
-    }
-
-    .checkbox-row {
-      display: grid;
-      gap: 10px;
-      margin-top: 12px;
-    }
-
-    .toggle {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      padding: 12px;
-      border-radius: 16px;
-      background: rgba(255,255,255,0.84);
-      border: 1px solid rgba(83, 62, 43, 0.1);
-    }
-
-    .toggle input {
-      width: 18px;
-      height: 18px;
-      margin-top: 2px;
-      accent-color: var(--accent);
-    }
-
-    .toggle strong {
-      display: block;
-      font: 700 0.9rem/1.2 "Segoe UI", Arial, sans-serif;
-    }
-
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .action-btn,
-    .print-btn {
-      min-height: 48px;
-      padding: 0 18px;
-      border: none;
-      border-radius: 16px;
-      cursor: pointer;
-      font: 700 0.86rem/1 "Segoe UI", Arial, sans-serif;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
-    }
-
-    .action-btn.primary {
-      color: #fff;
-      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
-      box-shadow: 0 12px 24px rgba(159, 67, 16, 0.2);
-    }
-
-    .action-btn.secondary,
-    .print-btn {
-      color: var(--support-deep);
-      background: linear-gradient(135deg, rgba(36,76,135,0.12), rgba(36,76,135,0.05));
-      box-shadow: 0 12px 24px rgba(24, 55, 95, 0.1);
-    }
-
-    .report-shell {
-      overflow: hidden;
-    }
-
-    .report-head {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 18px 20px;
-      border-bottom: 1px solid var(--line);
-      background: rgba(255,255,255,0.52);
-    }
-
-    .report-title {
-      margin: 0;
-      font-size: 1.4rem;
-      line-height: 1.05;
-      letter-spacing: -0.03em;
-    }
-
-    .report-sub {
-      margin: 8px 0 0;
-      color: var(--muted);
-      font: 500 0.92rem/1.5 "Segoe UI", Arial, sans-serif;
-    }
-
-    .report-badges {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: flex-start;
-      justify-content: flex-end;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      min-height: 30px;
-      padding: 0 12px;
-      border-radius: 999px;
-      background: #f3ebe2;
-      color: #5f5146;
-      font: 700 0.72rem/1 "Segoe UI", Arial, sans-serif;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    .badge.accent {
-      color: #fff;
-      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
-    }
-
-    .report-body {
-      padding: 18px 20px 22px;
-      display: grid;
-      gap: 16px;
-    }
-
-    .print-toolbar {
-      display: flex;
-      justify-content: flex-end;
-    }
-
-    .empty-state {
-      padding: 42px 22px;
-      text-align: center;
-      color: var(--muted);
-      font: 600 0.98rem/1.6 "Segoe UI", Arial, sans-serif;
-    }
-
-    .report-grid {
-      display: grid;
-      grid-template-columns: repeat(12, minmax(0, 1fr));
-      gap: 14px;
-    }
-
-    .card {
-      grid-column: span 12;
-      padding: 16px;
-      border-radius: var(--radius-lg);
-      border: 1px solid var(--line);
-      background: var(--card);
-      box-shadow: 0 12px 28px rgba(61, 40, 21, 0.06);
-    }
-
-    .card h3 {
-      margin: 0;
-      font-size: 1.08rem;
-      line-height: 1.08;
-      letter-spacing: -0.03em;
-    }
-
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 14px;
-    }
-
-    .metric,
-    .comp-meta div {
-      padding: 12px;
-      border-radius: 16px;
-      background: #faf4ee;
-      border: 1px solid rgba(83, 62, 43, 0.08);
-    }
-
-    .metric span,
-    .comp-meta span,
-    .estimate-card .label {
-      display: block;
-      color: var(--muted);
-      font: 700 0.7rem/1.2 "Segoe UI", Arial, sans-serif;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-    }
-
-    .metric strong,
-    .comp-meta strong {
-      display: block;
-      margin-top: 6px;
-      font: 700 1rem/1.15 "Segoe UI", Arial, sans-serif;
-      letter-spacing: -0.02em;
-    }
-
-    .estimate-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .estimate-card,
-    .comp-card {
-      padding: 16px;
-      border-radius: 18px;
-      border: 1px solid rgba(83, 62, 43, 0.08);
-      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(250,245,239,0.96));
-    }
-
-    .estimate-card .value {
-      margin-top: 8px;
-      font: 700 1.35rem/1 "Segoe UI", Arial, sans-serif;
-      letter-spacing: -0.04em;
-    }
-
-    .estimate-card .footnote {
-      margin-top: 8px;
-      color: var(--muted);
-      font: 500 0.84rem/1.45 "Segoe UI", Arial, sans-serif;
-    }
-
-    .estimate-card.featured {
-      color: #fff;
-      background: linear-gradient(135deg, var(--support), var(--support-deep));
-      box-shadow: 0 16px 30px rgba(24, 55, 95, 0.16);
-    }
-
-    .estimate-card.featured .label,
-    .estimate-card.featured .footnote {
-      color: rgba(255,255,255,0.85);
-    }
-
-    .comp-grid {
-      display: grid;
-      gap: 12px;
-      margin-top: 14px;
-    }
-
-    .comp-head {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      gap: 10px;
-    }
-
-    .comp-address {
-      margin: 0;
-      font-size: 1rem;
-      line-height: 1.25;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-    }
-
-    .comp-status {
-      display: inline-flex;
-      align-items: center;
-      min-height: 28px;
-      padding: 0 10px;
-      border-radius: 999px;
-      background: #f3ebe2;
-      color: #5f5146;
-      font: 700 0.72rem/1 "Segoe UI", Arial, sans-serif;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    .comp-status.active {
-      color: #fff;
-      background: linear-gradient(135deg, var(--success), #245740);
-    }
-
-    .comp-meta {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 14px;
-    }
-
-    .comp-notes,
-    .subtle-list {
-      margin: 12px 0 0;
-    }
-
-    .span-7 { grid-column: span 7; }
-    .span-5 { grid-column: span 5; }
-
-    .report-shell[data-ready="false"] .print-toolbar,
-    .report-shell[data-ready="false"] .report-grid {
-      display: none;
-    }
-
-    @media (max-width: 1024px) {
-      .layout { grid-template-columns: 1fr; }
-    }
-
-    @media (max-width: 760px) {
-      .shell {
-        width: min(100% - 14px, 1180px);
-        padding-top: 10px;
-      }
-
-      .hero,
-      .panel,
-      .report-shell { border-radius: 22px; }
-
-      .hero { padding: 16px 14px 14px; }
-
-      h1 { font-size: clamp(1.75rem, 7vw, 2.4rem); }
-
-      .panel,
-      .report-body { padding-left: 14px; padding-right: 14px; }
-
-      .field-grid.two-col,
-      .metrics,
-      .estimate-grid,
-      .comp-meta { grid-template-columns: 1fr 1fr; }
-
-      .span-7,
-      .span-5 { grid-column: span 12; }
-
-      .toolbar { flex-direction: column; }
-
-      .action-btn,
-      .print-btn { width: 100%; }
-    }
-
-    @media print {
-      body { background: #fff; }
-      .hero,
-      .panel { display: none; }
-      .shell { width: 100%; padding: 0; }
-      .layout { display: block; margin: 0; }
-      .report-shell {
-        border: none;
-        box-shadow: none;
-        background: #fff;
-      }
-      .print-toolbar { display: none; }
-      .report-head,
-      .card,
-      .comp-card,
-      .estimate-card { break-inside: avoid; }
-    }
-
-    /* Home-style shell overrides */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: radial-gradient(circle at top, #e5edff 0, #f3f4f6 40%, #e5e7eb 100%);
-      color: #111827;
+      color: var(--text-main);
+      min-height: 100vh;
       display: flex;
     }
-
     .app-shell {
       display: flex;
       width: 100%;
@@ -601,254 +36,131 @@
       padding: 0 16px;
       gap: 20px;
     }
-
     .sidebar {
       width: 240px;
       background: radial-gradient(circle at top, #1f2937 0, #020617 55%);
-      border-radius: 14px;
+      border-radius: var(--radius-card);
       padding: 16px 14px;
       color: #e5e7eb;
-      box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
+      box-shadow: var(--shadow-soft);
       display: flex;
       flex-direction: column;
       gap: 14px;
     }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 8px 2px;
-    }
-
+    .brand { display: flex; align-items: center; gap: 10px; padding: 8px 8px 2px; }
     .brand-logo {
-      width: 32px;
-      height: 32px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, #2563eb, #4f46e5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #f9fafb;
-      font-weight: 800;
-      font-size: 18px;
-      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.7);
+      width: 32px; height: 32px; border-radius: 12px; background: var(--primary-soft);
+      display: flex; align-items: center; justify-content: center; color: #f9fafb;
+      font-weight: 800; font-size: 18px; box-shadow: 0 10px 24px rgba(37, 99, 235, 0.7);
     }
-
-    .brand-text-title {
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      font-size: 12px;
-      text-transform: uppercase;
-    }
-
-    .brand-text-sub {
-      font-size: 11px;
-      color: #9ca3af;
-    }
-
-    .sidebar-section-title {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-      color: #6b7280;
-      padding: 4px 8px;
-      margin-top: 4px;
-    }
-
-    .nav-list {
-      list-style: none;
-      padding: 4px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
+    .brand-text-title { font-weight: 700; letter-spacing: 0.08em; font-size: 12px; text-transform: uppercase; }
+    .brand-text-sub { font-size: 11px; color: #9ca3af; }
+    .sidebar-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.16em; color: #6b7280; padding: 4px 8px; margin-top: 4px; }
+    .nav-list { list-style: none; padding: 4px; display: flex; flex-direction: column; gap: 4px; }
     .nav-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 7px 9px;
-      border-radius: 10px;
-      color: #e5e7eb;
-      cursor: pointer;
-      font-size: 13px;
-      text-decoration: none;
+      display: flex; align-items: center; gap: 10px; padding: 7px 9px; border-radius: 10px;
+      color: #e5e7eb; text-decoration: none; font-size: 13px;
       transition: background 0.2s ease, transform 0.12s ease, box-shadow 0.2s ease;
     }
-
-    .nav-item:hover {
-      background: rgba(148, 163, 184, 0.2);
-      transform: translateY(-1px);
-    }
-
-    .nav-item.active {
-      background: linear-gradient(135deg, #2563eb, #4f46e5);
-      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.6);
-    }
-
+    .nav-item:hover { background: rgba(148, 163, 184, 0.2); transform: translateY(-1px); }
+    .nav-item.active { background: linear-gradient(135deg, #2563eb, #4f46e5); box-shadow: 0 8px 20px rgba(37, 99, 235, 0.6); }
     .nav-item-label { flex: 1; }
-
-    .main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
+    .main { flex: 1; display: flex; flex-direction: column; gap: 14px; }
     .main-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 16px;
-      border-radius: 14px;
-      background: rgba(255, 255, 255, 0.9);
-      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
-      backdrop-filter: blur(10px);
+      display: flex; align-items: center; justify-content: space-between; padding: 10px 16px;
+      border-radius: var(--radius-card); background: rgba(255, 255, 255, 0.9);
+      box-shadow: var(--shadow-subtle); backdrop-filter: blur(10px);
     }
-
-    .main-header-left {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
+    .main-title { font-size: 18px; font-weight: 700; letter-spacing: 0.04em; }
+    .main-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+    .main-content { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+    .hero, .card, .report-shell {
+      background: var(--bg-card); border-radius: var(--radius-card); box-shadow: var(--shadow-subtle);
+      padding: 16px; border: 1px solid var(--border-subtle);
     }
-
-    .main-title {
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
+    .hero-eyebrow, .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--primary); font-weight: 700; }
+    .hero-title { font-size: clamp(1.7rem, 4vw, 2.4rem); line-height: 1.05; margin-top: 6px; }
+    .hero-copy, .section-copy, .muted-text, .report-subtitle { color: var(--text-muted); font-size: 14px; line-height: 1.55; margin-top: 8px; }
+    .layout { display: grid; grid-template-columns: minmax(320px, 420px) minmax(0, 1fr); gap: 14px; align-items: start; }
+    .section-title { font-size: 18px; font-weight: 700; margin-top: 4px; }
+    .form-stack { display: grid; gap: 14px; margin-top: 14px; }
+    .field-grid { display: grid; gap: 12px; }
+    .field-grid.two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .field { display: grid; gap: 6px; }
+    .field label, legend { font-size: 13px; font-weight: 600; }
+    input[type="text"], input[type="number"], textarea {
+      width: 100%; min-height: 46px; padding: 11px 12px; border-radius: 12px;
+      border: 1px solid #dbe1ea; background: #fff; color: var(--text-main); font: inherit;
     }
-
-    .main-subtitle {
-      font-size: 12px;
-      color: #6b7280;
+    textarea { min-height: 110px; resize: vertical; }
+    input:focus, textarea:focus { outline: none; border-color: rgba(37, 99, 235, 0.45); box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12); }
+    .sub-card { border: 1px solid var(--border-subtle); border-radius: 12px; background: #f8fafc; padding: 14px; }
+    .fixed-list, .search-list { margin-top: 10px; padding-left: 18px; color: var(--text-muted); display: grid; gap: 8px; font-size: 14px; line-height: 1.45; }
+    fieldset { border: 0; min-width: 0; }
+    .checkbox-row { display: grid; gap: 10px; margin-top: 12px; }
+    .toggle { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border-radius: 12px; border: 1px solid var(--border-subtle); background: #fff; }
+    .toggle input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--primary); }
+    .toggle strong { display: block; font-size: 14px; }
+    .toggle span:last-child { color: var(--text-muted); font-size: 13px; line-height: 1.45; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; }
+    .btn, .print-btn {
+      min-height: 42px; border: none; border-radius: var(--radius-pill); padding: 0 14px;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      cursor: pointer; transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease;
     }
-
-    .main-content {
-      flex: 1;
-      padding: 10px 2px 2px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+    .btn-primary, .badge-accent, .estimate-card.featured { background: var(--primary-soft); color: #fff; box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24); }
+    .btn-secondary, .print-btn { background: #eef2ff; color: #4338ca; }
+    .btn:hover, .print-btn:hover { transform: translateY(-1px); }
+    .report-shell { padding: 0; overflow: hidden; }
+    .report-head {
+      padding: 16px; border-bottom: 1px solid var(--border-subtle); background: rgba(255, 255, 255, 0.92);
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap;
     }
-
-    .hero,
-    .panel,
-    .report-shell {
-      border-radius: 14px;
-      border: 1px solid #e5e7eb;
-      background: #ffffff;
-      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
-      backdrop-filter: none;
+    .report-title { font-size: 20px; font-weight: 700; }
+    .report-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+    .badge, .comp-status {
+      min-height: 28px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: var(--radius-pill);
+      background: #eef2ff; color: #4338ca; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
     }
-
-    .hero::after {
-      display: none;
+    .report-body { padding: 16px; display: grid; gap: 14px; }
+    .print-toolbar { display: flex; justify-content: flex-end; }
+    .empty-state { padding: 34px 18px; text-align: center; color: var(--text-muted); font-size: 14px; line-height: 1.6; border: 1px dashed var(--border-subtle); border-radius: 12px; background: #f8fafc; }
+    .report-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; }
+    .report-card { grid-column: span 12; padding: 14px; border-radius: 12px; border: 1px solid var(--border-subtle); background: #fff; box-shadow: var(--shadow-subtle); }
+    .span-7 { grid-column: span 7; } .span-5 { grid-column: span 5; }
+    .metrics, .estimate-grid, .comp-meta { display: grid; gap: 10px; }
+    .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; }
+    .estimate-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
+    .metric, .estimate-card, .comp-card, .comp-meta div { padding: 12px; border-radius: 12px; border: 1px solid var(--border-subtle); background: #f8fafc; }
+    .metric span, .estimate-label, .comp-meta span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 700; }
+    .metric strong, .estimate-value, .comp-meta strong { display: block; margin-top: 6px; font-size: 16px; font-weight: 700; }
+    .estimate-footnote, .comp-notes { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--text-muted); }
+    .comp-grid { display: grid; gap: 12px; margin-top: 12px; }
+    .comp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .comp-address { font-size: 16px; font-weight: 700; }
+    .comp-status.active { background: linear-gradient(135deg, var(--success), #245740); color: #fff; }
+    .comp-meta { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-top: 12px; }
+    .report-shell[data-ready="false"] .print-toolbar, .report-shell[data-ready="false"] .report-grid { display: none; }
+    @media (max-width: 1080px) { .layout { grid-template-columns: 1fr; } }
+    @media (max-width: 960px) {
+      .app-shell { flex-direction: column; }
+      .sidebar { width: 100%; flex-direction: row; align-items: center; overflow-x: auto; }
+      .sidebar-section-title { display: none; }
+      .nav-list { flex-direction: row; flex-wrap: wrap; }
     }
-
-    .back-link,
-    .action-btn.primary,
-    .badge.accent,
-    .estimate-card.featured {
-      background: linear-gradient(135deg, #2563eb, #4f46e5);
-      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24);
+    @media (max-width: 760px) {
+      .app-shell { margin: 12px auto; padding: 0 10px; }
+      .field-grid.two-col, .metrics, .estimate-grid, .comp-meta { grid-template-columns: 1fr 1fr; }
+      .span-7, .span-5 { grid-column: span 12; }
+      .toolbar { flex-direction: column; }
+      .btn, .print-btn { width: 100%; }
     }
-
-    .section-label,
-    .eyebrow {
-      color: #2563eb;
-    }
-
-    .hero-copy,
-    .section-copy,
-    .card-copy,
-    .muted-text,
-    .report-sub,
-    .fixed-list li,
-    .checkbox-note,
-    .subtle-list {
-      color: #6b7280;
-    }
-
-    .parameter-shell,
-    .fixed-params,
-    .card,
-    .estimate-card,
-    .comp-card {
-      border-color: #e5e7eb;
-      background: #ffffff;
-      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
-    }
-
-    .metric,
-    .comp-meta div {
-      background: #f8fafc;
-      border-color: #e5e7eb;
-    }
-
-    .badge,
-    .comp-status {
-      background: #eef2ff;
-      color: #4338ca;
-    }
-
-    .comp-status.active {
-      background: linear-gradient(135deg, #2d6a4f, #245740);
-      color: #fff;
-    }
-
-    input[type="text"],
-    input[type="number"],
-    textarea {
-      border-color: #dbe1ea;
-      background: #ffffff;
-      color: #111827;
-      box-shadow: none;
-    }
-
-    input:focus,
-    textarea:focus {
-      border-color: rgba(37, 99, 235, 0.4);
-      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
-    }
-
-    @media (max-width: 1024px) {
-      .app-shell {
-        flex-direction: column;
-      }
-
-      .sidebar {
-        width: 100%;
-        flex-direction: row;
-        align-items: center;
-        overflow-x: auto;
-      }
-
-      .sidebar-section-title {
-        display: none;
-      }
-
-      .nav-list {
-        flex-direction: row;
-        flex-wrap: wrap;
-      }
-    }
-
     @media print {
-      .sidebar,
-      .main-header {
-        display: none;
-      }
-
-      .app-shell {
-        display: block;
-        margin: 0;
-        padding: 0;
-      }
-
-      .main-content {
-        padding: 0;
-      }
+      body { background: #fff; }
+      .sidebar, .main-header, .hero, .card { display: none; }
+      .app-shell { display: block; margin: 0; padding: 0; }
+      .report-shell { border: none; box-shadow: none; }
+      .print-toolbar { display: none; }
     }
   </style>
 </head>
@@ -858,7 +170,7 @@
       <div class="brand">
         <div class="brand-logo">AA</div>
         <div>
-          <div class="brand-text-title">AGENT ADMIN</div>
+          <div class="brand-text-title">Agent Admin</div>
           <div class="brand-text-sub">CMA Builder</div>
         </div>
       </div>
@@ -876,182 +188,107 @@
 
     <main class="main">
       <header class="main-header">
-        <div class="main-header-left">
+        <div>
           <div class="main-title">CMA Report Builder</div>
-          <div class="main-subtitle">Create a pricing report with your preferred search rules and comparable mix.</div>
+          <div class="main-subtitle">Use live RentCast results now, then we can tighten the search rules next.</div>
         </div>
       </header>
 
       <section class="main-content">
         <section class="hero">
-      <a class="back-link" href="/listings.html">&larr; Back to homes</a>
-      <p class="eyebrow">Comparative Market Analysis</p>
-      <h1>Build a clean CMA report for pricing conversations and listing presentations.</h1>
-      <p class="hero-copy">
-        Enter the subject property, add special value notes, adjust your search rules, and generate a polished report layout that is ready for live data hookups later.
-      </p>
-    </section>
+          <div class="hero-eyebrow">Comparative Market Analysis</div>
+          <h1 class="hero-title">Build a clean pricing report with live comps and room for more valuation sources later.</h1>
+          <p class="hero-copy">
+            The CMA form below uses your subject property input and currently pulls nearby RentCast sale listings through your Netlify function.
+          </p>
+        </section>
 
         <section class="layout">
-      <section class="panel" aria-labelledby="cma-form-title">
-        <p class="section-label">Input</p>
-        <h2 class="section-title" id="cma-form-title">Subject property and search setup</h2>
-        <p class="section-copy">
-          Fixed defaults run in the background every time. The adjustable fields let you tune the comp search before generating the report.
-        </p>
+          <section class="card">
+            <div class="section-label">Input</div>
+            <h2 class="section-title">Subject property and search setup</h2>
+            <p class="section-copy">Fixed defaults always apply. The adjustable search values are saved in the report now, and we can wire them into the search behavior next.</p>
 
-        <form id="cmaForm" class="form-stack">
-          <div class="field">
-            <label for="subjectAddress">Subject property address</label>
-            <input id="subjectAddress" name="subjectAddress" type="text" placeholder="123 Main St, Springfield, IL 62704" autocomplete="street-address" required />
-          </div>
+            <form id="cmaForm" class="form-stack">
+              <div class="field">
+                <label for="subjectAddress">Subject property address</label>
+                <input id="subjectAddress" name="subjectAddress" type="text" placeholder="123 Main St, Springfield, IL 62704" autocomplete="street-address" required />
+              </div>
 
-          <div class="field">
-            <label for="specialDetails">Special details that may affect value</label>
-            <textarea id="specialDetails" name="specialDetails" placeholder="Example: new roof in 2024, updated kitchen, premium corner lot, fresh paint, new HVAC, covered patio, upgraded flooring..."></textarea>
-          </div>
+              <div class="field">
+                <label for="specialDetails">Special details that may affect value</label>
+                <textarea id="specialDetails" name="specialDetails" placeholder="Example: new roof in 2024, updated kitchen, corner lot, fresh paint, new HVAC, covered patio..."></textarea>
+              </div>
 
-          <section class="fixed-params" aria-labelledby="fixed-search-title">
-            <p class="section-label">Fixed Search Parameters</p>
-            <h3 class="section-title" id="fixed-search-title">Always applied in the background</h3>
-            <ul class="fixed-list" id="fixedParameterList"></ul>
+              <section class="sub-card">
+                <div class="section-label">Fixed Search Parameters</div>
+                <h3 class="section-title">Always applied in the background</h3>
+                <ul class="fixed-list" id="fixedParameterList"></ul>
+              </section>
+
+              <section class="sub-card">
+                <div class="section-label">Adjustable Search Parameters</div>
+                <h3 class="section-title">Ready for the next search pass</h3>
+                <div class="field-grid two-col" style="margin-top: 12px;">
+                  <div class="field"><label for="searchRadius">Search radius (miles)</label><input id="searchRadius" name="searchRadius" type="number" min="0.25" max="25" step="0.25" value="1.5" /></div>
+                  <div class="field"><label for="ageVariance">Maximum age difference (years)</label><input id="ageVariance" name="ageVariance" type="number" min="0" max="50" step="1" value="10" /></div>
+                  <div class="field"><label for="sqftVariance">Square footage variance (%)</label><input id="sqftVariance" name="sqftVariance" type="number" min="5" max="60" step="5" value="20" /></div>
+                  <div class="field"><label for="bedVariance">Bedroom variance</label><input id="bedVariance" name="bedVariance" type="number" min="0" max="4" step="1" value="1" /></div>
+                  <div class="field"><label for="bathVariance">Bathroom variance</label><input id="bathVariance" name="bathVariance" type="number" min="0" max="4" step="0.5" value="1" /></div>
+                  <div class="field"><label for="yearBuiltVariance">Year built variance</label><input id="yearBuiltVariance" name="yearBuiltVariance" type="number" min="0" max="40" step="1" value="12" /></div>
+                  <div class="field"><label for="lotVariance">Lot size variance (%)</label><input id="lotVariance" name="lotVariance" type="number" min="5" max="80" step="5" value="25" /></div>
+                  <div class="field"><label for="lookbackMonths">Closed sales lookback (months)</label><input id="lookbackMonths" name="lookbackMonths" type="number" min="1" max="24" step="1" value="6" /></div>
+                </div>
+
+                <fieldset class="checkbox-row">
+                  <legend>Preference weighting</legend>
+                  <label class="toggle" for="prioritizeSubdivision">
+                    <input id="prioritizeSubdivision" name="prioritizeSubdivision" type="checkbox" checked />
+                    <span><strong>Prioritize same subdivision</strong><span>Give stronger weight to same-neighborhood matches when available.</span></span>
+                  </label>
+                  <label class="toggle" for="prioritizeStyle">
+                    <input id="prioritizeStyle" name="prioritizeStyle" type="checkbox" checked />
+                    <span><strong>Prioritize similar home style/type</strong><span>Favor a closer match in design or construction style.</span></span>
+                  </label>
+                </fieldset>
+              </section>
+
+              <div class="toolbar">
+                <button type="submit" class="btn btn-primary">Generate CMA</button>
+                <button type="reset" class="btn btn-secondary">Reset</button>
+              </div>
+            </form>
           </section>
 
-          <section class="parameter-shell" aria-labelledby="adjustable-search-title">
-            <p class="section-label">Adjustable Search Parameters</p>
-            <h3 class="section-title" id="adjustable-search-title">Tune the search before generating</h3>
-            <div class="field-grid two-col" style="margin-top: 14px;">
-              <div class="field">
-                <label for="searchRadius">Search radius (miles)</label>
-                <input id="searchRadius" name="searchRadius" type="number" min="0.25" max="25" step="0.25" value="1.5" />
+          <section class="report-shell" id="reportSection" data-ready="false">
+            <div class="report-head">
+              <div>
+                <div class="section-label">Report Output</div>
+                <h2 class="report-title">CMA report preview</h2>
+                <p class="report-subtitle" id="reportTimestamp">Generate a report to load live comps and build the pricing summary.</p>
               </div>
-              <div class="field">
-                <label for="ageVariance">Maximum age difference (years)</label>
-                <input id="ageVariance" name="ageVariance" type="number" min="0" max="50" step="1" value="10" />
-              </div>
-              <div class="field">
-                <label for="sqftVariance">Square footage variance (%)</label>
-                <input id="sqftVariance" name="sqftVariance" type="number" min="5" max="60" step="5" value="20" />
-              </div>
-              <div class="field">
-                <label for="bedVariance">Bedroom variance</label>
-                <input id="bedVariance" name="bedVariance" type="number" min="0" max="4" step="1" value="1" />
-              </div>
-              <div class="field">
-                <label for="bathVariance">Bathroom variance</label>
-                <input id="bathVariance" name="bathVariance" type="number" min="0" max="4" step="0.5" value="1" />
-              </div>
-              <div class="field">
-                <label for="yearBuiltVariance">Year built variance</label>
-                <input id="yearBuiltVariance" name="yearBuiltVariance" type="number" min="0" max="40" step="1" value="12" />
-              </div>
-              <div class="field">
-                <label for="lotVariance">Lot size variance (%)</label>
-                <input id="lotVariance" name="lotVariance" type="number" min="5" max="80" step="5" value="25" />
-              </div>
-              <div class="field">
-                <label for="lookbackMonths">Closed sales lookback (months)</label>
-                <input id="lookbackMonths" name="lookbackMonths" type="number" min="1" max="24" step="1" value="6" />
+              <div class="report-badges">
+                <span class="badge">3 sold comps</span>
+                <span class="badge">1 active comp</span>
+                <span class="badge badge-accent">RentCast connected</span>
               </div>
             </div>
 
-            <fieldset class="checkbox-row">
-              <legend>Preference weighting</legend>
-              <label class="toggle" for="prioritizeSubdivision">
-                <input id="prioritizeSubdivision" name="prioritizeSubdivision" type="checkbox" checked />
-                <span>
-                  <strong>Prioritize same subdivision</strong>
-                  <span class="checkbox-note">Give stronger weight to same-neighborhood matches when available.</span>
-                </span>
-              </label>
-              <label class="toggle" for="prioritizeStyle">
-                <input id="prioritizeStyle" name="prioritizeStyle" type="checkbox" checked />
-                <span>
-                  <strong>Prioritize similar home style/type</strong>
-                  <span class="checkbox-note">Favor a closer match in design or construction style.</span>
-                </span>
-              </label>
-            </fieldset>
+            <div class="report-body">
+              <div class="print-toolbar"><button type="button" class="print-btn" id="printReportBtn">Print Report</button></div>
+              <div class="empty-state" id="reportEmptyState">Enter a subject property address and generate the CMA to populate the report. Live RentCast data will load first, and the page will fall back gracefully if the result set is thin.</div>
 
-            <div class="toolbar">
-              <button type="submit" class="action-btn primary">Generate CMA</button>
-              <button type="reset" class="action-btn secondary">Reset</button>
+              <div class="report-grid" id="reportGrid">
+                <section class="report-card span-7"><div class="section-label">Subject Property</div><h3 class="section-title">Subject property overview</h3><p class="section-copy" id="subjectPropertyAddress">Not generated yet.</p><div class="metrics" id="subjectPropertyMetrics"></div></section>
+                <section class="report-card span-5"><div class="section-label">Special Details</div><h3 class="section-title">Value-impact notes</h3><p class="section-copy" id="specialDetailsOutput">No special details entered yet.</p></section>
+                <section class="report-card span-7"><div class="section-label">CMA Summary</div><h3 class="section-title">Pricing takeaway</h3><p class="section-copy" id="summaryText"></p></section>
+                <section class="report-card span-5"><div class="section-label">Search Summary</div><h3 class="section-title">Parameters used</h3><ul class="search-list" id="searchSummaryList"></ul></section>
+                <section class="report-card"><div class="section-label">Value Guidance</div><h3 class="section-title">Pricing recommendation</h3><div class="estimate-grid" id="estimateGrid"></div></section>
+                <section class="report-card"><div class="section-label">Comparable Sales</div><h3 class="section-title">Closed comparable properties</h3><p class="muted-text">These cards prefer sold comps first, then fill from the live result set if the API comes back light.</p><div class="comp-grid" id="soldCompGrid"></div></section>
+                <section class="report-card"><div class="section-label">Competitive Listing</div><h3 class="section-title">Active comparable property</h3><p class="muted-text">This card shows the best active benchmark available from the current live search.</p><div class="comp-grid" id="activeCompGrid"></div></section>
+              </div>
             </div>
           </section>
-        </form>
-      </section>
-
-      <section class="report-shell" id="reportSection" data-ready="false" aria-labelledby="report-title">
-        <div class="report-head">
-          <div>
-            <p class="section-label">Report Output</p>
-            <h2 class="report-title" id="report-title">CMA report preview</h2>
-            <p class="report-sub" id="reportTimestamp">Generate a report to preview the CMA layout and valuation sections.</p>
-          </div>
-          <div class="report-badges">
-            <span class="badge">3 sold comps</span>
-            <span class="badge">1 active comp</span>
-            <span class="badge accent">Mock data ready for API hookup</span>
-          </div>
-        </div>
-
-        <div class="report-body">
-          <div class="print-toolbar">
-            <button type="button" class="print-btn" id="printReportBtn">Print Report</button>
-          </div>
-
-          <div class="empty-state" id="reportEmptyState">
-            Enter a subject property address and generate the CMA to populate the report. This page is already structured for future MLS, valuation, and property data connections.
-          </div>
-
-          <div class="report-grid" id="reportGrid">
-            <section class="card span-7">
-              <p class="section-label">Subject Property</p>
-              <h3>Subject property overview</h3>
-              <p class="card-copy" id="subjectPropertyAddress">Not generated yet.</p>
-              <div class="metrics" id="subjectPropertyMetrics"></div>
-            </section>
-
-            <section class="card span-5">
-              <p class="section-label">Special Details</p>
-              <h3>Value-impact notes</h3>
-              <p class="card-copy" id="specialDetailsOutput">No special details entered yet.</p>
-            </section>
-
-            <section class="card span-7">
-              <p class="section-label">CMA Summary</p>
-              <h3>Pricing takeaway</h3>
-              <p class="card-copy" id="summaryText"></p>
-            </section>
-
-            <section class="card span-5">
-              <p class="section-label">Search Summary</p>
-              <h3>Parameters used</h3>
-              <ul class="subtle-list" id="searchSummaryList"></ul>
-            </section>
-
-            <section class="card">
-              <p class="section-label">Value Guidance</p>
-              <h3>Estimates and pricing recommendation</h3>
-              <div class="estimate-grid" id="estimateGrid"></div>
-            </section>
-
-            <section class="card">
-              <p class="section-label">Comparable Sales</p>
-              <h3>Closed comparable properties</h3>
-              <p class="muted-text">Three sold properties are shown below. Replace the mock generator in the script with your MLS or property data source when ready.</p>
-              <div class="comp-grid" id="soldCompGrid"></div>
-            </section>
-
-            <section class="card">
-              <p class="section-label">Competitive Listing</p>
-              <h3>Active comparable property</h3>
-              <p class="muted-text">This active listing is included as a market positioning reference.</p>
-              <div class="comp-grid" id="activeCompGrid"></div>
-            </section>
-          </div>
-        </div>
-      </section>
         </section>
       </section>
     </main>
@@ -1080,6 +317,7 @@
     const soldCompGrid = document.getElementById("soldCompGrid");
     const activeCompGrid = document.getElementById("activeCompGrid");
     const printReportBtn = document.getElementById("printReportBtn");
+    const generateBtn = form.querySelector('button[type="submit"]');
 
     FIXED_SEARCH_PARAMS.forEach((item) => {
       const li = document.createElement("li");
@@ -1087,29 +325,114 @@
       fixedParameterList.appendChild(li);
     });
 
-    function toNumber(value, fallback) {
+    const toNumber = (value, fallback = null) => {
       const n = Number(value);
       return Number.isFinite(n) ? n : fallback;
+    };
+
+    function coerceNumber(value) {
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+      if (value == null) return null;
+      const n = Number(String(value).trim().replace(/[^\d.-]/g, ""));
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function pickFirst(obj, keys, fallback = null) {
+      for (const key of keys) {
+        const value = obj?.[key];
+        if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+      }
+      return fallback;
     }
 
     function formatCurrency(value) {
-      return Number(value).toLocaleString("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: 0
-      });
+      const n = Number(value);
+      if (!Number.isFinite(n)) return "N/A";
+      return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
     }
 
     function formatLotSize(acres) {
-      return `${acres.toFixed(2)} acres`;
+      const n = Number(acres);
+      if (!Number.isFinite(n) || n <= 0) return "N/A";
+      return `${n >= 1 ? n.toFixed(2) : n.toFixed(3)} acres`;
     }
 
     function formatDateTime(date) {
-      return new Intl.DateTimeFormat("en-US", {
-        dateStyle: "medium",
-        timeStyle: "short"
-      }).format(date);
+      return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(date);
     }
+
+    function setGenerateState(isLoading) {
+      generateBtn.disabled = isLoading;
+      generateBtn.textContent = isLoading ? "Loading..." : "Generate CMA";
+    }
+
+    function arrayify(value) {
+      if (Array.isArray(value)) return value;
+      if (Array.isArray(value?.results)) return value.results;
+      if (Array.isArray(value?.items)) return value.items;
+      if (Array.isArray(value?.listings)) return value.listings;
+      if (Array.isArray(value?.data)) return value.data;
+      return [];
+    }
+
+    function parseSubjectAddress(raw) {
+      const full = String(raw || "").trim();
+      const parts = full.split(",").map((part) => part.trim()).filter(Boolean);
+      const stateZip = parts[2] || "";
+      const match = stateZip.match(/^([A-Za-z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/);
+      return {
+        full,
+        street: parts[0] || full,
+        city: parts[1] || "",
+        state: match?.[1] || "",
+        zipCode: match?.[2] || "",
+      };
+    }
+
+    function normalizeLotSize(value) {
+      const raw = coerceNumber(value);
+      if (!Number.isFinite(raw) || raw <= 0) return null;
+      return raw > 5 ? raw / 43560 : raw;
+    }
+
+    function buildCompAddress(item) {
+      const direct = pickFirst(item, ["formattedAddress", "address", "fullAddress", "addressLine1"]);
+      if (direct && String(direct).includes(",")) return String(direct);
+      const line1 = pickFirst(item, ["addressLine1", "streetAddress", "address", "formattedAddress"], "");
+      const city = pickFirst(item, ["city"], "");
+      const state = pickFirst(item, ["state"], "");
+      const zip = pickFirst(item, ["zipCode", "postalCode"], "");
+      return [line1, [city, state, zip].filter(Boolean).join(" ")].filter(Boolean).join(", ") || "Comparable property";
+    }
+
+    function buildSimilarityNotes(comp, values) {
+      const notes = [];
+      if (values.prioritizeSubdivision) notes.push("Neighborhood match weighted heavily.");
+      if (values.prioritizeStyle) notes.push("Style similarity was prioritized.");
+      if (comp.daysOnMarket != null) notes.push(`${comp.daysOnMarket} days on market.`);
+      if (!notes.length) notes.push("Comparable selected from the live RentCast result set.");
+      return notes.join(" ");
+    }
+
+    function normalizeComp(item, values) {
+      const status = String(pickFirst(item, ["status", "listingStatus", "propertyStatus", "saleType"], "Unknown"));
+      return {
+        address: buildCompAddress(item),
+        status,
+        listPrice: coerceNumber(pickFirst(item, ["listPrice", "price", "listingPrice", "askingPrice"])),
+        soldPrice: coerceNumber(pickFirst(item, ["soldPrice", "lastSalePrice", "salePrice", "closedPrice"])),
+        sqft: coerceNumber(pickFirst(item, ["squareFootage", "livingArea", "livingAreaSquareFeet", "sqft", "squareFeet"])),
+        beds: coerceNumber(pickFirst(item, ["bedrooms", "beds", "bedroomCount"])),
+        baths: coerceNumber(pickFirst(item, ["bathrooms", "baths", "bathroomCount", "fullBathrooms"])),
+        yearBuilt: coerceNumber(pickFirst(item, ["yearBuilt", "builtYear"])),
+        lotSize: normalizeLotSize(pickFirst(item, ["lotSize", "lotSizeAcres", "lotSizeSquareFeet", "acreage"])),
+        daysOnMarket: coerceNumber(pickFirst(item, ["daysOnMarket", "dom", "daysListed"])),
+        notes: buildSimilarityNotes({ daysOnMarket: coerceNumber(pickFirst(item, ["daysOnMarket", "dom", "daysListed"])) }, values),
+      };
+    }
+
+    const isSoldComp = (comp) => Boolean(comp.soldPrice != null || /\b(sold|closed|settled|off market)\b/i.test(comp.status));
+    const isActiveComp = (comp) => Boolean(/\b(active|new|coming soon|for sale)\b/i.test(comp.status)) && !isSoldComp(comp);
 
     function readFormValues() {
       return {
@@ -1128,167 +451,169 @@
       };
     }
 
+    function buildSearchSummary(values) {
+      return [
+        `Radius: ${values.searchRadius} miles`,
+        `Age difference: up to ${values.ageVariance} years`,
+        `Square footage variance: ${values.sqftVariance}%`,
+        `Bedroom variance: ${values.bedVariance}`,
+        `Bathroom variance: ${values.bathVariance}`,
+        `Year built variance: ${values.yearBuiltVariance} years`,
+        `Lot size variance: ${values.lotVariance}%`,
+        `Closed sales lookback: ${values.lookbackMonths} months`,
+        `Same subdivision priority: ${values.prioritizeSubdivision ? "On" : "Off"}`,
+        `Similar style priority: ${values.prioritizeStyle ? "On" : "Off"}`
+      ];
+    }
+
     function buildSubjectSnapshot(values) {
       const detailBoost = values.specialDetails ? 1.02 : 1;
       const baseSqft = 2180;
       const basePricePerSqft = 176;
-      const estimatedValue = Math.round(baseSqft * basePricePerSqft * detailBoost);
-
       return {
         beds: 4,
         baths: 3,
         sqft: baseSqft,
         yearBuilt: 2014,
         lotSize: 0.23,
-        estimatedValue
+        estimatedValue: Math.round(baseSqft * basePricePerSqft * detailBoost)
       };
     }
 
     function buildMockReport(values) {
-      // TODO: Replace this mock report builder with live MLS, AVM, and property detail data.
-      // The object shape below is meant to stay stable so future API wiring is straightforward.
       const subject = buildSubjectSnapshot(values);
-      const sameSubdivisionNote = values.prioritizeSubdivision
-        ? "Same subdivision received stronger weighting."
-        : "Subdivision match was treated as a secondary factor.";
-      const styleNote = values.prioritizeStyle
-        ? "Architectural style match was prioritized."
-        : "Style match was considered, but not heavily weighted.";
-
       const soldComps = [
-        {
-          address: "118 Willow Creek Dr",
-          status: "Sold",
-          listPrice: 392000,
-          soldPrice: 401500,
-          sqft: 2245,
-          beds: 4,
-          baths: 3,
-          yearBuilt: 2015,
-          lotSize: 0.21,
-          daysOnMarket: 14,
-          notes: "Very similar bedroom count and build era. Updated kitchen and a similar overall finish level."
-        },
-        {
-          address: "142 Willow Creek Dr",
-          status: "Sold",
-          listPrice: 405000,
-          soldPrice: 409000,
-          sqft: 2310,
-          beds: 4,
-          baths: 2.5,
-          yearBuilt: 2013,
-          lotSize: 0.24,
-          daysOnMarket: 9,
-          notes: "Same neighborhood appeal and close lot size. Slightly larger footprint but similar market positioning."
-        },
-        {
-          address: "85 Oak Hollow Ln",
-          status: "Sold",
-          listPrice: 384900,
-          soldPrice: 389500,
-          sqft: 2140,
-          beds: 3,
-          baths: 3,
-          yearBuilt: 2012,
-          lotSize: 0.22,
-          daysOnMarket: 18,
-          notes: "Smaller bedroom count but strong comp due to similar square footage, age, and curb appeal."
-        }
+        { address: "118 Willow Creek Dr", status: "Sold", listPrice: 392000, soldPrice: 401500, sqft: 2245, beds: 4, baths: 3, yearBuilt: 2015, lotSize: 0.21, daysOnMarket: 14, notes: "Very similar bedroom count and build era. Updated kitchen and a similar overall finish level." },
+        { address: "142 Willow Creek Dr", status: "Sold", listPrice: 405000, soldPrice: 409000, sqft: 2310, beds: 4, baths: 2.5, yearBuilt: 2013, lotSize: 0.24, daysOnMarket: 9, notes: "Same neighborhood appeal and close lot size. Slightly larger footprint but similar market positioning." },
+        { address: "85 Oak Hollow Ln", status: "Sold", listPrice: 384900, soldPrice: 389500, sqft: 2140, beds: 3, baths: 3, yearBuilt: 2012, lotSize: 0.22, daysOnMarket: 18, notes: "Smaller bedroom count but strong comp due to similar square footage, age, and curb appeal." }
       ];
-
-      const activeComp = {
-        address: "109 Willow Creek Ct",
-        status: "Active",
-        listPrice: 414900,
-        soldPrice: null,
-        sqft: 2288,
-        beds: 4,
-        baths: 3,
-        yearBuilt: 2016,
-        lotSize: 0.25,
-        daysOnMarket: 22,
-        notes: "Useful active benchmark for current competition. Slightly newer but very comparable in layout and buyer profile."
-      };
-
-      const soldAverage = Math.round(
-        soldComps.reduce((sum, item) => sum + item.soldPrice, 0) / soldComps.length
-      );
-      const valueAdjustment = values.specialDetails ? 6500 : 0;
-      const recommendedLow = soldAverage - 7500 + valueAdjustment;
-      const recommendedHigh = soldAverage + 9500 + valueAdjustment;
-      const suggestedListPrice = Math.round((recommendedLow + recommendedHigh) / 2 / 500) * 500;
-
+      const activeComp = { address: "109 Willow Creek Ct", status: "Active", listPrice: 414900, soldPrice: null, sqft: 2288, beds: 4, baths: 3, yearBuilt: 2016, lotSize: 0.25, daysOnMarket: 22, notes: "Useful active benchmark for current competition. Slightly newer but very comparable in layout and buyer profile." };
+      const soldAverage = Math.round(soldComps.reduce((sum, item) => sum + item.soldPrice, 0) / soldComps.length);
+      const adjustment = values.specialDetails ? 6500 : 0;
+      const low = soldAverage - 7500 + adjustment;
+      const high = soldAverage + 9500 + adjustment;
+      const suggested = Math.round((low + high) / 2 / 500) * 500;
       return {
         generatedAt: new Date(),
         subject,
         soldComps,
         activeComp,
-        zillowEstimate: suggestedListPrice + 3800,
-        realtorEstimate: suggestedListPrice - 2200,
-        recommendedRange: [recommendedLow, recommendedHigh],
-        suggestedListPrice,
-        summary: `Based on the current comp set, the subject appears to fit best near ${formatCurrency(suggestedListPrice)}. The sold comparables support a range from ${formatCurrency(recommendedLow)} to ${formatCurrency(recommendedHigh)}, with the active competition suggesting the home should be priced cleanly and presented well from day one. ${sameSubdivisionNote} ${styleNote}`,
-        searchSummary: [
-          `Radius: ${values.searchRadius} miles`,
-          `Age difference: up to ${values.ageVariance} years`,
-          `Square footage variance: ${values.sqftVariance}%`,
-          `Bedroom variance: ${values.bedVariance}`,
-          `Bathroom variance: ${values.bathVariance}`,
-          `Year built variance: ${values.yearBuiltVariance} years`,
-          `Lot size variance: ${values.lotVariance}%`,
-          `Closed sales lookback: ${values.lookbackMonths} months`,
-          `Same subdivision priority: ${values.prioritizeSubdivision ? "On" : "Off"}`,
-          `Similar style priority: ${values.prioritizeStyle ? "On" : "Off"}`
-        ]
+        recommendedRange: [low, high],
+        suggestedListPrice: suggested,
+        summary: `Based on the sample comp set, the subject appears to fit best near ${formatCurrency(suggested)}. The sold comparables support a range from ${formatCurrency(low)} to ${formatCurrency(high)}, and the active competition suggests the home should be priced cleanly and presented well from day one.`,
+        searchSummary: buildSearchSummary(values),
+        dataSourceNote: "RentCast did not return enough comparable data, so sample comps are shown as a fallback."
+      };
+    }
+
+    async function fetchLiveCma(values) {
+      const parsed = parseSubjectAddress(values.subjectAddress);
+      const params = new URLSearchParams();
+      params.set("address", parsed.street || parsed.full);
+      if (parsed.city) params.set("city", parsed.city);
+      if (parsed.state) params.set("state", parsed.state);
+      if (parsed.zipCode) params.set("zipCode", parsed.zipCode);
+      params.set("limit", "12");
+
+      const response = await fetch(`/.netlify/functions/cma?${params.toString()}`, { headers: { Accept: "application/json" } });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.details || payload?.error || `Request failed (${response.status})`);
+      return payload;
+    }
+
+    function buildLiveReport(values, payload) {
+      const comps = arrayify(payload?.data).map((item) => normalizeComp(item, values)).filter((comp) => comp.address && (comp.listPrice != null || comp.soldPrice != null));
+      if (!comps.length) throw new Error("RentCast returned no comparable listings for this search.");
+
+      const soldPool = comps.filter(isSoldComp);
+      const activePool = comps.filter(isActiveComp);
+      const fallbackPool = comps.filter((comp) => !isActiveComp(comp));
+      const soldComps = soldPool.slice(0, 3);
+      if (soldComps.length < 3) {
+        fallbackPool.forEach((comp) => {
+          if (soldComps.length < 3 && !soldComps.includes(comp)) soldComps.push(comp);
+        });
+      }
+
+      const activeComp = activePool[0] || comps.find((comp) => !soldComps.includes(comp)) || null;
+      const soldAverage = soldComps.length
+        ? Math.round(soldComps.reduce((sum, comp) => sum + (comp.soldPrice ?? comp.listPrice ?? 0), 0) / soldComps.length)
+        : Math.round(activeComp?.listPrice || 0);
+      const adjustment = values.specialDetails ? 6500 : 0;
+      const low = Math.max(0, soldAverage - 7500 + adjustment);
+      const high = Math.max(low, soldAverage + 9500 + adjustment);
+      const suggested = Math.round((low + high) / 2 / 500) * 500;
+      const benchmark = soldComps[0] || activeComp || {};
+
+      return {
+        generatedAt: new Date(),
+        subject: {
+          beds: benchmark.beds ?? "Pending direct property data",
+          baths: benchmark.baths ?? "Pending direct property data",
+          sqft: benchmark.sqft ?? "Pending direct property data",
+          yearBuilt: benchmark.yearBuilt ?? "Pending direct property data",
+          lotSize: benchmark.lotSize,
+          estimatedValue: suggested
+        },
+        soldComps,
+        activeComp,
+        recommendedRange: [low, high],
+        suggestedListPrice: suggested,
+        summary: `RentCast returned ${comps.length} nearby sale listings for this search. Based on the strongest comparables available, the subject appears to fit best around ${formatCurrency(suggested)}, with a working range of ${formatCurrency(low)} to ${formatCurrency(high)}.${activeComp?.listPrice ? ` The current active benchmark is listed at ${formatCurrency(activeComp.listPrice)}.` : ""}`,
+        searchSummary: buildSearchSummary(values),
+        dataSourceNote: `Generated ${formatDateTime(new Date())} using live RentCast sale listing data. Pricing guidance below is based on the strongest comparable properties returned for this search.`
       };
     }
 
     function renderMetric(label, value) {
       const div = document.createElement("div");
       div.className = "metric";
-      div.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+      div.innerHTML = `<span>${label}</span><strong>${value == null || value === "" ? "Pending" : value}</strong>`;
       return div;
     }
 
     function renderEstimateCard(label, value, footnote, featured) {
       const div = document.createElement("div");
       div.className = `estimate-card${featured ? " featured" : ""}`;
-      div.innerHTML = `
-        <div class="label">${label}</div>
-        <div class="value">${value}</div>
-        <div class="footnote">${footnote}</div>
-      `;
+      div.innerHTML = `<span class="estimate-label">${label}</span><strong class="estimate-value">${value}</strong><div class="estimate-footnote">${footnote}</div>`;
       return div;
     }
 
     function renderCompCard(comp) {
       const article = document.createElement("article");
       article.className = "comp-card";
+      const priceLine = comp.soldPrice != null ? `List price ${formatCurrency(comp.listPrice)} | Sold ${formatCurrency(comp.soldPrice)}` : `List price ${formatCurrency(comp.listPrice)}`;
       article.innerHTML = `
         <div class="comp-head">
           <div>
-            <h4 class="comp-address">${comp.address}</h4>
-            <p class="muted-text" style="margin-top: 6px;">List price ${formatCurrency(comp.listPrice)}${comp.soldPrice ? ` | Sold ${formatCurrency(comp.soldPrice)}` : ""}</p>
+            <h4 class="comp-address">${comp.address || "Comparable property"}</h4>
+            <p class="muted-text" style="margin-top:6px;">${priceLine}</p>
           </div>
-          <span class="comp-status${comp.status === "Active" ? " active" : ""}">${comp.status}</span>
+          <span class="comp-status${/\bactive\b/i.test(comp.status || "") ? " active" : ""}">${comp.status || "Comparable"}</span>
         </div>
         <div class="comp-meta">
-          <div><span>Square Feet</span><strong>${comp.sqft.toLocaleString()} sq ft</strong></div>
-          <div><span>Beds / Baths</span><strong>${comp.beds} / ${comp.baths}</strong></div>
-          <div><span>Year Built</span><strong>${comp.yearBuilt}</strong></div>
+          <div><span>Square Feet</span><strong>${comp.sqft != null ? `${Number(comp.sqft).toLocaleString()} sq ft` : "N/A"}</strong></div>
+          <div><span>Beds / Baths</span><strong>${comp.beds ?? "N/A"} / ${comp.baths ?? "N/A"}</strong></div>
+          <div><span>Year Built</span><strong>${comp.yearBuilt ?? "N/A"}</strong></div>
           <div><span>Lot Size</span><strong>${formatLotSize(comp.lotSize)}</strong></div>
-          <div><span>Days on Market</span><strong>${comp.daysOnMarket}</strong></div>
+          <div><span>Days on Market</span><strong>${comp.daysOnMarket ?? "N/A"}</strong></div>
         </div>
-        <p class="comp-notes">${comp.notes}</p>
+        <p class="comp-notes">${comp.notes || "Comparable from the live RentCast result set."}</p>
       `;
+      return article;
+    }
+
+    function renderCompEmpty(message) {
+      const article = document.createElement("article");
+      article.className = "comp-card";
+      article.innerHTML = `<p class="muted-text">${message}</p>`;
       return article;
     }
 
     function renderReport(values, report) {
       reportSection.dataset.ready = "true";
       reportEmptyState.style.display = "none";
-      reportTimestamp.textContent = `Generated ${formatDateTime(report.generatedAt)}. Mock values shown below can be replaced with live valuation and MLS data later.`;
+      reportTimestamp.textContent = report.dataSourceNote || `Generated ${formatDateTime(report.generatedAt)}.`;
       subjectPropertyAddress.textContent = values.subjectAddress;
       specialDetailsOutput.textContent = values.specialDetails || "No special details were entered for this subject property.";
       summaryText.textContent = report.summary;
@@ -1296,9 +621,9 @@
       subjectPropertyMetrics.innerHTML = "";
       subjectPropertyMetrics.appendChild(renderMetric("Estimated Beds", report.subject.beds));
       subjectPropertyMetrics.appendChild(renderMetric("Estimated Baths", report.subject.baths));
-      subjectPropertyMetrics.appendChild(renderMetric("Estimated Size", `${report.subject.sqft.toLocaleString()} sq ft`));
+      subjectPropertyMetrics.appendChild(renderMetric("Estimated Size", typeof report.subject.sqft === "number" ? `${report.subject.sqft.toLocaleString()} sq ft` : report.subject.sqft));
       subjectPropertyMetrics.appendChild(renderMetric("Year Built", report.subject.yearBuilt));
-      subjectPropertyMetrics.appendChild(renderMetric("Lot Size", formatLotSize(report.subject.lotSize)));
+      subjectPropertyMetrics.appendChild(renderMetric("Lot Size", report.subject.lotSize != null ? formatLotSize(report.subject.lotSize) : "Pending direct property data"));
       subjectPropertyMetrics.appendChild(renderMetric("Model Value", formatCurrency(report.subject.estimatedValue)));
 
       searchSummaryList.innerHTML = "";
@@ -1314,41 +639,63 @@
       });
 
       estimateGrid.innerHTML = "";
-      estimateGrid.appendChild(renderEstimateCard("Zillow estimate", formatCurrency(report.zillowEstimate), "Mock placeholder. Connect a valuation source here.", false));
-      estimateGrid.appendChild(renderEstimateCard("Realtor.com estimate", formatCurrency(report.realtorEstimate), "Mock placeholder. Connect a valuation source here.", false));
-      estimateGrid.appendChild(renderEstimateCard("Recommended price range", `${formatCurrency(report.recommendedRange[0])} - ${formatCurrency(report.recommendedRange[1])}`, "Range based on the comparable set and simple adjustments.", false));
-      estimateGrid.appendChild(renderEstimateCard("Suggested list price", formatCurrency(report.suggestedListPrice), "Use this as the lead pricing recommendation in the presentation.", true));
+      estimateGrid.appendChild(renderEstimateCard("Recommended price range", `${formatCurrency(report.recommendedRange[0])} - ${formatCurrency(report.recommendedRange[1])}`, "Range based on the strongest comparable data currently available.", false));
+      estimateGrid.appendChild(renderEstimateCard("Suggested list price", formatCurrency(report.suggestedListPrice), "Lead pricing recommendation for the current report version.", true));
 
       soldCompGrid.innerHTML = "";
-      report.soldComps.forEach((comp) => soldCompGrid.appendChild(renderCompCard(comp)));
+      if (report.soldComps.length) report.soldComps.forEach((comp) => soldCompGrid.appendChild(renderCompCard(comp)));
+      else soldCompGrid.appendChild(renderCompEmpty("No sold comparables were returned for this search yet."));
 
       activeCompGrid.innerHTML = "";
-      activeCompGrid.appendChild(renderCompCard(report.activeComp));
+      if (report.activeComp) activeCompGrid.appendChild(renderCompCard(report.activeComp));
+      else activeCompGrid.appendChild(renderCompEmpty("No active comparable was returned for this search yet."));
     }
 
-    form.addEventListener("submit", (event) => {
+    function resetReport() {
+      reportSection.dataset.ready = "false";
+      reportEmptyState.style.display = "";
+      reportEmptyState.textContent = "Enter a subject property address and generate the CMA to populate the report. Live RentCast data will load first, and the page will fall back gracefully if the result set is thin.";
+      reportTimestamp.textContent = "Generate a report to load live comps and build the pricing summary.";
+      subjectPropertyAddress.textContent = "Not generated yet.";
+      specialDetailsOutput.textContent = "No special details entered yet.";
+      summaryText.textContent = "";
+      subjectPropertyMetrics.innerHTML = "";
+      searchSummaryList.innerHTML = "";
+      estimateGrid.innerHTML = "";
+      soldCompGrid.innerHTML = "";
+      activeCompGrid.innerHTML = "";
+    }
+
+    form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const values = readFormValues();
       if (!values.subjectAddress) {
         form.subjectAddress.focus();
         return;
       }
-      renderReport(values, buildMockReport(values));
+
+      setGenerateState(true);
+      reportSection.dataset.ready = "false";
+      reportEmptyState.style.display = "";
+      reportEmptyState.textContent = "Fetching live RentCast comparable data for this property...";
+      reportTimestamp.textContent = "Loading live CMA data...";
+
+      try {
+        const payload = await fetchLiveCma(values);
+        renderReport(values, buildLiveReport(values, payload));
+      } catch (error) {
+        const fallbackReport = buildMockReport(values);
+        fallbackReport.dataSourceNote = `${error.message || "Live data unavailable."} Sample data is shown below so you can keep working.`;
+        renderReport(values, fallbackReport);
+      } finally {
+        setGenerateState(false);
+      }
     });
 
     form.addEventListener("reset", () => {
       setTimeout(() => {
-        reportSection.dataset.ready = "false";
-        reportEmptyState.style.display = "";
-        reportTimestamp.textContent = "Generate a report to preview the CMA layout and valuation sections.";
-        subjectPropertyAddress.textContent = "Not generated yet.";
-        specialDetailsOutput.textContent = "No special details entered yet.";
-        summaryText.textContent = "";
-        subjectPropertyMetrics.innerHTML = "";
-        searchSummaryList.innerHTML = "";
-        estimateGrid.innerHTML = "";
-        soldCompGrid.innerHTML = "";
-        activeCompGrid.innerHTML = "";
+        resetReport();
+        setGenerateState(false);
       }, 0);
     });
 

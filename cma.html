@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>CMA Report Builder</title>
+  <style>
+    :root {
+      --bg: #f7f2eb;
+      --panel: rgba(255, 255, 255, 0.86);
+      --card: rgba(255, 252, 247, 0.96);
+      --line: rgba(58, 42, 29, 0.11);
+      --text: #1f1b18;
+      --muted: #6c625a;
+      --accent: #cf5f1b;
+      --accent-deep: #9f4310;
+      --support: #244c87;
+      --support-deep: #17385d;
+      --success: #2d6a4f;
+      --shadow: 0 24px 60px rgba(61, 40, 21, 0.12);
+      --radius-xl: 28px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      min-height: 100%;
+      margin: 0;
+    }
+
+    body {
+      color: var(--text);
+      font-family: Georgia, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at top left, rgba(207, 95, 27, 0.16), transparent 26rem),
+        linear-gradient(180deg, #f8f4ee 0%, #efe7dc 54%, #f7f1e9 100%);
+    }
+
+    .shell {
+      width: min(1180px, calc(100% - 24px));
+      margin: 0 auto;
+      padding: 18px 0 28px;
+    }
+
+    .hero,
+    .panel,
+    .report-shell {
+      border-radius: var(--radius-xl);
+      border: 1px solid rgba(255, 255, 255, 0.56);
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.9), rgba(255,250,244,0.76)),
+        rgba(255,255,255,0.76);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 20px 20px 18px;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -6rem;
+      bottom: -7rem;
+      width: 15rem;
+      height: 15rem;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(207,95,27,0.18), transparent 68%);
+      pointer-events: none;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+      padding: 0 14px;
+      border-radius: 999px;
+      color: #fff;
+      text-decoration: none;
+      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+      box-shadow: 0 12px 24px rgba(159, 67, 16, 0.22);
+      font: 700 0.84rem/1 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .back-link:hover,
+    .back-link:focus-visible,
+    .action-btn:hover,
+    .action-btn:focus-visible,
+    .print-btn:hover,
+    .print-btn:focus-visible {
+      transform: translateY(-1px);
+      filter: brightness(1.02);
+      outline: none;
+    }
+
+    .eyebrow {
+      margin: 16px 0 8px;
+      color: var(--accent-deep);
+      font: 700 0.78rem/1.2 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 3.25rem);
+      line-height: 0.98;
+      letter-spacing: -0.04em;
+      font-weight: 700;
+    }
+
+    .hero-copy {
+      max-width: 44rem;
+      margin: 12px 0 0;
+      color: var(--muted);
+      font: 500 1rem/1.6 "Segoe UI", Arial, sans-serif;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 400px) minmax(0, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+      align-items: start;
+    }
+
+    .panel {
+      padding: 18px;
+    }
+
+    .section-label {
+      margin: 0 0 8px;
+      color: var(--accent-deep);
+      font: 700 0.72rem/1.2 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .section-title {
+      margin: 0;
+      font-size: 1.28rem;
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+    }
+
+    .section-copy,
+    .card-copy,
+    .muted-text {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font: 500 0.94rem/1.55 "Segoe UI", Arial, sans-serif;
+    }
+
+    .form-stack {
+      display: grid;
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .field-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .field-grid.two-col {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .field {
+      display: grid;
+      gap: 7px;
+    }
+
+    .field label,
+    legend {
+      color: var(--text);
+      font: 700 0.82rem/1.25 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.03em;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    textarea {
+      width: 100%;
+      min-height: 48px;
+      padding: 12px 14px;
+      border: 1px solid rgba(83, 62, 43, 0.14);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.92);
+      color: var(--text);
+      font: 500 0.96rem/1.35 "Segoe UI", Arial, sans-serif;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.45);
+    }
+
+    textarea {
+      min-height: 112px;
+      resize: vertical;
+    }
+
+    input:focus,
+    textarea:focus {
+      outline: none;
+      border-color: rgba(207, 95, 27, 0.4);
+      box-shadow: 0 0 0 4px rgba(207, 95, 27, 0.1);
+    }
+
+    .parameter-shell,
+    .fixed-params {
+      padding: 14px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.64);
+    }
+
+    .fixed-list {
+      display: grid;
+      gap: 8px;
+      margin: 12px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .fixed-list li,
+    .checkbox-note,
+    .subtle-list {
+      color: var(--muted);
+      font: 500 0.9rem/1.5 "Segoe UI", Arial, sans-serif;
+    }
+
+    .fixed-list li::before {
+      content: "•";
+      display: inline-block;
+      width: 1rem;
+      color: var(--accent-deep);
+      font-weight: 700;
+    }
+
+    fieldset {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      min-width: 0;
+    }
+
+    .checkbox-row {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .toggle {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.84);
+      border: 1px solid rgba(83, 62, 43, 0.1);
+    }
+
+    .toggle input {
+      width: 18px;
+      height: 18px;
+      margin-top: 2px;
+      accent-color: var(--accent);
+    }
+
+    .toggle strong {
+      display: block;
+      font: 700 0.9rem/1.2 "Segoe UI", Arial, sans-serif;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .action-btn,
+    .print-btn {
+      min-height: 48px;
+      padding: 0 18px;
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      font: 700 0.86rem/1 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+    }
+
+    .action-btn.primary {
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+      box-shadow: 0 12px 24px rgba(159, 67, 16, 0.2);
+    }
+
+    .action-btn.secondary,
+    .print-btn {
+      color: var(--support-deep);
+      background: linear-gradient(135deg, rgba(36,76,135,0.12), rgba(36,76,135,0.05));
+      box-shadow: 0 12px 24px rgba(24, 55, 95, 0.1);
+    }
+
+    .report-shell {
+      overflow: hidden;
+    }
+
+    .report-head {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,0.52);
+    }
+
+    .report-title {
+      margin: 0;
+      font-size: 1.4rem;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+    }
+
+    .report-sub {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font: 500 0.92rem/1.5 "Segoe UI", Arial, sans-serif;
+    }
+
+    .report-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: flex-start;
+      justify-content: flex-end;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: #f3ebe2;
+      color: #5f5146;
+      font: 700 0.72rem/1 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .badge.accent {
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+    }
+
+    .report-body {
+      padding: 18px 20px 22px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .print-toolbar {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .empty-state {
+      padding: 42px 22px;
+      text-align: center;
+      color: var(--muted);
+      font: 600 0.98rem/1.6 "Segoe UI", Arial, sans-serif;
+    }
+
+    .report-grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      grid-column: span 12;
+      padding: 16px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--line);
+      background: var(--card);
+      box-shadow: 0 12px 28px rgba(61, 40, 21, 0.06);
+    }
+
+    .card h3 {
+      margin: 0;
+      font-size: 1.08rem;
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .metric,
+    .comp-meta div {
+      padding: 12px;
+      border-radius: 16px;
+      background: #faf4ee;
+      border: 1px solid rgba(83, 62, 43, 0.08);
+    }
+
+    .metric span,
+    .comp-meta span,
+    .estimate-card .label {
+      display: block;
+      color: var(--muted);
+      font: 700 0.7rem/1.2 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .metric strong,
+    .comp-meta strong {
+      display: block;
+      margin-top: 6px;
+      font: 700 1rem/1.15 "Segoe UI", Arial, sans-serif;
+      letter-spacing: -0.02em;
+    }
+
+    .estimate-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .estimate-card,
+    .comp-card {
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(83, 62, 43, 0.08);
+      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(250,245,239,0.96));
+    }
+
+    .estimate-card .value {
+      margin-top: 8px;
+      font: 700 1.35rem/1 "Segoe UI", Arial, sans-serif;
+      letter-spacing: -0.04em;
+    }
+
+    .estimate-card .footnote {
+      margin-top: 8px;
+      color: var(--muted);
+      font: 500 0.84rem/1.45 "Segoe UI", Arial, sans-serif;
+    }
+
+    .estimate-card.featured {
+      color: #fff;
+      background: linear-gradient(135deg, var(--support), var(--support-deep));
+      box-shadow: 0 16px 30px rgba(24, 55, 95, 0.16);
+    }
+
+    .estimate-card.featured .label,
+    .estimate-card.featured .footnote {
+      color: rgba(255,255,255,0.85);
+    }
+
+    .comp-grid {
+      display: grid;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .comp-head {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .comp-address {
+      margin: 0;
+      font-size: 1rem;
+      line-height: 1.25;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .comp-status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: #f3ebe2;
+      color: #5f5146;
+      font: 700 0.72rem/1 "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .comp-status.active {
+      color: #fff;
+      background: linear-gradient(135deg, var(--success), #245740);
+    }
+
+    .comp-meta {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .comp-notes,
+    .subtle-list {
+      margin: 12px 0 0;
+    }
+
+    .span-7 { grid-column: span 7; }
+    .span-5 { grid-column: span 5; }
+
+    .report-shell[data-ready="false"] .print-toolbar,
+    .report-shell[data-ready="false"] .report-grid {
+      display: none;
+    }
+
+    @media (max-width: 1024px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 760px) {
+      .shell {
+        width: min(100% - 14px, 1180px);
+        padding-top: 10px;
+      }
+
+      .hero,
+      .panel,
+      .report-shell { border-radius: 22px; }
+
+      .hero { padding: 16px 14px 14px; }
+
+      h1 { font-size: clamp(1.75rem, 7vw, 2.4rem); }
+
+      .panel,
+      .report-body { padding-left: 14px; padding-right: 14px; }
+
+      .field-grid.two-col,
+      .metrics,
+      .estimate-grid,
+      .comp-meta { grid-template-columns: 1fr 1fr; }
+
+      .span-7,
+      .span-5 { grid-column: span 12; }
+
+      .toolbar { flex-direction: column; }
+
+      .action-btn,
+      .print-btn { width: 100%; }
+    }
+
+    @media print {
+      body { background: #fff; }
+      .hero,
+      .panel { display: none; }
+      .shell { width: 100%; padding: 0; }
+      .layout { display: block; margin: 0; }
+      .report-shell {
+        border: none;
+        box-shadow: none;
+        background: #fff;
+      }
+      .print-toolbar { display: none; }
+      .report-head,
+      .card,
+      .comp-card,
+      .estimate-card { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <a class="back-link" href="/listings.html">&larr; Back to homes</a>
+      <p class="eyebrow">Comparative Market Analysis</p>
+      <h1>Build a clean CMA report for pricing conversations and listing presentations.</h1>
+      <p class="hero-copy">
+        Enter the subject property, add special value notes, adjust your search rules, and generate a polished report layout that is ready for live data hookups later.
+      </p>
+    </section>
+
+    <section class="layout">
+      <section class="panel" aria-labelledby="cma-form-title">
+        <p class="section-label">Input</p>
+        <h2 class="section-title" id="cma-form-title">Subject property and search setup</h2>
+        <p class="section-copy">
+          Fixed defaults run in the background every time. The adjustable fields let you tune the comp search before generating the report.
+        </p>
+
+        <form id="cmaForm" class="form-stack">
+          <div class="field">
+            <label for="subjectAddress">Subject property address</label>
+            <input id="subjectAddress" name="subjectAddress" type="text" placeholder="123 Main St, Springfield, IL 62704" autocomplete="street-address" required />
+          </div>
+
+          <div class="field">
+            <label for="specialDetails">Special details that may affect value</label>
+            <textarea id="specialDetails" name="specialDetails" placeholder="Example: new roof in 2024, updated kitchen, premium corner lot, fresh paint, new HVAC, covered patio, upgraded flooring..."></textarea>
+          </div>
+
+          <section class="fixed-params" aria-labelledby="fixed-search-title">
+            <p class="section-label">Fixed Search Parameters</p>
+            <h3 class="section-title" id="fixed-search-title">Always applied in the background</h3>
+            <ul class="fixed-list" id="fixedParameterList"></ul>
+          </section>
+
+          <section class="parameter-shell" aria-labelledby="adjustable-search-title">
+            <p class="section-label">Adjustable Search Parameters</p>
+            <h3 class="section-title" id="adjustable-search-title">Tune the search before generating</h3>
+            <div class="field-grid two-col" style="margin-top: 14px;">
+              <div class="field">
+                <label for="searchRadius">Search radius (miles)</label>
+                <input id="searchRadius" name="searchRadius" type="number" min="0.25" max="25" step="0.25" value="1.5" />
+              </div>
+              <div class="field">
+                <label for="ageVariance">Maximum age difference (years)</label>
+                <input id="ageVariance" name="ageVariance" type="number" min="0" max="50" step="1" value="10" />
+              </div>
+              <div class="field">
+                <label for="sqftVariance">Square footage variance (%)</label>
+                <input id="sqftVariance" name="sqftVariance" type="number" min="5" max="60" step="5" value="20" />
+              </div>
+              <div class="field">
+                <label for="bedVariance">Bedroom variance</label>
+                <input id="bedVariance" name="bedVariance" type="number" min="0" max="4" step="1" value="1" />
+              </div>
+              <div class="field">
+                <label for="bathVariance">Bathroom variance</label>
+                <input id="bathVariance" name="bathVariance" type="number" min="0" max="4" step="0.5" value="1" />
+              </div>
+              <div class="field">
+                <label for="yearBuiltVariance">Year built variance</label>
+                <input id="yearBuiltVariance" name="yearBuiltVariance" type="number" min="0" max="40" step="1" value="12" />
+              </div>
+              <div class="field">
+                <label for="lotVariance">Lot size variance (%)</label>
+                <input id="lotVariance" name="lotVariance" type="number" min="5" max="80" step="5" value="25" />
+              </div>
+              <div class="field">
+                <label for="lookbackMonths">Closed sales lookback (months)</label>
+                <input id="lookbackMonths" name="lookbackMonths" type="number" min="1" max="24" step="1" value="6" />
+              </div>
+            </div>
+
+            <fieldset class="checkbox-row">
+              <legend>Preference weighting</legend>
+              <label class="toggle" for="prioritizeSubdivision">
+                <input id="prioritizeSubdivision" name="prioritizeSubdivision" type="checkbox" checked />
+                <span>
+                  <strong>Prioritize same subdivision</strong>
+                  <span class="checkbox-note">Give stronger weight to same-neighborhood matches when available.</span>
+                </span>
+              </label>
+              <label class="toggle" for="prioritizeStyle">
+                <input id="prioritizeStyle" name="prioritizeStyle" type="checkbox" checked />
+                <span>
+                  <strong>Prioritize similar home style/type</strong>
+                  <span class="checkbox-note">Favor a closer match in design or construction style.</span>
+                </span>
+              </label>
+            </fieldset>
+
+            <div class="toolbar">
+              <button type="submit" class="action-btn primary">Generate CMA</button>
+              <button type="reset" class="action-btn secondary">Reset</button>
+            </div>
+          </section>
+        </form>
+      </section>
+
+      <section class="report-shell" id="reportSection" data-ready="false" aria-labelledby="report-title">
+        <div class="report-head">
+          <div>
+            <p class="section-label">Report Output</p>
+            <h2 class="report-title" id="report-title">CMA report preview</h2>
+            <p class="report-sub" id="reportTimestamp">Generate a report to preview the CMA layout and valuation sections.</p>
+          </div>
+          <div class="report-badges">
+            <span class="badge">3 sold comps</span>
+            <span class="badge">1 active comp</span>
+            <span class="badge accent">Mock data ready for API hookup</span>
+          </div>
+        </div>
+
+        <div class="report-body">
+          <div class="print-toolbar">
+            <button type="button" class="print-btn" id="printReportBtn">Print Report</button>
+          </div>
+
+          <div class="empty-state" id="reportEmptyState">
+            Enter a subject property address and generate the CMA to populate the report. This page is already structured for future MLS, valuation, and property data connections.
+          </div>
+
+          <div class="report-grid" id="reportGrid">
+            <section class="card span-7">
+              <p class="section-label">Subject Property</p>
+              <h3>Subject property overview</h3>
+              <p class="card-copy" id="subjectPropertyAddress">Not generated yet.</p>
+              <div class="metrics" id="subjectPropertyMetrics"></div>
+            </section>
+
+            <section class="card span-5">
+              <p class="section-label">Special Details</p>
+              <h3>Value-impact notes</h3>
+              <p class="card-copy" id="specialDetailsOutput">No special details entered yet.</p>
+            </section>
+
+            <section class="card span-7">
+              <p class="section-label">CMA Summary</p>
+              <h3>Pricing takeaway</h3>
+              <p class="card-copy" id="summaryText"></p>
+            </section>
+
+            <section class="card span-5">
+              <p class="section-label">Search Summary</p>
+              <h3>Parameters used</h3>
+              <ul class="subtle-list" id="searchSummaryList"></ul>
+            </section>
+
+            <section class="card">
+              <p class="section-label">Value Guidance</p>
+              <h3>Estimates and pricing recommendation</h3>
+              <div class="estimate-grid" id="estimateGrid"></div>
+            </section>
+
+            <section class="card">
+              <p class="section-label">Comparable Sales</p>
+              <h3>Closed comparable properties</h3>
+              <p class="muted-text">Three sold properties are shown below. Replace the mock generator in the script with your MLS or property data source when ready.</p>
+              <div class="comp-grid" id="soldCompGrid"></div>
+            </section>
+
+            <section class="card">
+              <p class="section-label">Competitive Listing</p>
+              <h3>Active comparable property</h3>
+              <p class="muted-text">This active listing is included as a market positioning reference.</p>
+              <div class="comp-grid" id="activeCompGrid"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const FIXED_SEARCH_PARAMS = [
+      "Use residential resale comps by default unless the subject property type indicates otherwise.",
+      "Prefer the most recent closed sales first and exclude pending listings from the sold comp pool.",
+      "Target exactly 3 sold comparables and 1 active comparable for the report layout.",
+      "Favor arm's-length transactions and standard market exposure where possible.",
+      "De-prioritize outliers that materially differ in condition, quality, or lot utility."
+    ];
+
+    const form = document.getElementById("cmaForm");
+    const fixedParameterList = document.getElementById("fixedParameterList");
+    const reportSection = document.getElementById("reportSection");
+    const reportEmptyState = document.getElementById("reportEmptyState");
+    const reportTimestamp = document.getElementById("reportTimestamp");
+    const subjectPropertyAddress = document.getElementById("subjectPropertyAddress");
+    const subjectPropertyMetrics = document.getElementById("subjectPropertyMetrics");
+    const specialDetailsOutput = document.getElementById("specialDetailsOutput");
+    const summaryText = document.getElementById("summaryText");
+    const searchSummaryList = document.getElementById("searchSummaryList");
+    const estimateGrid = document.getElementById("estimateGrid");
+    const soldCompGrid = document.getElementById("soldCompGrid");
+    const activeCompGrid = document.getElementById("activeCompGrid");
+    const printReportBtn = document.getElementById("printReportBtn");
+
+    FIXED_SEARCH_PARAMS.forEach((item) => {
+      const li = document.createElement("li");
+      li.textContent = item;
+      fixedParameterList.appendChild(li);
+    });
+
+    function toNumber(value, fallback) {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : fallback;
+    }
+
+    function formatCurrency(value) {
+      return Number(value).toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0
+      });
+    }
+
+    function formatLotSize(acres) {
+      return `${acres.toFixed(2)} acres`;
+    }
+
+    function formatDateTime(date) {
+      return new Intl.DateTimeFormat("en-US", {
+        dateStyle: "medium",
+        timeStyle: "short"
+      }).format(date);
+    }
+
+    function readFormValues() {
+      return {
+        subjectAddress: form.subjectAddress.value.trim(),
+        specialDetails: form.specialDetails.value.trim(),
+        searchRadius: toNumber(form.searchRadius.value, 1.5),
+        ageVariance: toNumber(form.ageVariance.value, 10),
+        sqftVariance: toNumber(form.sqftVariance.value, 20),
+        bedVariance: toNumber(form.bedVariance.value, 1),
+        bathVariance: toNumber(form.bathVariance.value, 1),
+        yearBuiltVariance: toNumber(form.yearBuiltVariance.value, 12),
+        lotVariance: toNumber(form.lotVariance.value, 25),
+        lookbackMonths: toNumber(form.lookbackMonths.value, 6),
+        prioritizeSubdivision: form.prioritizeSubdivision.checked,
+        prioritizeStyle: form.prioritizeStyle.checked
+      };
+    }
+
+    function buildSubjectSnapshot(values) {
+      const detailBoost = values.specialDetails ? 1.02 : 1;
+      const baseSqft = 2180;
+      const basePricePerSqft = 176;
+      const estimatedValue = Math.round(baseSqft * basePricePerSqft * detailBoost);
+
+      return {
+        beds: 4,
+        baths: 3,
+        sqft: baseSqft,
+        yearBuilt: 2014,
+        lotSize: 0.23,
+        estimatedValue
+      };
+    }
+
+    function buildMockReport(values) {
+      // TODO: Replace this mock report builder with live MLS, AVM, and property detail data.
+      // The object shape below is meant to stay stable so future API wiring is straightforward.
+      const subject = buildSubjectSnapshot(values);
+      const sameSubdivisionNote = values.prioritizeSubdivision
+        ? "Same subdivision received stronger weighting."
+        : "Subdivision match was treated as a secondary factor.";
+      const styleNote = values.prioritizeStyle
+        ? "Architectural style match was prioritized."
+        : "Style match was considered, but not heavily weighted.";
+
+      const soldComps = [
+        {
+          address: "118 Willow Creek Dr",
+          status: "Sold",
+          listPrice: 392000,
+          soldPrice: 401500,
+          sqft: 2245,
+          beds: 4,
+          baths: 3,
+          yearBuilt: 2015,
+          lotSize: 0.21,
+          daysOnMarket: 14,
+          notes: "Very similar bedroom count and build era. Updated kitchen and a similar overall finish level."
+        },
+        {
+          address: "142 Willow Creek Dr",
+          status: "Sold",
+          listPrice: 405000,
+          soldPrice: 409000,
+          sqft: 2310,
+          beds: 4,
+          baths: 2.5,
+          yearBuilt: 2013,
+          lotSize: 0.24,
+          daysOnMarket: 9,
+          notes: "Same neighborhood appeal and close lot size. Slightly larger footprint but similar market positioning."
+        },
+        {
+          address: "85 Oak Hollow Ln",
+          status: "Sold",
+          listPrice: 384900,
+          soldPrice: 389500,
+          sqft: 2140,
+          beds: 3,
+          baths: 3,
+          yearBuilt: 2012,
+          lotSize: 0.22,
+          daysOnMarket: 18,
+          notes: "Smaller bedroom count but strong comp due to similar square footage, age, and curb appeal."
+        }
+      ];
+
+      const activeComp = {
+        address: "109 Willow Creek Ct",
+        status: "Active",
+        listPrice: 414900,
+        soldPrice: null,
+        sqft: 2288,
+        beds: 4,
+        baths: 3,
+        yearBuilt: 2016,
+        lotSize: 0.25,
+        daysOnMarket: 22,
+        notes: "Useful active benchmark for current competition. Slightly newer but very comparable in layout and buyer profile."
+      };
+
+      const soldAverage = Math.round(
+        soldComps.reduce((sum, item) => sum + item.soldPrice, 0) / soldComps.length
+      );
+      const valueAdjustment = values.specialDetails ? 6500 : 0;
+      const recommendedLow = soldAverage - 7500 + valueAdjustment;
+      const recommendedHigh = soldAverage + 9500 + valueAdjustment;
+      const suggestedListPrice = Math.round((recommendedLow + recommendedHigh) / 2 / 500) * 500;
+
+      return {
+        generatedAt: new Date(),
+        subject,
+        soldComps,
+        activeComp,
+        zillowEstimate: suggestedListPrice + 3800,
+        realtorEstimate: suggestedListPrice - 2200,
+        recommendedRange: [recommendedLow, recommendedHigh],
+        suggestedListPrice,
+        summary: `Based on the current comp set, the subject appears to fit best near ${formatCurrency(suggestedListPrice)}. The sold comparables support a range from ${formatCurrency(recommendedLow)} to ${formatCurrency(recommendedHigh)}, with the active competition suggesting the home should be priced cleanly and presented well from day one. ${sameSubdivisionNote} ${styleNote}`,
+        searchSummary: [
+          `Radius: ${values.searchRadius} miles`,
+          `Age difference: up to ${values.ageVariance} years`,
+          `Square footage variance: ${values.sqftVariance}%`,
+          `Bedroom variance: ${values.bedVariance}`,
+          `Bathroom variance: ${values.bathVariance}`,
+          `Year built variance: ${values.yearBuiltVariance} years`,
+          `Lot size variance: ${values.lotVariance}%`,
+          `Closed sales lookback: ${values.lookbackMonths} months`,
+          `Same subdivision priority: ${values.prioritizeSubdivision ? "On" : "Off"}`,
+          `Similar style priority: ${values.prioritizeStyle ? "On" : "Off"}`
+        ]
+      };
+    }
+
+    function renderMetric(label, value) {
+      const div = document.createElement("div");
+      div.className = "metric";
+      div.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+      return div;
+    }
+
+    function renderEstimateCard(label, value, footnote, featured) {
+      const div = document.createElement("div");
+      div.className = `estimate-card${featured ? " featured" : ""}`;
+      div.innerHTML = `
+        <div class="label">${label}</div>
+        <div class="value">${value}</div>
+        <div class="footnote">${footnote}</div>
+      `;
+      return div;
+    }
+
+    function renderCompCard(comp) {
+      const article = document.createElement("article");
+      article.className = "comp-card";
+      article.innerHTML = `
+        <div class="comp-head">
+          <div>
+            <h4 class="comp-address">${comp.address}</h4>
+            <p class="muted-text" style="margin-top: 6px;">List price ${formatCurrency(comp.listPrice)}${comp.soldPrice ? ` | Sold ${formatCurrency(comp.soldPrice)}` : ""}</p>
+          </div>
+          <span class="comp-status${comp.status === "Active" ? " active" : ""}">${comp.status}</span>
+        </div>
+        <div class="comp-meta">
+          <div><span>Square Feet</span><strong>${comp.sqft.toLocaleString()} sq ft</strong></div>
+          <div><span>Beds / Baths</span><strong>${comp.beds} / ${comp.baths}</strong></div>
+          <div><span>Year Built</span><strong>${comp.yearBuilt}</strong></div>
+          <div><span>Lot Size</span><strong>${formatLotSize(comp.lotSize)}</strong></div>
+          <div><span>Days on Market</span><strong>${comp.daysOnMarket}</strong></div>
+        </div>
+        <p class="comp-notes">${comp.notes}</p>
+      `;
+      return article;
+    }
+
+    function renderReport(values, report) {
+      reportSection.dataset.ready = "true";
+      reportEmptyState.style.display = "none";
+      reportTimestamp.textContent = `Generated ${formatDateTime(report.generatedAt)}. Mock values shown below can be replaced with live valuation and MLS data later.`;
+      subjectPropertyAddress.textContent = values.subjectAddress;
+      specialDetailsOutput.textContent = values.specialDetails || "No special details were entered for this subject property.";
+      summaryText.textContent = report.summary;
+
+      subjectPropertyMetrics.innerHTML = "";
+      subjectPropertyMetrics.appendChild(renderMetric("Estimated Beds", report.subject.beds));
+      subjectPropertyMetrics.appendChild(renderMetric("Estimated Baths", report.subject.baths));
+      subjectPropertyMetrics.appendChild(renderMetric("Estimated Size", `${report.subject.sqft.toLocaleString()} sq ft`));
+      subjectPropertyMetrics.appendChild(renderMetric("Year Built", report.subject.yearBuilt));
+      subjectPropertyMetrics.appendChild(renderMetric("Lot Size", formatLotSize(report.subject.lotSize)));
+      subjectPropertyMetrics.appendChild(renderMetric("Model Value", formatCurrency(report.subject.estimatedValue)));
+
+      searchSummaryList.innerHTML = "";
+      FIXED_SEARCH_PARAMS.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        searchSummaryList.appendChild(li);
+      });
+      report.searchSummary.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        searchSummaryList.appendChild(li);
+      });
+
+      estimateGrid.innerHTML = "";
+      estimateGrid.appendChild(renderEstimateCard("Zillow estimate", formatCurrency(report.zillowEstimate), "Mock placeholder. Connect a valuation source here.", false));
+      estimateGrid.appendChild(renderEstimateCard("Realtor.com estimate", formatCurrency(report.realtorEstimate), "Mock placeholder. Connect a valuation source here.", false));
+      estimateGrid.appendChild(renderEstimateCard("Recommended price range", `${formatCurrency(report.recommendedRange[0])} - ${formatCurrency(report.recommendedRange[1])}`, "Range based on the comparable set and simple adjustments.", false));
+      estimateGrid.appendChild(renderEstimateCard("Suggested list price", formatCurrency(report.suggestedListPrice), "Use this as the lead pricing recommendation in the presentation.", true));
+
+      soldCompGrid.innerHTML = "";
+      report.soldComps.forEach((comp) => soldCompGrid.appendChild(renderCompCard(comp)));
+
+      activeCompGrid.innerHTML = "";
+      activeCompGrid.appendChild(renderCompCard(report.activeComp));
+    }
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const values = readFormValues();
+      if (!values.subjectAddress) {
+        form.subjectAddress.focus();
+        return;
+      }
+      renderReport(values, buildMockReport(values));
+    });
+
+    form.addEventListener("reset", () => {
+      setTimeout(() => {
+        reportSection.dataset.ready = "false";
+        reportEmptyState.style.display = "";
+        reportTimestamp.textContent = "Generate a report to preview the CMA layout and valuation sections.";
+        subjectPropertyAddress.textContent = "Not generated yet.";
+        specialDetailsOutput.textContent = "No special details entered yet.";
+        summaryText.textContent = "";
+        subjectPropertyMetrics.innerHTML = "";
+        searchSummaryList.innerHTML = "";
+        estimateGrid.innerHTML = "";
+        soldCompGrid.innerHTML = "";
+        activeCompGrid.innerHTML = "";
+      }, 0);
+    });
+
+    printReportBtn.addEventListener("click", () => {
+      if (reportSection.dataset.ready !== "true") return;
+      window.print();
+    });
+  </script>
+</body>
+</html>

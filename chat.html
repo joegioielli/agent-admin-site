@@ -416,9 +416,15 @@
       display: flex;
       gap: 10px;
       align-items: flex-end;
-      padding: 12px 14px 14px;
+      padding: 12px 14px calc(14px + env(safe-area-inset-bottom, 0px));
       border-top: 1px solid var(--line);
       background: rgba(255,255,255,0.72);
+      transition: background-color 180ms ease, box-shadow 180ms ease;
+    }
+
+    .chat-panel.composer-active #inputBar {
+      background: rgba(255,255,255,0.9);
+      box-shadow: 0 -10px 24px rgba(61, 40, 21, 0.08);
     }
 
     #msgInput {
@@ -431,6 +437,7 @@
       color: var(--text);
       font: 500 0.98rem/1.3 "Segoe UI", Arial, sans-serif;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.45);
+      appearance: none;
     }
 
     #msgInput::placeholder {
@@ -660,7 +667,7 @@
       }
 
       #inputBar {
-        padding: 10px;
+        padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
         gap: 8px;
       }
 
@@ -762,7 +769,7 @@
         <div id="chat"></div>
 
         <div id="inputBar">
-          <input id="msgInput" placeholder="Ask about price, features, lenders, showings..." />
+          <input id="msgInput" placeholder="Ask about price, features, lenders, showings..." enterkeyhint="send" autocapitalize="sentences" autocomplete="off" spellcheck="true" />
           <button id="voiceBtn" title="Voice input">Mic</button>
           <button id="sendBtn">Send</button>
         </div>
@@ -850,6 +857,7 @@
       agent: null,
       lenders: [],
     };
+    let isSending = false;
 
     const isCompactViewport = () => window.matchMedia('(max-width: 640px)').matches;
 
@@ -866,6 +874,19 @@
     function syncSpacer() {
       if (!leftGroup || !rightSpacer) return;
       rightSpacer.style.width = leftGroup.offsetWidth + 'px';
+    }
+
+    function setComposerActive(active) {
+      if (!chatPanel) return;
+      chatPanel.classList.toggle('composer-active', Boolean(active));
+    }
+
+    function setSendingState(active) {
+      isSending = Boolean(active);
+      sendBtn.disabled = isSending;
+      input.disabled = isSending;
+      sendBtn.textContent = isSending ? '...' : 'Send';
+      sendBtn.setAttribute('aria-busy', isSending ? 'true' : 'false');
     }
 
     function resetViewportTop() {
@@ -1320,7 +1341,7 @@
 
     async function sendMessage(source = 'button') {
       const message = (input.value || '').trim();
-      if (!message) return;
+      if (!message || isSending) return;
 
       if (source === 'keyboard' && isCompactViewport()) {
         input.blur();
@@ -1378,6 +1399,7 @@
         return;
       }
 
+      setSendingState(true);
       addMessage('You', message);
       input.value = '';
       cancelAllNudges();
@@ -1392,6 +1414,8 @@
         addMessage('AI', 'Sorry - something went wrong. Please try again.');
         console.error(err);
         scheduleViewportReset();
+      } finally {
+        setSendingState(false);
       }
 
       lastPrompt = 'none';
@@ -1410,9 +1434,11 @@
     });
     input.addEventListener('input', cancelAllNudges);
     input.addEventListener('focus', () => {
+      setComposerActive(true);
       scheduleViewportReset([50, 250]);
     });
     input.addEventListener('blur', () => {
+      setComposerActive(false);
       scheduleViewportReset([0, 120, 280]);
     });
 
@@ -1517,7 +1543,9 @@
       addMessage('AI', "I don't have a text number for this listing yet.");
     });
 
-    setTimeout(() => input.focus(), 300);
+    setTimeout(() => {
+      if (!isCompactViewport()) input.focus();
+    }, 300);
     startIntroIfFresh();
     defer(() => {
       loadAgentPhone();

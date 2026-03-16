@@ -42,15 +42,15 @@
     }
 
     .shell {
-      width: min(1080px, calc(100% - 28px));
+      width: min(760px, calc(100% - 20px));
       margin: 0 auto;
-      padding: 22px 0 34px;
+      padding: 14px 0 24px;
     }
 
     .hero {
       position: relative;
       overflow: hidden;
-      padding: 24px 24px 22px;
+      padding: 18px 18px 16px;
       border-radius: var(--radius-xl);
       border: 1px solid rgba(255, 255, 255, 0.55);
       background:
@@ -65,8 +65,8 @@
       position: absolute;
       right: -5rem;
       bottom: -7rem;
-      width: 17rem;
-      height: 17rem;
+      width: 14rem;
+      height: 14rem;
       border-radius: 50%;
       background: radial-gradient(circle, rgba(207,95,27,0.18), transparent 68%);
       pointer-events: none;
@@ -76,7 +76,7 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 18px;
+      margin-bottom: 14px;
       color: var(--accent-deep);
       text-decoration: none;
       font: 700 0.84rem/1 "Segoe UI", Arial, sans-serif;
@@ -85,7 +85,7 @@
     }
 
     .eyebrow {
-      margin: 0 0 10px;
+      margin: 0 0 8px;
       color: var(--accent-deep);
       font: 700 0.78rem/1.2 "Segoe UI", Arial, sans-serif;
       letter-spacing: 0.18em;
@@ -94,25 +94,17 @@
 
     h1 {
       margin: 0;
-      font-size: clamp(2rem, 4.8vw, 3.15rem);
+      font-size: clamp(1.75rem, 4.8vw, 2.5rem);
       line-height: 0.98;
       letter-spacing: -0.04em;
       font-weight: 700;
     }
 
-    .hero-copy {
-      max-width: 40rem;
-      margin: 14px 0 0;
-      color: var(--muted);
-      font: 500 1rem/1.6 "Segoe UI", Arial, sans-serif;
-    }
-
     .content {
       display: grid;
-      grid-template-columns: minmax(0, 1.15fr) minmax(290px, 0.85fr);
-      gap: 18px;
-      margin-top: 18px;
-      align-items: start;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      margin-top: 14px;
     }
 
     .media-card,
@@ -157,14 +149,14 @@
     }
 
     .media-body {
-      padding: 18px 18px 20px;
+      padding: 16px 16px 18px;
     }
 
     .meta-row {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-bottom: 14px;
+      margin-bottom: 10px;
     }
 
     .meta-pill {
@@ -189,39 +181,33 @@
     }
 
     .address-line2 {
-      margin: 10px 0 0;
+      margin: 8px 0 0;
       color: var(--muted);
       font: 500 1rem/1.5 "Segoe UI", Arial, sans-serif;
     }
 
     .action-card {
-      padding: 22px 20px;
+      padding: 18px 16px;
     }
 
     .action-title {
       margin: 0;
-      font-size: 1.45rem;
+      font-size: 1.2rem;
       line-height: 1.08;
       letter-spacing: -0.03em;
-    }
-
-    .action-copy {
-      margin: 12px 0 0;
-      color: var(--muted);
-      font: 500 0.97rem/1.55 "Segoe UI", Arial, sans-serif;
     }
 
     .actions {
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      margin-top: 22px;
+      gap: 10px;
+      margin-top: 16px;
     }
 
     .action-btn {
       width: 100%;
-      min-height: 58px;
-      padding: 14px 18px;
+      min-height: 54px;
+      padding: 12px 16px;
       border: none;
       border-radius: var(--radius-md);
       cursor: pointer;
@@ -244,15 +230,8 @@
 
     .action-btn strong {
       display: block;
-      font: 700 1rem/1.2 "Segoe UI", Arial, sans-serif;
+      font: 700 0.98rem/1.2 "Segoe UI", Arial, sans-serif;
       letter-spacing: 0.01em;
-    }
-
-    .action-btn span {
-      display: block;
-      margin-top: 5px;
-      font: 500 0.88rem/1.45 "Segoe UI", Arial, sans-serif;
-      opacity: 0.92;
     }
 
     .chat-btn {
@@ -273,7 +252,7 @@
     }
 
     .inline-status {
-      margin-top: 16px;
+      margin-top: 8px;
       min-height: 22px;
       color: var(--muted);
       font: 600 0.88rem/1.4 "Segoe UI", Arial, sans-serif;
@@ -297,7 +276,7 @@
     }
 
     .loading .status-pill {
-      width: 140px;
+      width: 120px;
     }
 
     .loading .meta-pill {
@@ -322,16 +301,10 @@
       100% { background-position: -200% 0; }
     }
 
-    @media (max-width: 860px) {
-      .content {
-        grid-template-columns: 1fr;
-      }
-    }
-
     @media (max-width: 640px) {
       .shell {
-        width: min(100% - 18px, 1080px);
-        padding-top: 14px;
+        width: min(100% - 14px, 760px);
+        padding-top: 10px;
       }
 
       .hero,
@@ -341,11 +314,15 @@
       }
 
       .hero {
-        padding: 20px 18px 18px;
+        padding: 16px 14px 14px;
       }
 
       .action-card {
-        padding: 18px 16px;
+        padding: 14px;
+      }
+
+      .media-body {
+        padding: 14px 14px 16px;
       }
     }
   </style>
@@ -356,9 +333,6 @@
       <a id="backLink" class="back-link" href="/listings.html">&larr; Back to homes</a>
       <p class="eyebrow">Property Overview</p>
       <h1>Continue with this home.</h1>
-      <p class="hero-copy">
-        Review the property, then choose how you want to continue. You can chat instantly or start a guided call.
-      </p>
     </section>
 
     <section class="content">
@@ -382,24 +356,18 @@
 
       <aside class="action-card">
         <h2 class="action-title">Choose your next step</h2>
-        <p class="action-copy">
-          Get answers about pricing, features, and financing, or have our assistant start a call for you.
-        </p>
 
         <div class="actions">
           <button id="textBtn" class="action-btn chat-btn" type="button">
             <strong>Chat about this home</strong>
-            <span>Ask about price, features, lenders, showings, and more.</span>
           </button>
 
           <button id="callBtn" class="action-btn call-btn" type="button">
             <strong>Talk to our smart assistant</strong>
-            <span>Start a guided call tied to this specific property.</span>
           </button>
 
           <button id="backBtn" class="action-btn back-btn" type="button">
             <strong>Back to homes</strong>
-            <span>Return to the listing gallery and choose a different property.</span>
           </button>
         </div>
 
@@ -450,6 +418,7 @@
       mls: MLS_FROM_URL || FALLBACK_SELECTED || "",
       address1: ADDRESS_FROM_URL || "",
       address2: "",
+      price: "",
       photoUrl: "",
       detailsUrl: "",
       details: {}
@@ -518,6 +487,27 @@
       return res.json();
     }
 
+    function formatPrice(value) {
+      if (typeof value === "number") {
+        return value.toLocaleString("en-US", {
+          style: "currency",
+          currency: "USD",
+          maximumFractionDigits: 0,
+        });
+      }
+
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+      const num = Number(raw.replace(/[^\d.]/g, ""));
+      return Number.isFinite(num) && num > 0
+        ? num.toLocaleString("en-US", {
+            style: "currency",
+            currency: "USD",
+            maximumFractionDigits: 0,
+          })
+        : raw;
+    }
+
     function setStatus(message) {
       inlineStatusEl.textContent = message || "";
     }
@@ -533,7 +523,7 @@
       addressLine1El.textContent = line1;
       addressLine2El.textContent = line2 || "Choose how you want to continue with this property.";
       mlsPillEl.textContent = CURRENT.mls ? `MLS #${CURRENT.mls}` : "Listing";
-      statusPillEl.textContent = CURRENT.photoUrl ? "Property ready" : "Property selected";
+      statusPillEl.textContent = formatPrice(CURRENT.price) || "Price unavailable";
       imgEl.src = CURRENT.photoUrl || placeholderImage;
       mediaCardEl.classList.remove("loading");
 
@@ -544,6 +534,7 @@
     }
 
     async function enrichListing(found) {
+      CURRENT.price = found.price || CURRENT.price;
       CURRENT.photoUrl = found.photoUrl || found.primaryPhotoUrl || CURRENT.photoUrl;
       CURRENT.detailsUrl = found.detailsUrl || "";
       if (!CURRENT.address1) CURRENT.address1 = found.address || CURRENT.address1;

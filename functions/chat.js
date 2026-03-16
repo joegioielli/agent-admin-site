@@ -183,6 +183,10 @@ function pick(obj, keys, fallback = undefined) {
   return fallback;
 }
 
+function trimmedText(value, maxLen = 2000) {
+  return String(value ?? "").trim().slice(0, maxLen);
+}
+
 function fmtUSD(x) {
   if (typeof x === "number") {
     return x.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -566,6 +570,7 @@ export async function handler(event) {
     const message = body.message || body.text || body.question;
     const address1 = body.address1 || body.a1 || "";
     const address2 = body.address2 || body.a2 || "";
+    const priorHistory = trimmedText(body.history || body.chatHistory || "", 4000);
 
     if (!propertyId || !message) {
       const reply = "Missing propertyId/listingId (pid) or message.";
@@ -930,12 +935,32 @@ export async function handler(event) {
       return respond(event, { reply, listingId: String(propertyId) });
     }
 
+    const supportOptions = [];
+    if (agentName || agentPhone || officePhone) {
+      supportOptions.push(
+        agentName
+          ? `offer to help connect them with ${agentName} if they want`
+          : "offer to help connect them with the listing agent if they want"
+      );
+    }
+    if (propertyId) {
+      supportOptions.push("invite them to ask another question about this home");
+    }
+
     const system = [
-      "You are a helpful real-estate assistant.",
-      "Answer ONLY using the provided listing JSON and MLS/full text.",
-      "If the information is not present, say you do not have that info.",
-      "Be concise and factual.",
-    ].join(" ");
+      "You are a warm, conversational real-estate assistant helping with one specific property.",
+      "Use ONLY the provided listing JSON, MLS/full text, and prior conversation for factual claims.",
+      "Do not invent facts, neighborhood details, policies, or property features that are not in the provided context.",
+      "If the answer is not in the listing details, say that naturally, like 'I don't see that in the listing details I have.'",
+      "Do not mention JSON, MLS text, databases, or internal data sources unless the user directly asks.",
+      "When information is missing, be helpful and human: briefly acknowledge the question, be honest that you do not see that detail, and offer one practical next step.",
+      supportOptions.length ? `When info is missing, ${supportOptions.join(", ")}.` : "",
+      "Keep replies short and natural, usually 2 to 4 sentences max.",
+      "If the user asks a direct factual question and the answer is present, answer clearly first, then optionally add one short helpful sentence.",
+      "Sound like a person texting with a client, not like a form letter.",
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     const domLine =
       computedDom !== null
@@ -967,6 +992,7 @@ export async function handler(event) {
       temperature: 0.2,
       messages: [
         { role: "system", content: system },
+        ...(priorHistory ? [{ role: "user", content: `Recent conversation:\n${priorHistory}` }] : []),
         { role: "user", content: context },
         { role: "user", content: message },
       ],

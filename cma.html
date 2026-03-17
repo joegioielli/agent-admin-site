@@ -348,6 +348,12 @@
       return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(date);
     }
 
+    function formatDateOnly(date) {
+      const parsed = parseDateValue(date);
+      if (!parsed) return "N/A";
+      return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(parsed);
+    }
+
     function setGenerateState(isLoading) {
       generateBtn.disabled = isLoading;
       generateBtn.textContent = isLoading ? "Loading..." : "Generate CMA";
@@ -1127,6 +1133,7 @@
       const article = document.createElement("article");
       article.className = "comp-card";
       const priceLine = comp.soldPrice != null ? `List ${formatCurrency(comp.listPrice)} | Sold ${formatCurrency(comp.soldPrice)}` : `List ${formatCurrency(comp.listPrice)}`;
+      const closeDateValue = comp.soldPrice != null ? formatDateOnly(comp.soldDate || comp.listDate) : "N/A";
       article.innerHTML = `
         <div class="comp-head">
           <div>
@@ -1141,6 +1148,8 @@
           <div><span>Year Built</span><strong>${comp.yearBuilt ?? "N/A"}</strong></div>
           <div><span>Lot Size</span><strong>${formatLotSize(comp.lotSize)}</strong></div>
           <div><span>Days on Market</span><strong>${comp.daysOnMarket ?? "N/A"}</strong></div>
+          <div><span>Close Date</span><strong>${closeDateValue}</strong></div>
+          <div><span>Price / Sq Ft</span><strong>${formatPpsf(comp.pricePerSqft)}</strong></div>
         </div>
         <p class="comp-notes">${comp.notes || "Comparable from the ranked candidate pool."}</p>
       `;

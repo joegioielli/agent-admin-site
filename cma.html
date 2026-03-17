@@ -235,7 +235,9 @@
 
     const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
     const toNumber = (value, fallback = null) => {
-      const n = Number(value);
+      const text = String(value ?? "").trim();
+      if (!text) return fallback;
+      const n = Number(text);
       return Number.isFinite(n) ? n : fallback;
     };
 
@@ -437,6 +439,52 @@
       return [line1, [city, state, zip].filter(Boolean).join(" ")].filter(Boolean).join(", ") || "Comparable property";
     }
 
+    function canonicalizeAddress(value) {
+      let text = normalizeText(value);
+      if (!text) return "";
+      const replacements = [
+        [/\bln\b/g, "lane"],
+        [/\bst\b/g, "street"],
+        [/\brd\b/g, "road"],
+        [/\bdr\b/g, "drive"],
+        [/\bct\b/g, "court"],
+        [/\bcir\b/g, "circle"],
+        [/\bave\b/g, "avenue"],
+        [/\bblvd\b/g, "boulevard"],
+        [/\bpkwy\b/g, "parkway"],
+        [/\bhwy\b/g, "highway"]
+      ];
+      replacements.forEach(([pattern, replacement]) => {
+        text = text.replace(pattern, replacement);
+      });
+      return text.replace(/\s+/g, " ").trim();
+    }
+
+    function addressesLikelyMatch(values, comp) {
+      const parsed = parseSubjectAddress(values.subjectAddress);
+      const subjectStreet = canonicalizeAddress(parsed.street || values.subjectAddress);
+      const subjectCity = canonicalizeAddress(parsed.city);
+      const subjectState = canonicalizeAddress(parsed.state);
+      const subjectZip = cleanText(parsed.zipCode);
+      if (!subjectStreet) return false;
+
+      const compStreet = canonicalizeAddress(comp.address);
+      const compCity = canonicalizeAddress(comp.city);
+      const compState = canonicalizeAddress(comp.state);
+      const compZip = cleanText(comp.zipCode);
+
+      const streetMatches = compStreet.includes(subjectStreet) || subjectStreet.includes(compStreet);
+      if (!streetMatches) return false;
+      if (subjectZip && compZip && subjectZip !== compZip) return false;
+      if (subjectCity && compCity && subjectCity !== compCity) return false;
+      if (subjectState && compState && subjectState !== compState) return false;
+      return true;
+    }
+
+    function findSubjectComparable(values, comps) {
+      return comps.find((comp) => addressesLikelyMatch(values, comp)) || null;
+    }
+
     function normalizeComp(item) {
       const status = cleanText(pickFirst(item, ["status", "listingStatus", "propertyStatus", "saleType"], "Unknown"));
       const remarks = cleanText(pickFirst(item, ["remarks", "publicRemarks", "description", "marketingRemarks", "privateRemarks"], ""));
@@ -511,25 +559,26 @@
       };
     }
 
-    function buildSubjectProfile(values, comps) {
+    function buildSubjectProfile(values, comps, subjectMatch = null) {
       const parsed = parseSubjectAddress(values.subjectAddress);
       const typedPool = values.subjectPropertyType ? comps.filter((comp) => !comp.propertyType || comp.propertyType === values.subjectPropertyType) : comps;
       const referencePool = typedPool.length ? typedPool : comps;
+      const fallbackComp = subjectMatch || referencePool[0] || null;
       return {
         address: values.subjectAddress,
-        city: parsed.city,
-        state: parsed.state,
-        zipCode: parsed.zipCode,
+        city: parsed.city || fallbackComp?.city || "",
+        state: parsed.state || fallbackComp?.state || "",
+        zipCode: parsed.zipCode || fallbackComp?.zipCode || "",
         schoolZone: "",
-        beds: values.subjectBeds ?? median(referencePool.map((comp) => comp.beds)),
-        baths: values.subjectBaths ?? median(referencePool.map((comp) => comp.baths)),
-        sqft: values.subjectSqft ?? median(referencePool.map((comp) => comp.sqft)),
-        yearBuilt: values.subjectYearBuilt ?? median(referencePool.map((comp) => comp.yearBuilt)),
-        lotSize: values.subjectLotSize ?? median(referencePool.map((comp) => comp.lotSize)),
-        propertyType: values.subjectPropertyType || referencePool.find((comp) => comp.propertyType)?.propertyType || "",
-        subdivision: values.subjectSubdivision || referencePool.find((comp) => comp.subdivision)?.subdivision || "",
-        storyCount: values.subjectStoryCount ?? referencePool.find((comp) => Number.isFinite(comp.storyCount))?.storyCount ?? null,
-        garageParking: values.subjectGarageParking || "",
+        beds: values.subjectBeds ?? fallbackComp?.beds ?? median(referencePool.map((comp) => comp.beds)),
+        baths: values.subjectBaths ?? fallbackComp?.baths ?? median(referencePool.map((comp) => comp.baths)),
+        sqft: values.subjectSqft ?? fallbackComp?.sqft ?? median(referencePool.map((comp) => comp.sqft)),
+        yearBuilt: values.subjectYearBuilt ?? fallbackComp?.yearBuilt ?? median(referencePool.map((comp) => comp.yearBuilt)),
+        lotSize: values.subjectLotSize ?? fallbackComp?.lotSize ?? median(referencePool.map((comp) => comp.lotSize)),
+        propertyType: values.subjectPropertyType || fallbackComp?.propertyType || referencePool.find((comp) => comp.propertyType)?.propertyType || "",
+        subdivision: values.subjectSubdivision || fallbackComp?.subdivision || referencePool.find((comp) => comp.subdivision)?.subdivision || "",
+        storyCount: values.subjectStoryCount ?? fallbackComp?.storyCount ?? referencePool.find((comp) => Number.isFinite(comp.storyCount))?.storyCount ?? null,
+        garageParking: values.subjectGarageParking || fallbackComp?.garageParking || "",
         specialDetails: values.specialDetails,
         conditionNotes: values.conditionNotes,
         estimatedValue: null
@@ -925,9 +974,11 @@
     function buildLiveReport(values, payload) {
       const comps = arrayify(payload?.data).map((item) => normalizeComp(item)).filter((comp) => comp.address && (comp.listPrice != null || comp.soldPrice != null));
       if (!comps.length) throw new Error("RentCast returned no comparable listings for this search.");
-      const subject = buildSubjectProfile(values, comps);
-      const soldSelection = selectSoldComparables(subject, comps, values);
-      const activeSelection = selectActiveComparable(subject, comps, values, new Set(soldSelection.soldComps.map((comp) => comp.id)));
+      const subjectMatch = findSubjectComparable(values, comps);
+      const compPool = subjectMatch ? comps.filter((comp) => comp.id !== subjectMatch.id && !addressesLikelyMatch(values, comp)) : comps;
+      const subject = buildSubjectProfile(values, compPool, subjectMatch);
+      const soldSelection = selectSoldComparables(subject, compPool, values);
+      const activeSelection = selectActiveComparable(subject, compPool, values, new Set(soldSelection.soldComps.map((comp) => comp.id)));
       const sourceNote = soldSelection.usedLiveFallbackPool
         ? `Generated ${formatDateTime(new Date())} using live RentCast data. The API returned a thin sold set, so the report used the closest live listings available while keeping the current CMA scoring logic in place.`
         : `Generated ${formatDateTime(new Date())} using live RentCast sale-listing data with staged comp filtering and similarity scoring.`;

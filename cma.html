@@ -934,7 +934,27 @@
     }
 
     function buildReport(values, subject, soldComps, activeComp, selectionMeta, sourceNote) {
-      if (!soldComps.length) throw new Error("No sold comparable properties passed the CMA rules for this search.");
+      if (!soldComps.length) {
+        const emptyTrend = {
+          trend: "insufficient closed sales",
+          note: "No closed comparable sales matched the current CMA rules. Review the active benchmark and consider broadening the search."
+        };
+        return {
+          generatedAt: new Date(),
+          subject,
+          soldComps: [],
+          activeComp,
+          recommendedRange: [null, null],
+          suggestedListPrice: null,
+          ppsfSummary: { low: null, average: null, high: null, averageDom: null },
+          marketTrend: emptyTrend,
+          pricingOptions: [],
+          strategyNote: "No closed comparable sales matched the current rules, so the pricing recommendation is incomplete until more sold data is available.",
+          summary: "The CMA search did not return any closed comparable sales that matched the current rules. Active properties can still be reviewed, but pricing guidance should be treated as incomplete until closed comps are found.",
+          searchSummary: buildSearchSummary(values, subject, selectionMeta, emptyTrend),
+          dataSourceNote: sourceNote
+        };
+      }
       const pricing = buildPricingModel(values, subject, soldComps, activeComp);
       subject.estimatedValue = pricing.suggestedListPrice;
       return {
@@ -1137,11 +1157,16 @@
       ppsfMetrics.appendChild(renderMetric("Market Trend", report.marketTrend?.trend ? report.marketTrend.trend.replace(/\b\w/g, (char) => char.toUpperCase()) : "Stable"));
 
       strategyOptions.innerHTML = "";
-      report.pricingOptions.forEach((option) => strategyOptions.appendChild(renderStrategyCard(option)));
+      if (report.pricingOptions.length) report.pricingOptions.forEach((option) => strategyOptions.appendChild(renderStrategyCard(option)));
+      else strategyOptions.appendChild(renderCompEmpty("Pricing strategy will appear once closed comparable sales are available."));
 
       estimateGrid.innerHTML = "";
-      estimateGrid.appendChild(renderEstimateCard("Recommended price range", `${formatCurrency(report.recommendedRange[0])} - ${formatCurrency(report.recommendedRange[1])}`, "Comp-supported range from the selected sold comparables and PPSF cross-check.", false));
-      estimateGrid.appendChild(renderEstimateCard("Suggested list price", formatCurrency(report.suggestedListPrice), "Primary launch recommendation using market trend, condition, and pricing psychology.", true));
+      if (report.soldComps.length) {
+        estimateGrid.appendChild(renderEstimateCard("Recommended price range", `${formatCurrency(report.recommendedRange[0])} - ${formatCurrency(report.recommendedRange[1])}`, "Comp-supported range from the selected sold comparables and PPSF cross-check.", false));
+        estimateGrid.appendChild(renderEstimateCard("Suggested list price", formatCurrency(report.suggestedListPrice), "Primary launch recommendation using market trend, condition, and pricing psychology.", true));
+      } else {
+        estimateGrid.appendChild(renderEstimateCard("Pricing guidance", "Need closed comps", "No closed comparable sales matched the current rules. Review active inventory or broaden the search parameters.", false));
+      }
 
       soldCompGrid.innerHTML = "";
       if (report.soldComps.length) report.soldComps.forEach((comp) => soldCompGrid.appendChild(renderCompCard(comp)));

@@ -960,10 +960,10 @@
     async function fetchLiveCma(values) {
       const parsed = parseSubjectAddress(values.subjectAddress);
       const params = new URLSearchParams();
+      if (parsed.street || parsed.full) params.set("address", parsed.street || parsed.full);
       if (parsed.city) params.set("city", parsed.city);
-      if (parsed.state) params.set("state", parsed.state);
+      if (parsed.state) params.set("state", parsed.state.toUpperCase());
       if (parsed.zipCode) params.set("zipCode", parsed.zipCode);
-      if ((!parsed.city || !parsed.state) && (parsed.street || parsed.full)) params.set("address", parsed.street || parsed.full);
       if (values.subjectPropertyTypeRaw) params.set("propertyType", values.subjectPropertyTypeRaw);
       params.set("limit", "60");
       const response = await fetch(`/.netlify/functions/cma?${params.toString()}`, { headers: { Accept: "application/json" } });

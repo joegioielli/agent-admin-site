@@ -6,165 +6,41 @@
   <title>CMA Report Builder</title>
   <style>
     :root {
-      --bg-page: #f3f4f6;
-      --bg-card: #ffffff;
-      --border-subtle: #e5e7eb;
-      --text-main: #111827;
-      --text-muted: #6b7280;
-      --primary: #2563eb;
-      --primary-soft: linear-gradient(135deg, #2563eb, #4f46e5);
-      --success: #2d6a4f;
-      --radius-card: 14px;
-      --radius-pill: 999px;
-      --shadow-soft: 0 14px 30px rgba(15, 23, 42, 0.12);
-      --shadow-subtle: 0 6px 16px rgba(15, 23, 42, 0.06);
+      --bg-page:#f3f4f6;
+      --bg-card:#fff;
+      --border:#e5e7eb;
+      --text:#111827;
+      --muted:#6b7280;
+      --primary:#2563eb;
+      --primary-soft:linear-gradient(135deg,#2563eb,#4f46e5);
+      --success:#2d6a4f;
+      --radius:14px;
+      --pill:999px;
+      --shadow:0 6px 16px rgba(15,23,42,.06);
+      --shadow-lg:0 14px 30px rgba(15,23,42,.12);
     }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: radial-gradient(circle at top, #e5edff 0, #f3f4f6 40%, #e5e7eb 100%);
-      color: var(--text-main);
-      min-height: 100vh;
-      display: flex;
-    }
-    .app-shell {
-      display: flex;
-      width: 100%;
-      max-width: 1400px;
-      margin: 24px auto;
-      padding: 0 16px;
-      gap: 20px;
-    }
-    .sidebar {
-      width: 240px;
-      background: radial-gradient(circle at top, #1f2937 0, #020617 55%);
-      border-radius: var(--radius-card);
-      padding: 16px 14px;
-      color: #e5e7eb;
-      box-shadow: var(--shadow-soft);
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-    .brand { display: flex; align-items: center; gap: 10px; padding: 8px 8px 2px; }
-    .brand-logo {
-      width: 32px; height: 32px; border-radius: 12px; background: var(--primary-soft);
-      display: flex; align-items: center; justify-content: center; color: #f9fafb;
-      font-weight: 800; font-size: 18px; box-shadow: 0 10px 24px rgba(37, 99, 235, 0.7);
-    }
-    .brand-text-title { font-weight: 700; letter-spacing: 0.08em; font-size: 12px; text-transform: uppercase; }
-    .brand-text-sub { font-size: 11px; color: #9ca3af; }
-    .sidebar-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.16em; color: #6b7280; padding: 4px 8px; margin-top: 4px; }
-    .nav-list { list-style: none; padding: 4px; display: flex; flex-direction: column; gap: 4px; }
-    .nav-item {
-      display: flex; align-items: center; gap: 10px; padding: 7px 9px; border-radius: 10px;
-      color: #e5e7eb; text-decoration: none; font-size: 13px;
-      transition: background 0.2s ease, transform 0.12s ease, box-shadow 0.2s ease;
-    }
-    .nav-item:hover { background: rgba(148, 163, 184, 0.2); transform: translateY(-1px); }
-    .nav-item.active { background: linear-gradient(135deg, #2563eb, #4f46e5); box-shadow: 0 8px 20px rgba(37, 99, 235, 0.6); }
-    .nav-item-label { flex: 1; }
-    .main { flex: 1; display: flex; flex-direction: column; gap: 14px; }
-    .main-header {
-      display: flex; align-items: center; justify-content: space-between; padding: 10px 16px;
-      border-radius: var(--radius-card); background: rgba(255, 255, 255, 0.9);
-      box-shadow: var(--shadow-subtle); backdrop-filter: blur(10px);
-    }
-    .main-title { font-size: 18px; font-weight: 700; letter-spacing: 0.04em; }
-    .main-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
-    .main-content { flex: 1; display: flex; flex-direction: column; gap: 12px; }
-    .hero, .card, .report-shell {
-      background: var(--bg-card); border-radius: var(--radius-card); box-shadow: var(--shadow-subtle);
-      padding: 16px; border: 1px solid var(--border-subtle);
-    }
-    .hero-eyebrow, .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--primary); font-weight: 700; }
-    .hero-title { font-size: clamp(1.7rem, 4vw, 2.4rem); line-height: 1.05; margin-top: 6px; }
-    .hero-copy, .section-copy, .muted-text, .report-subtitle { color: var(--text-muted); font-size: 14px; line-height: 1.55; margin-top: 8px; }
-    .layout { display: grid; grid-template-columns: minmax(320px, 420px) minmax(0, 1fr); gap: 14px; align-items: start; }
-    .section-title { font-size: 18px; font-weight: 700; margin-top: 4px; }
-    .form-stack { display: grid; gap: 14px; margin-top: 14px; }
-    .field-grid { display: grid; gap: 12px; }
-    .field-grid.two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .field { display: grid; gap: 6px; }
-    .field label, legend { font-size: 13px; font-weight: 600; }
-    input[type="text"], input[type="number"], textarea {
-      width: 100%; min-height: 46px; padding: 11px 12px; border-radius: 12px;
-      border: 1px solid #dbe1ea; background: #fff; color: var(--text-main); font: inherit;
-    }
-    textarea { min-height: 110px; resize: vertical; }
-    input:focus, textarea:focus { outline: none; border-color: rgba(37, 99, 235, 0.45); box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12); }
-    .sub-card { border: 1px solid var(--border-subtle); border-radius: 12px; background: #f8fafc; padding: 14px; }
-    .fixed-list, .search-list { margin-top: 10px; padding-left: 18px; color: var(--text-muted); display: grid; gap: 8px; font-size: 14px; line-height: 1.45; }
-    fieldset { border: 0; min-width: 0; }
-    .checkbox-row { display: grid; gap: 10px; margin-top: 12px; }
-    .toggle { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border-radius: 12px; border: 1px solid var(--border-subtle); background: #fff; }
-    .toggle input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--primary); }
-    .toggle strong { display: block; font-size: 14px; }
-    .toggle span:last-child { color: var(--text-muted); font-size: 13px; line-height: 1.45; }
-    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; }
-    .btn, .print-btn {
-      min-height: 42px; border: none; border-radius: var(--radius-pill); padding: 0 14px;
-      font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
-      cursor: pointer; transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease;
-    }
-    .btn-primary, .badge-accent, .estimate-card.featured { background: var(--primary-soft); color: #fff; box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24); }
-    .btn-secondary, .print-btn { background: #eef2ff; color: #4338ca; }
-    .btn:hover, .print-btn:hover { transform: translateY(-1px); }
-    .report-shell { padding: 0; overflow: hidden; }
-    .report-head {
-      padding: 16px; border-bottom: 1px solid var(--border-subtle); background: rgba(255, 255, 255, 0.92);
-      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-    }
-    .report-title { font-size: 20px; font-weight: 700; }
-    .report-badges { display: flex; flex-wrap: wrap; gap: 8px; }
-    .badge, .comp-status {
-      min-height: 28px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: var(--radius-pill);
-      background: #eef2ff; color: #4338ca; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
-    }
-    .report-body { padding: 16px; display: grid; gap: 14px; }
-    .print-toolbar { display: flex; justify-content: flex-end; }
-    .empty-state { padding: 34px 18px; text-align: center; color: var(--text-muted); font-size: 14px; line-height: 1.6; border: 1px dashed var(--border-subtle); border-radius: 12px; background: #f8fafc; }
-    .report-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; }
-    .report-card { grid-column: span 12; padding: 14px; border-radius: 12px; border: 1px solid var(--border-subtle); background: #fff; box-shadow: var(--shadow-subtle); }
-    .span-7 { grid-column: span 7; } .span-5 { grid-column: span 5; }
-    .metrics, .estimate-grid, .comp-meta { display: grid; gap: 10px; }
-    .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; }
-    .estimate-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
-    .metric, .estimate-card, .comp-card, .comp-meta div, .strategy-card { padding: 12px; border-radius: 12px; border: 1px solid var(--border-subtle); background: #f8fafc; }
-    .metric span, .estimate-label, .comp-meta span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 700; }
-    .metric strong, .estimate-value, .comp-meta strong { display: block; margin-top: 6px; font-size: 16px; font-weight: 700; }
-    .estimate-footnote, .comp-notes { margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--text-muted); }
-    .comp-grid { display: grid; gap: 12px; margin-top: 12px; }
-    .comp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-    .comp-address { font-size: 16px; font-weight: 700; }
-    .comp-status.active { background: linear-gradient(135deg, var(--success), #245740); color: #fff; }
-    .comp-meta { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-top: 12px; }
-    .strategy-grid { display: grid; gap: 10px; margin-top: 12px; }
-    .strategy-card strong { display: block; font-size: 14px; }
-    .strategy-card p { margin-top: 6px; font-size: 13px; line-height: 1.45; color: var(--text-muted); }
-    .report-shell[data-ready="false"] .print-toolbar, .report-shell[data-ready="false"] .report-grid { display: none; }
-    @media (max-width: 1080px) { .layout { grid-template-columns: 1fr; } }
-    @media (max-width: 960px) {
-      .app-shell { flex-direction: column; }
-      .sidebar { width: 100%; flex-direction: row; align-items: center; overflow-x: auto; }
-      .sidebar-section-title { display: none; }
-      .nav-list { flex-direction: row; flex-wrap: wrap; }
-    }
-    @media (max-width: 760px) {
-      .app-shell { margin: 12px auto; padding: 0 10px; }
-      .field-grid.two-col, .metrics, .estimate-grid, .comp-meta { grid-template-columns: 1fr 1fr; }
-      .span-7, .span-5 { grid-column: span 12; }
-      .toolbar { flex-direction: column; }
-      .btn, .print-btn { width: 100%; }
-    }
-    @media print {
-      body { background: #fff; }
-      .sidebar, .main-header, .hero, .card { display: none; }
-      .app-shell { display: block; margin: 0; padding: 0; }
-      .report-shell { border: none; box-shadow: none; }
-      .print-toolbar { display: none; }
-    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(circle at top,#e5edff 0,#f3f4f6 40%,#e5e7eb 100%);color:var(--text);min-height:100vh;display:flex}
+    .app-shell{display:flex;width:100%;max-width:1400px;margin:24px auto;padding:0 16px;gap:20px}
+    .sidebar{width:240px;background:radial-gradient(circle at top,#1f2937 0,#020617 55%);border-radius:var(--radius);padding:16px 14px;color:#e5e7eb;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;gap:14px}
+    .brand{display:flex;align-items:center;gap:10px;padding:8px 8px 2px}.brand-logo{width:32px;height:32px;border-radius:12px;background:var(--primary-soft);display:flex;align-items:center;justify-content:center;color:#f9fafb;font-weight:800;font-size:18px;box-shadow:0 10px 24px rgba(37,99,235,.7)}
+    .brand-text-title{font-weight:700;letter-spacing:.08em;font-size:12px;text-transform:uppercase}.brand-text-sub{font-size:11px;color:#9ca3af}.sidebar-section-title{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:#6b7280;padding:4px 8px;margin-top:4px}
+    .nav-list{list-style:none;padding:4px;display:flex;flex-direction:column;gap:4px}.nav-item{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:10px;color:#e5e7eb;text-decoration:none;font-size:13px;transition:background .2s ease,transform .12s ease,box-shadow .2s ease}.nav-item:hover{background:rgba(148,163,184,.2);transform:translateY(-1px)}.nav-item.active{background:linear-gradient(135deg,#2563eb,#4f46e5);box-shadow:0 8px 20px rgba(37,99,235,.6)}.nav-item-label{flex:1}
+    .main{flex:1;display:flex;flex-direction:column;gap:14px}.main-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-radius:var(--radius);background:rgba(255,255,255,.9);box-shadow:var(--shadow);backdrop-filter:blur(10px)}.main-title{font-size:18px;font-weight:700;letter-spacing:.04em}.main-subtitle{font-size:12px;color:var(--muted);margin-top:3px}.main-content{flex:1;display:flex;flex-direction:column;gap:12px}
+    .hero,.card,.report-shell{background:var(--bg-card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;border:1px solid var(--border)}
+    .hero-eyebrow,.section-label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--primary);font-weight:700}.hero-title{font-size:clamp(1.7rem,4vw,2.4rem);line-height:1.05;margin-top:6px}.hero-copy,.section-copy,.muted-text,.report-subtitle{color:var(--muted);font-size:14px;line-height:1.55;margin-top:8px}.layout{display:grid;grid-template-columns:minmax(320px,420px) minmax(0,1fr);gap:14px;align-items:start}.section-title{font-size:18px;font-weight:700;margin-top:4px}
+    .form-stack{display:grid;gap:14px;margin-top:14px}.field-grid{display:grid;gap:12px}.field-grid.two-col{grid-template-columns:repeat(2,minmax(0,1fr))}.field{display:grid;gap:6px}.field label,legend{font-size:13px;font-weight:600}input[type="text"],input[type="number"],textarea{width:100%;min-height:46px;padding:11px 12px;border-radius:12px;border:1px solid #dbe1ea;background:#fff;color:var(--text);font:inherit}textarea{min-height:110px;resize:vertical}input:focus,textarea:focus{outline:none;border-color:rgba(37,99,235,.45);box-shadow:0 0 0 4px rgba(37,99,235,.12)}
+    .sub-card{border:1px solid var(--border);border-radius:12px;background:#f8fafc;padding:14px}.fixed-list,.search-list{margin-top:10px;padding-left:18px;color:var(--muted);display:grid;gap:8px;font-size:14px;line-height:1.45}fieldset{border:0;min-width:0}.checkbox-row{display:grid;gap:10px;margin-top:12px}.toggle{display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:12px;border:1px solid var(--border);background:#fff}.toggle input{width:18px;height:18px;margin-top:2px;accent-color:var(--primary)}.toggle strong{display:block;font-size:14px}.toggle span:last-child{color:var(--muted);font-size:13px;line-height:1.45}
+    .toolbar{display:flex;flex-wrap:wrap;gap:10px}.btn,.print-btn{min-height:42px;border:none;border-radius:var(--pill);padding:0 14px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:transform .12s ease,box-shadow .2s ease,background .2s ease}.btn-primary,.badge-accent,.estimate-card.featured{background:var(--primary-soft);color:#fff;box-shadow:0 10px 24px rgba(37,99,235,.24)}.btn-secondary,.print-btn{background:#eef2ff;color:#4338ca}.btn:hover,.print-btn:hover{transform:translateY(-1px)}
+    .report-shell{padding:0;overflow:hidden}.report-head{padding:16px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.92);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}.report-title{font-size:20px;font-weight:700}.report-badges{display:flex;flex-wrap:wrap;gap:8px}.badge,.comp-status{min-height:28px;display:inline-flex;align-items:center;padding:0 10px;border-radius:var(--pill);background:#eef2ff;color:#4338ca;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.report-body{padding:16px;display:grid;gap:14px}.print-toolbar{display:flex;justify-content:flex-end}
+    .empty-state{padding:34px 18px;text-align:center;color:var(--muted);font-size:14px;line-height:1.6;border:1px dashed var(--border);border-radius:12px;background:#f8fafc}.report-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px}.report-card{grid-column:span 12;padding:14px;border-radius:12px;border:1px solid var(--border);background:#fff;box-shadow:var(--shadow)}.span-7{grid-column:span 7}.span-5{grid-column:span 5}
+    .metrics,.estimate-grid,.comp-meta{display:grid;gap:10px}.metrics{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:12px}.estimate-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:12px}.metric,.estimate-card,.comp-card,.comp-meta div,.strategy-card{padding:12px;border-radius:12px;border:1px solid var(--border);background:#f8fafc}.metric span,.estimate-label,.comp-meta span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}.metric strong,.estimate-value,.comp-meta strong{display:block;margin-top:6px;font-size:16px;font-weight:700}.estimate-footnote,.comp-notes{margin-top:8px;font-size:13px;line-height:1.45;color:var(--muted)}
+    .comp-grid{display:grid;gap:12px;margin-top:12px}.comp-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}.comp-address{font-size:16px;font-weight:700}.comp-status.active{background:linear-gradient(135deg,var(--success),#245740);color:#fff}.comp-meta{grid-template-columns:repeat(5,minmax(0,1fr));margin-top:12px}.strategy-grid{display:grid;gap:10px;margin-top:12px}.strategy-card strong{display:block;font-size:14px}.strategy-card p{margin-top:6px;font-size:13px;line-height:1.45;color:var(--muted)}
+    .report-shell[data-ready="false"] .print-toolbar,.report-shell[data-ready="false"] .report-grid{display:none}
+    @media (max-width:1080px){.layout{grid-template-columns:1fr}}
+    @media (max-width:960px){.app-shell{flex-direction:column}.sidebar{width:100%;flex-direction:row;align-items:center;overflow-x:auto}.sidebar-section-title{display:none}.nav-list{flex-direction:row;flex-wrap:wrap}}
+    @media (max-width:760px){.app-shell{margin:12px auto;padding:0 10px}.field-grid.two-col,.metrics,.estimate-grid,.comp-meta{grid-template-columns:1fr 1fr}.span-7,.span-5{grid-column:span 12}.toolbar{flex-direction:column}.btn,.print-btn{width:100%}}
+    @media print{body{background:#fff}.sidebar,.main-header,.hero,.card{display:none}.app-shell{display:block;margin:0;padding:0}.report-shell{border:none;box-shadow:none}.print-toolbar{display:none}}
   </style>
 </head>
 <body>
@@ -177,7 +53,6 @@
           <div class="brand-text-sub">CMA Builder</div>
         </div>
       </div>
-
       <div class="sidebar-section-title">Sections</div>
       <ul class="nav-list">
         <li><a class="nav-item" href="home.html"><span class="nav-item-label">Home</span></a></li>
@@ -188,41 +63,33 @@
         <li><a class="nav-item active" href="cma.html"><span class="nav-item-label">CMA</span></a></li>
       </ul>
     </aside>
-
     <main class="main">
       <header class="main-header">
         <div>
           <div class="main-title">CMA Report Builder</div>
-          <div class="main-subtitle">Use live RentCast results now, then we can tighten the search rules next.</div>
+          <div class="main-subtitle">Use live RentCast results with staged comp search, similarity scoring, and pricing guidance.</div>
         </div>
       </header>
-
       <section class="main-content">
         <section class="hero">
           <div class="hero-eyebrow">Comparative Market Analysis</div>
-          <h1 class="hero-title">Build a clean pricing report with live comps and agent-friendly pricing guidance.</h1>
-          <p class="hero-copy">
-            The CMA form below uses your subject property input, searches a broader comparable pool, and ranks the best matches before building the pricing recommendation.
-          </p>
+          <h1 class="hero-title">Build a clean pricing report with live comps and agent-friendly recommendations.</h1>
+          <p class="hero-copy">The CMA engine below uses subject property details, staged comparable-search logic, and a weighted scoring model to build a more defensible report.</p>
         </section>
-
         <section class="layout">
           <section class="card">
             <div class="section-label">Input</div>
             <h2 class="section-title">Subject property and search setup</h2>
-            <p class="section-copy">Use the subject property fields when you have them. The CMA engine blends those details with live comparable data and a ranked scoring model.</p>
-
+            <p class="section-copy">Use the subject property fields when you have them. The engine blends those details with live comparable data and a structured pricing model.</p>
             <form id="cmaForm" class="form-stack">
               <div class="field">
                 <label for="subjectAddress">Subject property address</label>
                 <input id="subjectAddress" name="subjectAddress" type="text" placeholder="123 Main St, Springfield, IL 62704" autocomplete="street-address" required />
               </div>
-
               <div class="field">
                 <label for="specialDetails">Special details that may affect value</label>
                 <textarea id="specialDetails" name="specialDetails" placeholder="Example: new roof in 2024, updated kitchen, corner lot, fresh paint, new HVAC, covered patio..."></textarea>
               </div>
-
               <section class="sub-card">
                 <div class="section-label">Subject Details</div>
                 <h3 class="section-title">Property facts to strengthen the comp search</h3>
@@ -246,27 +113,24 @@
                   <textarea id="conditionNotes" name="conditionNotes" placeholder="Example: dated baths, backs to greenbelt, strong curb appeal, busy road, fenced yard, deferred maintenance..."></textarea>
                 </div>
               </section>
-
               <section class="sub-card">
                 <div class="section-label">Fixed Search Parameters</div>
                 <h3 class="section-title">Always applied in the background</h3>
                 <ul class="fixed-list" id="fixedParameterList"></ul>
               </section>
-
               <section class="sub-card">
                 <div class="section-label">Adjustable Search Parameters</div>
-                <h3 class="section-title">Ready for the next search pass</h3>
+                <h3 class="section-title">Search controls</h3>
                 <div class="field-grid two-col" style="margin-top: 12px;">
-                  <div class="field"><label for="searchRadius">Search radius (miles)</label><input id="searchRadius" name="searchRadius" type="number" min="0.25" max="25" step="0.25" value="1.5" /></div>
+                  <div class="field"><label for="searchRadius">Search radius (miles)</label><input id="searchRadius" name="searchRadius" type="number" min="0.25" max="5" step="0.25" value="1.5" /></div>
                   <div class="field"><label for="ageVariance">Maximum age difference (years)</label><input id="ageVariance" name="ageVariance" type="number" min="0" max="50" step="1" value="10" /></div>
                   <div class="field"><label for="sqftVariance">Square footage variance (%)</label><input id="sqftVariance" name="sqftVariance" type="number" min="5" max="60" step="5" value="20" /></div>
                   <div class="field"><label for="bedVariance">Bedroom variance</label><input id="bedVariance" name="bedVariance" type="number" min="0" max="4" step="1" value="1" /></div>
                   <div class="field"><label for="bathVariance">Bathroom variance</label><input id="bathVariance" name="bathVariance" type="number" min="0" max="4" step="0.5" value="1" /></div>
                   <div class="field"><label for="yearBuiltVariance">Year built variance</label><input id="yearBuiltVariance" name="yearBuiltVariance" type="number" min="0" max="40" step="1" value="12" /></div>
                   <div class="field"><label for="lotVariance">Lot size variance (%)</label><input id="lotVariance" name="lotVariance" type="number" min="5" max="80" step="5" value="25" /></div>
-                  <div class="field"><label for="lookbackMonths">Closed sales lookback (months)</label><input id="lookbackMonths" name="lookbackMonths" type="number" min="1" max="24" step="1" value="6" /></div>
+                  <div class="field"><label for="lookbackMonths">Closed sales lookback (months)</label><input id="lookbackMonths" name="lookbackMonths" type="number" min="1" max="12" step="1" value="6" /></div>
                 </div>
-
                 <fieldset class="checkbox-row">
                   <legend>Preference weighting</legend>
                   <label class="toggle" for="prioritizeSubdivision">
@@ -279,14 +143,12 @@
                   </label>
                 </fieldset>
               </section>
-
               <div class="toolbar">
                 <button type="submit" class="btn btn-primary">Generate CMA</button>
                 <button type="reset" class="btn btn-secondary">Reset</button>
               </div>
             </form>
           </section>
-
           <section class="report-shell" id="reportSection" data-ready="false">
             <div class="report-head">
               <div>
@@ -300,12 +162,10 @@
                 <span class="badge badge-accent">RentCast connected</span>
               </div>
             </div>
-
             <div class="report-body">
               <div class="print-toolbar"><button type="button" class="print-btn" id="printReportBtn">Print Report</button></div>
               <div class="empty-state" id="reportEmptyState">Enter a subject property address and generate the CMA to populate the report. Live RentCast data will load first, and the page will fall back gracefully if the result set is thin.</div>
-
-              <div class="report-grid" id="reportGrid">
+              <div class="report-grid">
                 <section class="report-card span-7"><div class="section-label">Subject Property</div><h3 class="section-title">Subject property overview</h3><p class="section-copy" id="subjectPropertyAddress">Not generated yet.</p><div class="metrics" id="subjectPropertyMetrics"></div></section>
                 <section class="report-card span-5"><div class="section-label">Special Details</div><h3 class="section-title">Value-impact notes</h3><p class="section-copy" id="specialDetailsOutput">No special details entered yet.</p></section>
                 <section class="report-card span-7"><div class="section-label">CMA Summary</div><h3 class="section-title">Pricing takeaway</h3><p class="section-copy" id="summaryText"></p></section>
@@ -313,8 +173,8 @@
                 <section class="report-card span-7"><div class="section-label">PPSF Support</div><h3 class="section-title">Price per square foot and market read</h3><div class="metrics" id="ppsfMetrics"></div><p class="muted-text" id="marketTrendText"></p></section>
                 <section class="report-card span-5"><div class="section-label">Pricing Strategy</div><h3 class="section-title">Recommended positioning</h3><p class="section-copy" id="strategyNoteText"></p><div class="strategy-grid" id="strategyOptions"></div></section>
                 <section class="report-card"><div class="section-label">Value Guidance</div><h3 class="section-title">Pricing recommendation</h3><div class="estimate-grid" id="estimateGrid"></div></section>
-                <section class="report-card"><div class="section-label">Comparable Sales</div><h3 class="section-title">Closed comparable properties</h3><p class="muted-text">These cards prefer sold comps first, then fill from the live result set if the API comes back light.</p><div class="comp-grid" id="soldCompGrid"></div></section>
-                <section class="report-card"><div class="section-label">Competitive Listing</div><h3 class="section-title">Active comparable property</h3><p class="muted-text">This card shows the best active benchmark available from the current live search.</p><div class="comp-grid" id="activeCompGrid"></div></section>
+                <section class="report-card"><div class="section-label">Comparable Sales</div><h3 class="section-title">Closed comparable properties</h3><p class="muted-text">These cards show the best sold matches returned after staged search filtering and similarity scoring.</p><div class="comp-grid" id="soldCompGrid"></div></section>
+                <section class="report-card"><div class="section-label">Competitive Listing</div><h3 class="section-title">Active comparable property</h3><p class="muted-text">This card shows the strongest current benchmark available from the live search.</p><div class="comp-grid" id="activeCompGrid"></div></section>
               </div>
             </div>
           </section>
@@ -322,14 +182,29 @@
       </section>
     </main>
   </div>
-
   <script>
     const FIXED_SEARCH_PARAMS = [
-      "Use residential resale comps by default unless the subject property type indicates otherwise.",
-      "Prefer the most recent closed sales first and exclude pending listings from the sold comp pool.",
-      "Target exactly 3 sold comparables and 1 active comparable for the report layout.",
-      "Favor arm's-length transactions and standard market exposure where possible.",
-      "De-prioritize outliers that materially differ in condition, quality, or lot utility."
+      "Match the subject to the same major property type before anything else.",
+      "Search sold comps in staged recency and distance bands before widening the pool.",
+      "Score candidate comps instead of using the first results returned by the API.",
+      "De-prioritize distressed, short sale, foreclosure, and obvious outlier comps.",
+      "Return the best 3 sold comps and 1 active benchmark for the report layout."
+    ];
+
+    const POSITIVE_DETAIL_KEYWORDS = [
+      "new roof", "new hvac", "new ac", "fresh paint", "updated kitchen", "updated bath",
+      "updated bathrooms", "updated flooring", "new flooring", "renovated", "remodeled",
+      "fenced yard", "covered patio", "outdoor living", "curb appeal", "corner lot",
+      "lot premium", "pool", "modern systems", "upgrade", "upgrades"
+    ];
+
+    const NEGATIVE_DETAIL_KEYWORDS = [
+      "busy road", "commercial", "dated", "deferred maintenance", "needs work", "fixer",
+      "functional obsolescence", "inferior lot", "backs to", "backs up to", "as-is", "as is"
+    ];
+
+    const DISTRESS_KEYWORDS = [
+      "foreclosure", "short sale", "distressed", "investor special", "estate sale", "handyman"
     ];
 
     const form = document.getElementById("cmaForm");
@@ -342,6 +217,10 @@
     const specialDetailsOutput = document.getElementById("specialDetailsOutput");
     const summaryText = document.getElementById("summaryText");
     const searchSummaryList = document.getElementById("searchSummaryList");
+    const ppsfMetrics = document.getElementById("ppsfMetrics");
+    const marketTrendText = document.getElementById("marketTrendText");
+    const strategyNoteText = document.getElementById("strategyNoteText");
+    const strategyOptions = document.getElementById("strategyOptions");
     const estimateGrid = document.getElementById("estimateGrid");
     const soldCompGrid = document.getElementById("soldCompGrid");
     const activeCompGrid = document.getElementById("activeCompGrid");
@@ -354,6 +233,7 @@
       fixedParameterList.appendChild(li);
     });
 
+    const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
     const toNumber = (value, fallback = null) => {
       const n = Number(value);
       return Number.isFinite(n) ? n : fallback;
@@ -374,10 +254,73 @@
       return fallback;
     }
 
+    const cleanText = (value) => String(value || "").trim();
+    const normalizeText = (value) => cleanText(value).toLowerCase().replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
+
+    function parseDateValue(value) {
+      if (!value) return null;
+      const date = value instanceof Date ? value : new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function daysSince(date) {
+      const parsed = parseDateValue(date);
+      if (!parsed) return null;
+      return Math.round((Date.now() - parsed.getTime()) / 86400000);
+    }
+
+    function monthsSince(date) {
+      const days = daysSince(date);
+      return days == null ? null : days / 30.4375;
+    }
+
+    function average(values) {
+      const valid = values.filter((value) => Number.isFinite(value));
+      if (!valid.length) return null;
+      return valid.reduce((sum, value) => sum + value, 0) / valid.length;
+    }
+
+    function median(values) {
+      const valid = values.filter((value) => Number.isFinite(value)).sort((a, b) => a - b);
+      if (!valid.length) return null;
+      const mid = Math.floor(valid.length / 2);
+      return valid.length % 2 ? valid[mid] : (valid[mid - 1] + valid[mid]) / 2;
+    }
+
+    function weightedAverage(items, valueKey, weightKey) {
+      let numerator = 0;
+      let denominator = 0;
+      items.forEach((item) => {
+        const value = typeof valueKey === "function" ? valueKey(item) : item?.[valueKey];
+        const weight = typeof weightKey === "function" ? weightKey(item) : item?.[weightKey];
+        if (Number.isFinite(value) && Number.isFinite(weight) && weight > 0) {
+          numerator += value * weight;
+          denominator += weight;
+        }
+      });
+      return denominator ? numerator / denominator : null;
+    }
+
+    function uniqueBy(items, keyFn) {
+      const seen = new Set();
+      return items.filter((item) => {
+        const key = keyFn(item);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+
     function formatCurrency(value) {
       const n = Number(value);
       if (!Number.isFinite(n)) return "N/A";
       return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+    }
+
+    function formatPpsf(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return "N/A";
+      return `${formatCurrency(n)}/sf`;
     }
 
     function formatLotSize(acres) {
@@ -405,23 +348,54 @@
     }
 
     function parseSubjectAddress(raw) {
-      const full = String(raw || "").trim();
+      const full = cleanText(raw);
       const parts = full.split(",").map((part) => part.trim()).filter(Boolean);
       const stateZip = parts[2] || "";
       const match = stateZip.match(/^([A-Za-z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/);
-      return {
-        full,
-        street: parts[0] || full,
-        city: parts[1] || "",
-        state: match?.[1] || "",
-        zipCode: match?.[2] || "",
-      };
+      return { full, street: parts[0] || full, city: parts[1] || "", state: match?.[1] || "", zipCode: match?.[2] || "" };
     }
 
     function normalizeLotSize(value) {
       const raw = coerceNumber(value);
       if (!Number.isFinite(raw) || raw <= 0) return null;
       return raw > 5 ? raw / 43560 : raw;
+    }
+
+    function normalizePropertyType(value) {
+      const text = normalizeText(value);
+      if (!text) return "";
+      if (/(single|sfh|detached)/.test(text)) return "single_family";
+      if (/condo|condominium/.test(text)) return "condo";
+      if (/townhome|townhouse/.test(text)) return "townhome";
+      if (/duplex|triplex|quad/.test(text)) return "multifamily";
+      if (/manufactured|mobile/.test(text)) return "manufactured";
+      return text.replace(/\s+/g, "_");
+    }
+
+    function displayPropertyType(value) {
+      if (!value) return "Pending";
+      return String(value).replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+    }
+
+    function normalizeStoryCount(value) {
+      const text = normalizeText(value);
+      if (!text) return null;
+      if (/\b(one|single|1)\b/.test(text)) return 1;
+      if (/\b(two|2)\b/.test(text)) return 2;
+      if (/\b(three|3)\b/.test(text)) return 3;
+      const numeric = coerceNumber(text);
+      return Number.isFinite(numeric) ? numeric : null;
+    }
+
+    function summarizeStoryCount(value) {
+      return Number.isFinite(value) ? `${value}-story` : "Pending";
+    }
+
+    function analyzeConditionText(text) {
+      const normalized = normalizeText(text);
+      const positiveMatches = POSITIVE_DETAIL_KEYWORDS.filter((keyword) => normalized.includes(keyword));
+      const negativeMatches = NEGATIVE_DETAIL_KEYWORDS.filter((keyword) => normalized.includes(keyword));
+      return { positiveMatches, negativeMatches, netScore: positiveMatches.length - negativeMatches.length };
     }
 
     function buildCompAddress(item) {
@@ -434,29 +408,42 @@
       return [line1, [city, state, zip].filter(Boolean).join(" ")].filter(Boolean).join(", ") || "Comparable property";
     }
 
-    function buildSimilarityNotes(comp, values) {
-      const notes = [];
-      if (values.prioritizeSubdivision) notes.push("Neighborhood match weighted heavily.");
-      if (values.prioritizeStyle) notes.push("Style similarity was prioritized.");
-      if (comp.daysOnMarket != null) notes.push(`${comp.daysOnMarket} days on market.`);
-      if (!notes.length) notes.push("Comparable selected from the live RentCast result set.");
-      return notes.join(" ");
-    }
-
-    function normalizeComp(item, values) {
-      const status = String(pickFirst(item, ["status", "listingStatus", "propertyStatus", "saleType"], "Unknown"));
+    function normalizeComp(item) {
+      const status = cleanText(pickFirst(item, ["status", "listingStatus", "propertyStatus", "saleType"], "Unknown"));
+      const remarks = cleanText(pickFirst(item, ["remarks", "publicRemarks", "description", "marketingRemarks", "privateRemarks"], ""));
+      const listPrice = coerceNumber(pickFirst(item, ["listPrice", "price", "listingPrice", "askingPrice"]));
+      const soldPrice = coerceNumber(pickFirst(item, ["soldPrice", "lastSalePrice", "salePrice", "closedPrice"]));
+      const sqft = coerceNumber(pickFirst(item, ["squareFootage", "livingArea", "livingAreaSquareFeet", "sqft", "squareFeet"]));
+      const derivedPrice = soldPrice ?? listPrice;
+      const pricePerSqft = Number.isFinite(derivedPrice) && Number.isFinite(sqft) && sqft > 0 ? derivedPrice / sqft : null;
       return {
+        id: cleanText(pickFirst(item, ["id", "listingId", "propertyId", "mlsNumber"], buildCompAddress(item))),
         address: buildCompAddress(item),
+        city: cleanText(pickFirst(item, ["city"], "")),
+        state: cleanText(pickFirst(item, ["state"], "")),
+        zipCode: cleanText(pickFirst(item, ["zipCode", "postalCode"], "")),
         status,
-        listPrice: coerceNumber(pickFirst(item, ["listPrice", "price", "listingPrice", "askingPrice"])),
-        soldPrice: coerceNumber(pickFirst(item, ["soldPrice", "lastSalePrice", "salePrice", "closedPrice"])),
-        sqft: coerceNumber(pickFirst(item, ["squareFootage", "livingArea", "livingAreaSquareFeet", "sqft", "squareFeet"])),
+        listPrice,
+        soldPrice,
+        sqft,
         beds: coerceNumber(pickFirst(item, ["bedrooms", "beds", "bedroomCount"])),
         baths: coerceNumber(pickFirst(item, ["bathrooms", "baths", "bathroomCount", "fullBathrooms"])),
         yearBuilt: coerceNumber(pickFirst(item, ["yearBuilt", "builtYear"])),
         lotSize: normalizeLotSize(pickFirst(item, ["lotSize", "lotSizeAcres", "lotSizeSquareFeet", "acreage"])),
         daysOnMarket: coerceNumber(pickFirst(item, ["daysOnMarket", "dom", "daysListed"])),
-        notes: buildSimilarityNotes({ daysOnMarket: coerceNumber(pickFirst(item, ["daysOnMarket", "dom", "daysListed"])) }, values),
+        distanceMiles: coerceNumber(pickFirst(item, ["distance", "distanceMiles", "distanceFromSubject"])),
+        subdivision: cleanText(pickFirst(item, ["subdivision", "subdivisionName", "neighborhood", "community"], "")),
+        schoolZone: cleanText(pickFirst(item, ["schoolDistrict", "schoolZone"], "")),
+        propertyType: normalizePropertyType(pickFirst(item, ["propertyType", "type", "propertySubType", "homeType"], "")),
+        storyCount: normalizeStoryCount(pickFirst(item, ["stories", "storyCount", "levels", "style"], "")),
+        garageParking: cleanText(pickFirst(item, ["garageSpaces", "garage", "parking"], "")),
+        soldDate: parseDateValue(pickFirst(item, ["soldDate", "saleDate", "closeDate", "lastSaleDate", "offMarketDate"])),
+        listDate: parseDateValue(pickFirst(item, ["listDate", "listedDate", "onMarketDate", "createdDate"])),
+        pricePerSqft,
+        distressed: DISTRESS_KEYWORDS.some((keyword) => normalizeText(`${status} ${remarks}`).includes(keyword)),
+        conditionSignal: analyzeConditionText(remarks),
+        notes: "",
+        similarityScore: null
       };
     }
 
@@ -465,74 +452,420 @@
 
     function readFormValues() {
       return {
-        subjectAddress: form.subjectAddress.value.trim(),
-        specialDetails: form.specialDetails.value.trim(),
-        searchRadius: toNumber(form.searchRadius.value, 1.5),
-        ageVariance: toNumber(form.ageVariance.value, 10),
-        sqftVariance: toNumber(form.sqftVariance.value, 20),
-        bedVariance: toNumber(form.bedVariance.value, 1),
-        bathVariance: toNumber(form.bathVariance.value, 1),
-        yearBuiltVariance: toNumber(form.yearBuiltVariance.value, 12),
-        lotVariance: toNumber(form.lotVariance.value, 25),
-        lookbackMonths: toNumber(form.lookbackMonths.value, 6),
+        subjectAddress: cleanText(form.subjectAddress.value),
+        specialDetails: cleanText(form.specialDetails.value),
+        subjectSqft: toNumber(form.subjectSqft.value, null),
+        subjectBeds: toNumber(form.subjectBeds.value, null),
+        subjectBaths: toNumber(form.subjectBaths.value, null),
+        subjectYearBuilt: toNumber(form.subjectYearBuilt.value, null),
+        subjectLotSize: toNumber(form.subjectLotSize.value, null),
+        subjectPropertyType: normalizePropertyType(form.subjectPropertyType.value),
+        subjectSubdivision: cleanText(form.subjectSubdivision.value),
+        subjectStoryCount: normalizeStoryCount(form.subjectStoryCount.value),
+        subjectGarageParking: cleanText(form.subjectGarageParking.value),
+        conditionNotes: cleanText(form.conditionNotes.value),
+        priorAppraisalValue: toNumber(form.priorAppraisalValue.value, null),
+        priorAppraisalDate: cleanText(form.priorAppraisalDate.value),
+        priorPurchasePrice: toNumber(form.priorPurchasePrice.value, null),
+        priorPurchaseDate: cleanText(form.priorPurchaseDate.value),
+        searchRadius: clamp(toNumber(form.searchRadius.value, 1.5), 0.25, 5),
+        ageVariance: clamp(toNumber(form.ageVariance.value, 10), 0, 50),
+        sqftVariance: clamp(toNumber(form.sqftVariance.value, 20), 5, 60),
+        bedVariance: clamp(toNumber(form.bedVariance.value, 1), 0, 4),
+        bathVariance: clamp(toNumber(form.bathVariance.value, 1), 0, 4),
+        yearBuiltVariance: clamp(toNumber(form.yearBuiltVariance.value, 12), 0, 40),
+        lotVariance: clamp(toNumber(form.lotVariance.value, 25), 5, 80),
+        lookbackMonths: clamp(toNumber(form.lookbackMonths.value, 6), 1, 12),
         prioritizeSubdivision: form.prioritizeSubdivision.checked,
         prioritizeStyle: form.prioritizeStyle.checked
       };
     }
 
-    function buildSearchSummary(values) {
-      return [
-        `Radius: ${values.searchRadius} miles`,
-        `Age difference: up to ${values.ageVariance} years`,
-        `Square footage variance: ${values.sqftVariance}%`,
-        `Bedroom variance: ${values.bedVariance}`,
-        `Bathroom variance: ${values.bathVariance}`,
-        `Year built variance: ${values.yearBuiltVariance} years`,
-        `Lot size variance: ${values.lotVariance}%`,
-        `Closed sales lookback: ${values.lookbackMonths} months`,
-        `Same subdivision priority: ${values.prioritizeSubdivision ? "On" : "Off"}`,
-        `Similar style priority: ${values.prioritizeStyle ? "On" : "Off"}`
+    function buildSubjectProfile(values, comps) {
+      const parsed = parseSubjectAddress(values.subjectAddress);
+      const typedPool = values.subjectPropertyType ? comps.filter((comp) => !comp.propertyType || comp.propertyType === values.subjectPropertyType) : comps;
+      const referencePool = typedPool.length ? typedPool : comps;
+      return {
+        address: values.subjectAddress,
+        city: parsed.city,
+        state: parsed.state,
+        zipCode: parsed.zipCode,
+        schoolZone: "",
+        beds: values.subjectBeds ?? median(referencePool.map((comp) => comp.beds)),
+        baths: values.subjectBaths ?? median(referencePool.map((comp) => comp.baths)),
+        sqft: values.subjectSqft ?? median(referencePool.map((comp) => comp.sqft)),
+        yearBuilt: values.subjectYearBuilt ?? median(referencePool.map((comp) => comp.yearBuilt)),
+        lotSize: values.subjectLotSize ?? median(referencePool.map((comp) => comp.lotSize)),
+        propertyType: values.subjectPropertyType || referencePool.find((comp) => comp.propertyType)?.propertyType || "",
+        subdivision: values.subjectSubdivision || referencePool.find((comp) => comp.subdivision)?.subdivision || "",
+        storyCount: values.subjectStoryCount ?? referencePool.find((comp) => Number.isFinite(comp.storyCount))?.storyCount ?? null,
+        garageParking: values.subjectGarageParking || "",
+        specialDetails: values.specialDetails,
+        conditionNotes: values.conditionNotes,
+        estimatedValue: null
+      };
+    }
+    function buildSoldSearchStages(values) {
+      const maxRadius = clamp(values.searchRadius, 1, 5);
+      const maxLookbackDays = clamp(Math.round(values.lookbackMonths * 30.4375), 90, 365);
+      const stages = [
+        { days: Math.min(90, maxLookbackDays), radius: Math.min(1, maxRadius), sqftPct: 10, absSqft: 250, strictStory: true, relaxed: false, label: "within 90 days and 1 mile" },
+        { days: Math.min(180, maxLookbackDays), radius: Math.min(1, maxRadius), sqftPct: 10, absSqft: 250, strictStory: true, relaxed: false, label: "within 180 days and 1 mile" },
+        { days: Math.min(180, maxLookbackDays), radius: Math.min(1.5, maxRadius), sqftPct: 15, absSqft: 350, strictStory: true, relaxed: false, label: "within 180 days and 1.5 miles" },
+        { days: Math.min(180, maxLookbackDays), radius: Math.min(2, maxRadius), sqftPct: 15, absSqft: 350, strictStory: false, relaxed: false, label: "within 180 days and 2 miles" },
+        { days: maxLookbackDays, radius: Math.min(3, maxRadius), sqftPct: Math.max(20, values.sqftVariance), absSqft: 500, strictStory: false, relaxed: true, label: `within ${values.lookbackMonths} months and ${Math.min(3, maxRadius)} miles` },
+        { days: maxLookbackDays, radius: maxRadius, sqftPct: Math.max(25, values.sqftVariance), absSqft: 650, strictStory: false, relaxed: true, label: `within ${values.lookbackMonths} months and ${maxRadius} miles` }
       ];
+      return uniqueBy(stages, (stage) => `${stage.days}|${stage.radius}|${stage.sqftPct}|${stage.strictStory}`);
     }
 
-    function buildSubjectSnapshot(values) {
-      const detailBoost = values.specialDetails ? 1.02 : 1;
-      const baseSqft = 2180;
-      const basePricePerSqft = 176;
+    function percentDifference(a, b) {
+      if (!Number.isFinite(a) || !Number.isFinite(b) || a === 0 || b === 0) return null;
+      return Math.abs(a - b) / a;
+    }
+
+    function allowedYearDelta(subject, values, relaxed) {
+      const userCap = Math.min(values.ageVariance, values.yearBuiltVariance);
+      if (!Number.isFinite(subject.yearBuilt)) return userCap;
+      const age = new Date().getFullYear() - subject.yearBuilt;
+      if (age < 5) return Math.min(2, userCap);
+      if (age >= 40) return relaxed ? Math.min(15, Math.max(userCap, 15)) : Math.min(15, userCap);
+      return relaxed ? Math.min(Math.max(userCap, 12), 15) : Math.min(10, userCap);
+    }
+
+    function isSameSubdivision(subject, comp) {
+      return subject.subdivision && comp.subdivision && normalizeText(subject.subdivision) === normalizeText(comp.subdivision);
+    }
+
+    function matchesPropertyType(subject, comp) {
+      if (!subject.propertyType || !comp.propertyType) return true;
+      return subject.propertyType === comp.propertyType;
+    }
+
+    function passesSoldStage(subject, comp, values, stage) {
+      if (!isSoldComp(comp) || !matchesPropertyType(subject, comp) || comp.distressed) return false;
+      if (comp.distanceMiles != null && comp.distanceMiles > stage.radius) return false;
+      const recency = daysSince(comp.soldDate || comp.listDate);
+      if (recency != null && recency > stage.days) return false;
+      if (Number.isFinite(subject.sqft) && Number.isFinite(comp.sqft)) {
+        const pct = percentDifference(subject.sqft, comp.sqft);
+        const absDiff = Math.abs(subject.sqft - comp.sqft);
+        if (!((pct != null && pct <= stage.sqftPct / 100) || absDiff <= stage.absSqft)) return false;
+      }
+      if (Number.isFinite(subject.beds) && Number.isFinite(comp.beds) && Math.abs(subject.beds - comp.beds) > values.bedVariance + (stage.relaxed ? 1 : 0)) return false;
+      if (Number.isFinite(subject.baths) && Number.isFinite(comp.baths) && Math.abs(subject.baths - comp.baths) > values.bathVariance + (stage.relaxed ? 0.5 : 0)) return false;
+      if (Number.isFinite(subject.yearBuilt) && Number.isFinite(comp.yearBuilt) && Math.abs(subject.yearBuilt - comp.yearBuilt) > allowedYearDelta(subject, values, stage.relaxed)) return false;
+      if (Number.isFinite(subject.lotSize) && Number.isFinite(comp.lotSize)) {
+        const pct = percentDifference(subject.lotSize, comp.lotSize);
+        const maxPct = (stage.relaxed ? values.lotVariance * 1.5 : values.lotVariance) / 100;
+        if (pct != null && pct > maxPct) return false;
+      }
+      if (stage.strictStory && Number.isFinite(subject.storyCount) && Number.isFinite(comp.storyCount) && subject.storyCount !== comp.storyCount) return false;
+      return true;
+    }
+
+    function passesActiveSearch(subject, comp, values) {
+      if (!isActiveComp(comp) || !matchesPropertyType(subject, comp)) return false;
+      if (comp.distanceMiles != null && comp.distanceMiles > values.searchRadius) return false;
+      if (Number.isFinite(subject.beds) && Number.isFinite(comp.beds) && Math.abs(subject.beds - comp.beds) > values.bedVariance + 1) return false;
+      if (Number.isFinite(subject.baths) && Number.isFinite(comp.baths) && Math.abs(subject.baths - comp.baths) > values.bathVariance + 0.5) return false;
+      return true;
+    }
+
+    function buildScoreDetails(subject, comp, values, stage, listingKind) {
+      const radius = Math.max(stage?.radius || values.searchRadius || 1, 0.25);
+      const distancePoints = comp.distanceMiles == null ? 12 : clamp(Math.round(25 * (1 - comp.distanceMiles / (radius * 1.15))), 0, 25);
+      let sqftPoints = 10;
+      if (Number.isFinite(subject.sqft) && Number.isFinite(comp.sqft)) {
+        const pct = percentDifference(subject.sqft, comp.sqft);
+        const absDiff = Math.abs(subject.sqft - comp.sqft);
+        if ((pct != null && pct <= 0.10) || absDiff <= 250) sqftPoints = 20;
+        else if ((pct != null && pct <= 0.15) || absDiff <= 350) sqftPoints = 16;
+        else if ((pct != null && pct <= values.sqftVariance / 100) || absDiff <= 500) sqftPoints = 10;
+        else sqftPoints = 4;
+      }
+      let bedBathPoints = 8;
+      if (Number.isFinite(subject.beds) && Number.isFinite(comp.beds)) {
+        const diff = Math.abs(subject.beds - comp.beds);
+        bedBathPoints = diff === 0 ? 8 : diff <= 1 ? 5 : 1;
+      }
+      if (Number.isFinite(subject.baths) && Number.isFinite(comp.baths)) {
+        const diff = Math.abs(subject.baths - comp.baths);
+        bedBathPoints += diff === 0 ? 7 : diff <= 0.5 ? 5 : diff <= 1 ? 3 : 1;
+      } else {
+        bedBathPoints += 4;
+      }
+      let yearBuiltPoints = 5;
+      if (Number.isFinite(subject.yearBuilt) && Number.isFinite(comp.yearBuilt)) {
+        const diff = Math.abs(subject.yearBuilt - comp.yearBuilt);
+        const maxDelta = allowedYearDelta(subject, values, true);
+        yearBuiltPoints = diff <= Math.min(2, maxDelta) ? 10 : diff <= maxDelta ? 7 : diff <= maxDelta + 5 ? 4 : 1;
+      }
+      let neighborhoodPoints = 4;
+      if (isSameSubdivision(subject, comp)) neighborhoodPoints = 10;
+      else if (subject.zipCode && comp.zipCode && subject.zipCode === comp.zipCode) neighborhoodPoints = values.prioritizeSubdivision ? 8 : 7;
+      else if (subject.city && comp.city && normalizeText(subject.city) === normalizeText(comp.city)) neighborhoodPoints = 6;
+      let lotPoints = 5;
+      if (Number.isFinite(subject.lotSize) && Number.isFinite(comp.lotSize) && subject.lotSize > 0) {
+        const pct = percentDifference(subject.lotSize, comp.lotSize);
+        if (pct != null) {
+          if (pct <= 0.10) lotPoints = 10;
+          else if (pct <= 0.25) lotPoints = 7;
+          else if (pct <= values.lotVariance / 100) lotPoints = 4;
+          else lotPoints = 1;
+        }
+      }
+      const recency = daysSince(comp.soldDate || comp.listDate);
+      let recencyPoints = 5;
+      if (recency != null) {
+        if (listingKind === "sold") recencyPoints = recency <= 90 ? 10 : recency <= 180 ? 8 : recency <= 365 ? 5 : 2;
+        else recencyPoints = recency <= 30 ? 10 : recency <= 90 ? 8 : 5;
+      }
+      let penalty = 0;
+      const penaltyReasons = [];
+      if (Number.isFinite(subject.storyCount) && Number.isFinite(comp.storyCount) && subject.storyCount !== comp.storyCount) { penalty += 8; penaltyReasons.push("story-count mismatch"); }
+      if (subject.city && comp.city && normalizeText(subject.city) !== normalizeText(comp.city)) { penalty += 4; penaltyReasons.push("outside core market pocket"); }
+      const subjectCondition = analyzeConditionText(`${subject.specialDetails} ${subject.conditionNotes}`);
+      if (Math.abs(subjectCondition.netScore - comp.conditionSignal.netScore) >= 3) { penalty += 4; penaltyReasons.push("condition mismatch"); }
+      if (comp.distressed) { penalty += 12; penaltyReasons.push("inferior sale quality"); }
+      return { total: clamp(distancePoints + sqftPoints + bedBathPoints + yearBuiltPoints + neighborhoodPoints + lotPoints + recencyPoints - penalty, 0, 100), penaltyReasons };
+    }
+
+    function buildComparableNotes(subject, comp, scoreDetails) {
+      const notes = [`Similarity score ${Math.round(scoreDetails.total)}/100.`];
+      if (isSameSubdivision(subject, comp)) notes.push("Same subdivision match.");
+      else if (subject.city && comp.city && normalizeText(subject.city) === normalizeText(comp.city)) notes.push("Same market area.");
+      if (Number.isFinite(subject.sqft) && Number.isFinite(comp.sqft)) {
+        const pct = percentDifference(subject.sqft, comp.sqft);
+        if (pct != null) notes.push(`${Math.round(pct * 100)}% size difference.`);
+      }
+      if (Number.isFinite(comp.pricePerSqft)) notes.push(`${formatPpsf(comp.pricePerSqft)} benchmark.`);
+      if (comp.daysOnMarket != null) notes.push(`${comp.daysOnMarket} DOM.`);
+      if (scoreDetails.penaltyReasons.length) notes.push(`Watch ${scoreDetails.penaltyReasons.join(", ")}.`);
+      return notes.join(" ");
+    }
+
+    function scoreComparable(subject, comp, values, stage, listingKind) {
+      const details = buildScoreDetails(subject, comp, values, stage, listingKind);
+      return { ...comp, similarityScore: Math.round(details.total), notes: buildComparableNotes(subject, comp, details) };
+    }
+
+    function selectSoldComparables(subject, comps, values) {
+      const soldPool = uniqueBy(comps.filter(isSoldComp), (comp) => comp.id || comp.address);
+      const stages = buildSoldSearchStages(values);
+      const selected = [];
+      let stageUsed = "full fallback pool";
+
+      for (const stage of stages) {
+        const matches = soldPool
+          .filter((comp) => passesSoldStage(subject, comp, values, stage))
+          .map((comp) => scoreComparable(subject, comp, values, stage, "sold"))
+          .sort((a, b) => b.similarityScore - a.similarityScore || (b.soldPrice ?? b.listPrice ?? 0) - (a.soldPrice ?? a.listPrice ?? 0));
+        matches.forEach((candidate) => {
+          if (selected.length < 3 && !selected.some((item) => item.id === candidate.id)) selected.push(candidate);
+        });
+        if (selected.length >= 3) {
+          stageUsed = stage.label;
+          break;
+        }
+      }
+
+      if (selected.length < 3) {
+        const fallbackStage = stages[stages.length - 1];
+        soldPool
+          .map((comp) => scoreComparable(subject, comp, values, fallbackStage, "sold"))
+          .sort((a, b) => b.similarityScore - a.similarityScore)
+          .forEach((candidate) => {
+            if (selected.length < 3 && !selected.some((item) => item.id === candidate.id)) selected.push(candidate);
+          });
+      }
+
+      return { soldComps: selected.slice(0, 3), soldCandidateCount: soldPool.length, soldStageUsed: stageUsed };
+    }
+
+    function selectActiveComparable(subject, comps, values, selectedSoldIds) {
+      const activePool = uniqueBy(comps.filter((comp) => passesActiveSearch(subject, comp, values)), (comp) => comp.id || comp.address);
+      const activeComp = activePool
+        .filter((comp) => !selectedSoldIds.has(comp.id))
+        .map((comp) => scoreComparable(subject, comp, values, { radius: values.searchRadius }, "active"))
+        .sort((a, b) => b.similarityScore - a.similarityScore)[0] || null;
+      return { activeComp, activeCandidateCount: activePool.length };
+    }
+    function psychPrice(value, direction = "nearest") {
+      if (!Number.isFinite(value) || value <= 0) return null;
+      const step = value < 250000 ? 2500 : 5000;
+      let rounded = Math.round(value / step) * step;
+      if (direction === "down") rounded = Math.floor(value / step) * step;
+      if (direction === "up") rounded = Math.ceil(value / step) * step;
+      return Math.max(rounded - 100, step - 100);
+    }
+
+    function inferMarketTrend(soldComps, activeComp) {
+      const datedSold = soldComps.filter((comp) => Number.isFinite(comp.pricePerSqft) && comp.soldDate).sort((a, b) => a.soldDate - b.soldDate);
+      const avgDom = average(soldComps.map((comp) => comp.daysOnMarket));
+      let trend = "stable";
+      if (datedSold.length >= 2) {
+        const midpoint = Math.ceil(datedSold.length / 2);
+        const olderAvg = average(datedSold.slice(0, midpoint).map((comp) => comp.pricePerSqft));
+        const recentAvg = average(datedSold.slice(-midpoint).map((comp) => comp.pricePerSqft));
+        if (Number.isFinite(olderAvg) && Number.isFinite(recentAvg)) {
+          const change = (recentAvg - olderAvg) / olderAvg;
+          if (change >= 0.03) trend = "strengthening";
+          else if (change <= -0.03) trend = "softening";
+        }
+      } else if (activeComp?.pricePerSqft && soldComps.length) {
+        const soldAvg = average(soldComps.map((comp) => comp.pricePerSqft));
+        if (Number.isFinite(soldAvg)) {
+          if (activeComp.pricePerSqft >= soldAvg * 1.03) trend = "strengthening";
+          else if (activeComp.pricePerSqft <= soldAvg * 0.97) trend = "softening";
+        }
+      }
       return {
-        beds: 4,
-        baths: 3,
-        sqft: baseSqft,
-        yearBuilt: 2014,
-        lotSize: 0.23,
-        estimatedValue: Math.round(baseSqft * basePricePerSqft * detailBoost)
+        trend,
+        pricingLean: trend === "strengthening" ? "aggressive" : trend === "softening" ? "conservative" : "balanced",
+        avgDom,
+        note: trend === "strengthening" ? "Recent comparable pricing suggests the local market is still firming up." : trend === "softening" ? "Recent comparable pricing suggests buyers are becoming more price-sensitive." : "Recent comparable pricing looks fairly stable in the current market pocket."
       };
     }
 
-    function buildMockReport(values) {
-      const subject = buildSubjectSnapshot(values);
-      const soldComps = [
-        { address: "118 Willow Creek Dr", status: "Sold", listPrice: 392000, soldPrice: 401500, sqft: 2245, beds: 4, baths: 3, yearBuilt: 2015, lotSize: 0.21, daysOnMarket: 14, notes: "Very similar bedroom count and build era. Updated kitchen and a similar overall finish level." },
-        { address: "142 Willow Creek Dr", status: "Sold", listPrice: 405000, soldPrice: 409000, sqft: 2310, beds: 4, baths: 2.5, yearBuilt: 2013, lotSize: 0.24, daysOnMarket: 9, notes: "Same neighborhood appeal and close lot size. Slightly larger footprint but similar market positioning." },
-        { address: "85 Oak Hollow Ln", status: "Sold", listPrice: 384900, soldPrice: 389500, sqft: 2140, beds: 3, baths: 3, yearBuilt: 2012, lotSize: 0.22, daysOnMarket: 18, notes: "Smaller bedroom count but strong comp due to similar square footage, age, and curb appeal." }
+    function buildHistoricalReference(values, marketTrend, conditionPct) {
+      const references = [];
+      const annualTrend = marketTrend.trend === "strengthening" ? 0.04 : marketTrend.trend === "softening" ? -0.01 : 0.02;
+      if (Number.isFinite(values.priorAppraisalValue) && values.priorAppraisalDate) {
+        const monthsOld = monthsSince(values.priorAppraisalDate);
+        if (monthsOld != null && monthsOld <= 36) references.push(values.priorAppraisalValue * (1 + annualTrend * (monthsOld / 12)) * (1 + conditionPct * 0.75));
+      }
+      if (Number.isFinite(values.priorPurchasePrice) && values.priorPurchaseDate) {
+        const monthsOld = monthsSince(values.priorPurchaseDate);
+        if (monthsOld != null && monthsOld <= 36) references.push(values.priorPurchasePrice * (1 + annualTrend * (monthsOld / 12)) * (1 + conditionPct));
+      }
+      return average(references);
+    }
+
+    function buildPricingModel(values, subject, soldComps, activeComp) {
+      const compPpsf = soldComps.map((comp) => comp.pricePerSqft).filter((value) => Number.isFinite(value));
+      const compPrices = soldComps.map((comp) => comp.soldPrice ?? comp.listPrice).filter((value) => Number.isFinite(value));
+      const subjectSqft = Number.isFinite(subject.sqft) ? subject.sqft : median(soldComps.map((comp) => comp.sqft));
+      const weightedSalePrice = weightedAverage(soldComps, (comp) => comp.soldPrice ?? comp.listPrice, (comp) => Math.max(comp.similarityScore || 0, 1));
+      const weightedPpsf = weightedAverage(soldComps, "pricePerSqft", (comp) => Math.max(comp.similarityScore || 0, 1));
+      let baseAnchor = average([
+        weightedSalePrice,
+        Number.isFinite(weightedPpsf) && Number.isFinite(subjectSqft) ? weightedPpsf * subjectSqft : null
+      ].filter((value) => Number.isFinite(value)));
+      if (!Number.isFinite(baseAnchor)) baseAnchor = average(compPrices);
+
+      const subjectCondition = analyzeConditionText(`${subject.specialDetails} ${subject.conditionNotes}`);
+      const conditionPct = clamp(subjectCondition.netScore * 0.006, -0.03, 0.03);
+      const marketTrend = inferMarketTrend(soldComps, activeComp);
+      const historicalAnchor = buildHistoricalReference(values, marketTrend, conditionPct);
+      if (Number.isFinite(baseAnchor)) baseAnchor *= 1 + conditionPct;
+      if (Number.isFinite(baseAnchor) && Number.isFinite(historicalAnchor)) baseAnchor = (baseAnchor * 0.85) + (historicalAnchor * 0.15);
+
+      const lowPpsf = compPpsf.length ? Math.min(...compPpsf) : null;
+      const highPpsf = compPpsf.length ? Math.max(...compPpsf) : null;
+      const avgPpsf = average(compPpsf);
+      let low = average([
+        compPrices.length ? Math.min(...compPrices) : null,
+        Number.isFinite(lowPpsf) && Number.isFinite(subjectSqft) ? lowPpsf * subjectSqft : null,
+        Number.isFinite(baseAnchor) ? baseAnchor * 0.985 : null
+      ].filter((value) => Number.isFinite(value)));
+      let high = average([
+        compPrices.length ? Math.max(...compPrices) : null,
+        Number.isFinite(highPpsf) && Number.isFinite(subjectSqft) ? highPpsf * subjectSqft : null,
+        Number.isFinite(baseAnchor) ? baseAnchor * 1.015 : null
+      ].filter((value) => Number.isFinite(value)));
+      if (!Number.isFinite(low) || !Number.isFinite(high)) {
+        low = Number.isFinite(baseAnchor) ? baseAnchor * 0.97 : 0;
+        high = Number.isFinite(baseAnchor) ? baseAnchor * 1.03 : 0;
+      }
+      if (activeComp?.listPrice && marketTrend.trend === "softening") high = Math.min(high, activeComp.listPrice + 5000);
+      if (activeComp?.listPrice && marketTrend.trend === "strengthening") low = Math.max(low, activeComp.listPrice - 10000);
+      if (high - low < 10000) {
+        low -= 5000;
+        high += 5000;
+      }
+
+      const rangeLow = psychPrice(low, "down");
+      const rangeHigh = psychPrice(high, "up");
+      let bias = marketTrend.pricingLean === "aggressive" ? 0.72 : marketTrend.pricingLean === "conservative" ? 0.35 : 0.55;
+      bias = clamp(bias + clamp(subjectCondition.netScore * 0.03, -0.09, 0.09), 0.2, 0.8);
+      let suggested = psychPrice(rangeLow + (rangeHigh - rangeLow) * bias, "nearest");
+      suggested = clamp(suggested, rangeLow, rangeHigh);
+
+      const strategyNote = marketTrend.pricingLean === "aggressive"
+        ? "The selected comps support leaning to the upper half of the range, especially if the home shows well and launches cleanly."
+        : marketTrend.pricingLean === "conservative"
+          ? "The selected comps support a slightly tighter opening position so the listing stays competitive with current buyer behavior."
+          : "The selected comps support a balanced launch that preserves negotiating room without chasing the market.";
+
+      const conditionSupport = subjectCondition.netScore > 0
+        ? "The subject's upgrades and condition notes support positioning near the upper half of the range."
+        : subjectCondition.netScore < 0
+          ? "The subject's condition notes suggest staying closer to the middle or lower half of the range."
+          : "With neutral condition notes, the comp set supports a balanced position within the range.";
+
+      return {
+        recommendedRange: [rangeLow, rangeHigh],
+        suggestedListPrice: suggested,
+        ppsfSummary: { low: lowPpsf, average: avgPpsf, high: highPpsf, averageDom: marketTrend.avgDom },
+        marketTrend,
+        strategyNote,
+        pricingOptions: [
+          { label: "Maximum price with patience", price: psychPrice(rangeHigh, "down"), note: "Upper-range strategy for more room if traffic and presentation are strong." },
+          { label: "Balanced market pricing", price: suggested, note: "Best mix of exposure, perceived value, and negotiation flexibility." },
+          { label: "Faster sale strategy", price: psychPrice(rangeLow, "up"), note: "Lower-range strategy for stronger early activity and faster absorption." }
+        ],
+        explanation: `Recommend listing at ${formatCurrency(suggested)} with a defensible range of ${formatCurrency(rangeLow)} to ${formatCurrency(rangeHigh)}. The best comparable sales are recent homes of similar size and utility in the same market area. ${conditionSupport} Pricing just under the next search threshold helps visibility while staying competitive with the active benchmark.`
+      };
+    }
+
+    function buildSearchSummary(values, subject, selection, marketTrend) {
+      return [
+        `Property type target: ${displayPropertyType(subject.propertyType)}`,
+        `Sold search stage used: ${selection.soldStageUsed}`,
+        `Candidate pool reviewed: ${selection.soldCandidateCount} sold and ${selection.activeCandidateCount} active candidates`,
+        `Search radius cap: ${values.searchRadius} miles`,
+        `Closed sales lookback cap: ${values.lookbackMonths} months`,
+        `Square footage tolerance: primary 10%, then 15%, then up to ${values.sqftVariance}% as a fallback`,
+        `Bed / bath tolerance: +/-${values.bedVariance} beds and +/-${values.bathVariance} baths`,
+        `Year built tolerance: up to ${values.yearBuiltVariance} years`,
+        `Lot size tolerance: ${values.lotVariance}%`,
+        `Subdivision priority: ${values.prioritizeSubdivision ? "On" : "Off"}`,
+        `Style priority: ${values.prioritizeStyle ? "On" : "Off"}`,
+        `Market read: ${marketTrend.trend}`
       ];
-      const activeComp = { address: "109 Willow Creek Ct", status: "Active", listPrice: 414900, soldPrice: null, sqft: 2288, beds: 4, baths: 3, yearBuilt: 2016, lotSize: 0.25, daysOnMarket: 22, notes: "Useful active benchmark for current competition. Slightly newer but very comparable in layout and buyer profile." };
-      const soldAverage = Math.round(soldComps.reduce((sum, item) => sum + item.soldPrice, 0) / soldComps.length);
-      const adjustment = values.specialDetails ? 6500 : 0;
-      const low = soldAverage - 7500 + adjustment;
-      const high = soldAverage + 9500 + adjustment;
-      const suggested = Math.round((low + high) / 2 / 500) * 500;
+    }
+
+    function buildReport(values, subject, soldComps, activeComp, selectionMeta, sourceNote) {
+      if (!soldComps.length) throw new Error("No sold comparable properties passed the CMA rules for this search.");
+      const pricing = buildPricingModel(values, subject, soldComps, activeComp);
+      subject.estimatedValue = pricing.suggestedListPrice;
       return {
         generatedAt: new Date(),
         subject,
         soldComps,
         activeComp,
-        recommendedRange: [low, high],
-        suggestedListPrice: suggested,
-        summary: `Based on the sample comp set, the subject appears to fit best near ${formatCurrency(suggested)}. The sold comparables support a range from ${formatCurrency(low)} to ${formatCurrency(high)}, and the active competition suggests the home should be priced cleanly and presented well from day one.`,
-        searchSummary: buildSearchSummary(values),
-        dataSourceNote: "RentCast did not return enough comparable data, so sample comps are shown as a fallback."
+        recommendedRange: pricing.recommendedRange,
+        suggestedListPrice: pricing.suggestedListPrice,
+        ppsfSummary: pricing.ppsfSummary,
+        marketTrend: pricing.marketTrend,
+        pricingOptions: pricing.pricingOptions,
+        strategyNote: pricing.strategyNote,
+        summary: pricing.explanation,
+        searchSummary: buildSearchSummary(values, subject, selectionMeta, pricing.marketTrend),
+        dataSourceNote: sourceNote
       };
+    }
+
+    function buildMockReport(values) {
+      const subject = buildSubjectProfile(values, []);
+      const soldComps = [
+        normalizeComp({ id: "sample-1", formattedAddress: "118 Willow Creek Dr, Springfield, IL 62704", status: "Sold", soldPrice: 401500, listPrice: 392000, squareFootage: 2245, bedrooms: 4, bathrooms: 3, yearBuilt: 2015, lotSizeAcres: 0.21, daysOnMarket: 14, soldDate: "2026-01-28", subdivision: "Willow Creek", propertyType: subject.propertyType || "Single Family", stories: "2" }),
+        normalizeComp({ id: "sample-2", formattedAddress: "142 Willow Creek Dr, Springfield, IL 62704", status: "Sold", soldPrice: 409000, listPrice: 405000, squareFootage: 2310, bedrooms: 4, bathrooms: 2.5, yearBuilt: 2013, lotSizeAcres: 0.24, daysOnMarket: 9, soldDate: "2026-02-10", subdivision: "Willow Creek", propertyType: subject.propertyType || "Single Family", stories: "2" }),
+        normalizeComp({ id: "sample-3", formattedAddress: "85 Oak Hollow Ln, Springfield, IL 62704", status: "Sold", soldPrice: 389500, listPrice: 384900, squareFootage: 2140, bedrooms: 3, bathrooms: 3, yearBuilt: 2012, lotSizeAcres: 0.22, daysOnMarket: 18, soldDate: "2025-12-22", subdivision: "Oak Hollow", propertyType: subject.propertyType || "Single Family", stories: "2" })
+      ].map((comp) => scoreComparable(subject, comp, values, { radius: 1.5 }, "sold"));
+      const activeComp = scoreComparable(subject, normalizeComp({ id: "sample-4", formattedAddress: "109 Willow Creek Ct, Springfield, IL 62704", status: "Active", listPrice: 414900, squareFootage: 2288, bedrooms: 4, bathrooms: 3, yearBuilt: 2016, lotSizeAcres: 0.25, daysOnMarket: 22, listDate: "2026-03-01", subdivision: "Willow Creek", propertyType: subject.propertyType || "Single Family", stories: "2" }), values, { radius: 1.5 }, "active");
+      return buildReport(values, subject, soldComps, activeComp, { soldStageUsed: "sample fallback set", soldCandidateCount: soldComps.length, activeCandidateCount: 1 }, "Live RentCast data was unavailable or too thin for a reliable set, so sample comps are shown as a working fallback.");
     }
 
     async function fetchLiveCma(values) {
@@ -542,56 +875,20 @@
       if (parsed.city) params.set("city", parsed.city);
       if (parsed.state) params.set("state", parsed.state);
       if (parsed.zipCode) params.set("zipCode", parsed.zipCode);
-      params.set("limit", "12");
-
+      if (values.subjectPropertyType) params.set("propertyType", values.subjectPropertyType);
+      params.set("limit", "60");
       const response = await fetch(`/.netlify/functions/cma?${params.toString()}`, { headers: { Accept: "application/json" } });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.details || payload?.error || `Request failed (${response.status})`);
       return payload;
     }
-
     function buildLiveReport(values, payload) {
-      const comps = arrayify(payload?.data).map((item) => normalizeComp(item, values)).filter((comp) => comp.address && (comp.listPrice != null || comp.soldPrice != null));
+      const comps = arrayify(payload?.data).map((item) => normalizeComp(item)).filter((comp) => comp.address && (comp.listPrice != null || comp.soldPrice != null));
       if (!comps.length) throw new Error("RentCast returned no comparable listings for this search.");
-
-      const soldPool = comps.filter(isSoldComp);
-      const activePool = comps.filter(isActiveComp);
-      const fallbackPool = comps.filter((comp) => !isActiveComp(comp));
-      const soldComps = soldPool.slice(0, 3);
-      if (soldComps.length < 3) {
-        fallbackPool.forEach((comp) => {
-          if (soldComps.length < 3 && !soldComps.includes(comp)) soldComps.push(comp);
-        });
-      }
-
-      const activeComp = activePool[0] || comps.find((comp) => !soldComps.includes(comp)) || null;
-      const soldAverage = soldComps.length
-        ? Math.round(soldComps.reduce((sum, comp) => sum + (comp.soldPrice ?? comp.listPrice ?? 0), 0) / soldComps.length)
-        : Math.round(activeComp?.listPrice || 0);
-      const adjustment = values.specialDetails ? 6500 : 0;
-      const low = Math.max(0, soldAverage - 7500 + adjustment);
-      const high = Math.max(low, soldAverage + 9500 + adjustment);
-      const suggested = Math.round((low + high) / 2 / 500) * 500;
-      const benchmark = soldComps[0] || activeComp || {};
-
-      return {
-        generatedAt: new Date(),
-        subject: {
-          beds: benchmark.beds ?? "Pending direct property data",
-          baths: benchmark.baths ?? "Pending direct property data",
-          sqft: benchmark.sqft ?? "Pending direct property data",
-          yearBuilt: benchmark.yearBuilt ?? "Pending direct property data",
-          lotSize: benchmark.lotSize,
-          estimatedValue: suggested
-        },
-        soldComps,
-        activeComp,
-        recommendedRange: [low, high],
-        suggestedListPrice: suggested,
-        summary: `RentCast returned ${comps.length} nearby sale listings for this search. Based on the strongest comparables available, the subject appears to fit best around ${formatCurrency(suggested)}, with a working range of ${formatCurrency(low)} to ${formatCurrency(high)}.${activeComp?.listPrice ? ` The current active benchmark is listed at ${formatCurrency(activeComp.listPrice)}.` : ""}`,
-        searchSummary: buildSearchSummary(values),
-        dataSourceNote: `Generated ${formatDateTime(new Date())} using live RentCast sale listing data. Pricing guidance below is based on the strongest comparable properties returned for this search.`
-      };
+      const subject = buildSubjectProfile(values, comps);
+      const soldSelection = selectSoldComparables(subject, comps, values);
+      const activeSelection = selectActiveComparable(subject, comps, values, new Set(soldSelection.soldComps.map((comp) => comp.id)));
+      return buildReport(values, subject, soldSelection.soldComps, activeSelection.activeComp, { soldStageUsed: soldSelection.soldStageUsed, soldCandidateCount: soldSelection.soldCandidateCount, activeCandidateCount: activeSelection.activeCandidateCount }, `Generated ${formatDateTime(new Date())} using live RentCast sale-listing data with staged comp filtering and similarity scoring.`);
     }
 
     function renderMetric(label, value) {
@@ -608,10 +905,17 @@
       return div;
     }
 
+    function renderStrategyCard(option) {
+      const article = document.createElement("article");
+      article.className = "strategy-card";
+      article.innerHTML = `<strong>${option.label}: ${formatCurrency(option.price)}</strong><p>${option.note}</p>`;
+      return article;
+    }
+
     function renderCompCard(comp) {
       const article = document.createElement("article");
       article.className = "comp-card";
-      const priceLine = comp.soldPrice != null ? `List price ${formatCurrency(comp.listPrice)} | Sold ${formatCurrency(comp.soldPrice)}` : `List price ${formatCurrency(comp.listPrice)}`;
+      const priceLine = comp.soldPrice != null ? `List ${formatCurrency(comp.listPrice)} | Sold ${formatCurrency(comp.soldPrice)}` : `List ${formatCurrency(comp.listPrice)}`;
       article.innerHTML = `
         <div class="comp-head">
           <div>
@@ -627,7 +931,7 @@
           <div><span>Lot Size</span><strong>${formatLotSize(comp.lotSize)}</strong></div>
           <div><span>Days on Market</span><strong>${comp.daysOnMarket ?? "N/A"}</strong></div>
         </div>
-        <p class="comp-notes">${comp.notes || "Comparable from the live RentCast result set."}</p>
+        <p class="comp-notes">${comp.notes || "Comparable from the ranked candidate pool."}</p>
       `;
       return article;
     }
@@ -644,16 +948,21 @@
       reportEmptyState.style.display = "none";
       reportTimestamp.textContent = report.dataSourceNote || `Generated ${formatDateTime(report.generatedAt)}.`;
       subjectPropertyAddress.textContent = values.subjectAddress;
-      specialDetailsOutput.textContent = values.specialDetails || "No special details were entered for this subject property.";
+      specialDetailsOutput.textContent = [values.specialDetails, values.conditionNotes].filter(Boolean).join(" ").trim() || "No special details were entered for this subject property.";
       summaryText.textContent = report.summary;
+      strategyNoteText.textContent = report.strategyNote || "No strategy note available.";
+      marketTrendText.textContent = report.marketTrend?.note || "";
 
       subjectPropertyMetrics.innerHTML = "";
-      subjectPropertyMetrics.appendChild(renderMetric("Estimated Beds", report.subject.beds));
-      subjectPropertyMetrics.appendChild(renderMetric("Estimated Baths", report.subject.baths));
-      subjectPropertyMetrics.appendChild(renderMetric("Estimated Size", typeof report.subject.sqft === "number" ? `${report.subject.sqft.toLocaleString()} sq ft` : report.subject.sqft));
-      subjectPropertyMetrics.appendChild(renderMetric("Year Built", report.subject.yearBuilt));
-      subjectPropertyMetrics.appendChild(renderMetric("Lot Size", report.subject.lotSize != null ? formatLotSize(report.subject.lotSize) : "Pending direct property data"));
-      subjectPropertyMetrics.appendChild(renderMetric("Model Value", formatCurrency(report.subject.estimatedValue)));
+      subjectPropertyMetrics.appendChild(renderMetric("Property Type", displayPropertyType(report.subject.propertyType)));
+      subjectPropertyMetrics.appendChild(renderMetric("Beds / Baths", `${report.subject.beds ?? "Pending"} / ${report.subject.baths ?? "Pending"}`));
+      subjectPropertyMetrics.appendChild(renderMetric("Square Feet", Number.isFinite(report.subject.sqft) ? `${Number(report.subject.sqft).toLocaleString()} sq ft` : "Pending"));
+      subjectPropertyMetrics.appendChild(renderMetric("Year Built", report.subject.yearBuilt ?? "Pending"));
+      subjectPropertyMetrics.appendChild(renderMetric("Lot Size", report.subject.lotSize != null ? formatLotSize(report.subject.lotSize) : "Pending"));
+      subjectPropertyMetrics.appendChild(renderMetric("Story Count", summarizeStoryCount(report.subject.storyCount)));
+      subjectPropertyMetrics.appendChild(renderMetric("Subdivision", report.subject.subdivision || "Pending"));
+      subjectPropertyMetrics.appendChild(renderMetric("Garage / Parking", report.subject.garageParking || "Pending"));
+      subjectPropertyMetrics.appendChild(renderMetric("Suggested Value", formatCurrency(report.subject.estimatedValue)));
 
       searchSummaryList.innerHTML = "";
       FIXED_SEARCH_PARAMS.forEach((item) => {
@@ -667,17 +976,27 @@
         searchSummaryList.appendChild(li);
       });
 
+      ppsfMetrics.innerHTML = "";
+      ppsfMetrics.appendChild(renderMetric("Low PPSF", formatPpsf(report.ppsfSummary?.low)));
+      ppsfMetrics.appendChild(renderMetric("Average PPSF", formatPpsf(report.ppsfSummary?.average)));
+      ppsfMetrics.appendChild(renderMetric("High PPSF", formatPpsf(report.ppsfSummary?.high)));
+      ppsfMetrics.appendChild(renderMetric("Avg DOM", report.ppsfSummary?.averageDom != null ? `${Math.round(report.ppsfSummary.averageDom)} days` : "N/A"));
+      ppsfMetrics.appendChild(renderMetric("Market Trend", report.marketTrend?.trend ? report.marketTrend.trend.replace(/\b\w/g, (char) => char.toUpperCase()) : "Stable"));
+
+      strategyOptions.innerHTML = "";
+      report.pricingOptions.forEach((option) => strategyOptions.appendChild(renderStrategyCard(option)));
+
       estimateGrid.innerHTML = "";
-      estimateGrid.appendChild(renderEstimateCard("Recommended price range", `${formatCurrency(report.recommendedRange[0])} - ${formatCurrency(report.recommendedRange[1])}`, "Range based on the strongest comparable data currently available.", false));
-      estimateGrid.appendChild(renderEstimateCard("Suggested list price", formatCurrency(report.suggestedListPrice), "Lead pricing recommendation for the current report version.", true));
+      estimateGrid.appendChild(renderEstimateCard("Recommended price range", `${formatCurrency(report.recommendedRange[0])} - ${formatCurrency(report.recommendedRange[1])}`, "Comp-supported range from the selected sold comparables and PPSF cross-check.", false));
+      estimateGrid.appendChild(renderEstimateCard("Suggested list price", formatCurrency(report.suggestedListPrice), "Primary launch recommendation using market trend, condition, and pricing psychology.", true));
 
       soldCompGrid.innerHTML = "";
       if (report.soldComps.length) report.soldComps.forEach((comp) => soldCompGrid.appendChild(renderCompCard(comp)));
-      else soldCompGrid.appendChild(renderCompEmpty("No sold comparables were returned for this search yet."));
+      else soldCompGrid.appendChild(renderCompEmpty("No sold comparables passed the current CMA rules."));
 
       activeCompGrid.innerHTML = "";
       if (report.activeComp) activeCompGrid.appendChild(renderCompCard(report.activeComp));
-      else activeCompGrid.appendChild(renderCompEmpty("No active comparable was returned for this search yet."));
+      else activeCompGrid.appendChild(renderCompEmpty("No active comparable passed the current search rules."));
     }
 
     function resetReport() {
@@ -688,8 +1007,12 @@
       subjectPropertyAddress.textContent = "Not generated yet.";
       specialDetailsOutput.textContent = "No special details entered yet.";
       summaryText.textContent = "";
+      strategyNoteText.textContent = "";
+      marketTrendText.textContent = "";
       subjectPropertyMetrics.innerHTML = "";
       searchSummaryList.innerHTML = "";
+      ppsfMetrics.innerHTML = "";
+      strategyOptions.innerHTML = "";
       estimateGrid.innerHTML = "";
       soldCompGrid.innerHTML = "";
       activeCompGrid.innerHTML = "";
@@ -702,19 +1025,17 @@
         form.subjectAddress.focus();
         return;
       }
-
       setGenerateState(true);
       reportSection.dataset.ready = "false";
       reportEmptyState.style.display = "";
-      reportEmptyState.textContent = "Fetching live RentCast comparable data for this property...";
+      reportEmptyState.textContent = "Fetching and ranking live comparable properties for this CMA...";
       reportTimestamp.textContent = "Loading live CMA data...";
-
       try {
         const payload = await fetchLiveCma(values);
         renderReport(values, buildLiveReport(values, payload));
       } catch (error) {
         const fallbackReport = buildMockReport(values);
-        fallbackReport.dataSourceNote = `${error.message || "Live data unavailable."} Sample data is shown below so you can keep working.`;
+        fallbackReport.dataSourceNote = `${error.message || "Live data unavailable."} Sample data is shown below so you can keep building the report.`;
         renderReport(values, fallbackReport);
       } finally {
         setGenerateState(false);

@@ -1,8 +1,9 @@
 // netlify/functions/cma.js
-// Proxy RentCast sale listing data for the CMA tool.
-// TODO: Expand this to merge valuation, property, and comparable endpoints for the full report.
+// Primary CMA data source: RentCast AVM endpoint with comparables.
+// Falls back to sale listings only when AVM does not return enough data.
 
-const RENTCAST_BASE_URL = "https://api.rentcast.io/v1/listings/sale";
+const RENTCAST_AVM_URL = "https://api.rentcast.io/v1/avm/value";
+const RENTCAST_LISTINGS_URL = "https://api.rentcast.io/v1/listings/sale";
 
 function corsHeaders(extra = {}) {
   return {
@@ -29,8 +30,14 @@ function normalizeState(value) {
   return clean(value).toUpperCase();
 }
 
+function toFiniteNumber(value, fallback = null) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function extractItems(payload) {
   if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.comparables)) return payload.comparables;
   if (Array.isArray(payload?.results)) return payload.results;
   if (Array.isArray(payload?.items)) return payload.items;
   if (Array.isArray(payload?.listings)) return payload.listings;
@@ -76,7 +83,7 @@ async function fetchRentcast(url, apiKey) {
   return { response, data, rawText };
 }
 
-function buildAttemptConfigs({ address, city, state, zipCode, limit, propertyType }) {
+function buildListingAttempts({ address, city, state, zipCode, limit, propertyType }) {
   const attempts = [];
 
   function addAttempt(label, params) {
@@ -129,6 +136,8 @@ export async function handler(event) {
   const zipCode = clean(params.zip || params.zipCode || params.postalCode);
   const limit = clean(params.limit || "60");
   const propertyType = clean(params.propertyType);
+  const searchRadius = toFiniteNumber(params.searchRadius, 3);
+  const compCount = Math.max(4, Math.min(toFiniteNumber(params.compCount, 20), 50));
 
   if (!address && !(city && state) && !zipCode) {
     return json(400, {
@@ -138,31 +147,89 @@ export async function handler(event) {
   }
 
   try {
-    const attempts = buildAttemptConfigs({ address, city, state, zipCode, limit, propertyType });
     const diagnostics = [];
-    const combined = [];
-    let lastError = null;
 
-    for (const attempt of attempts) {
-      const url = new URL(RENTCAST_BASE_URL);
+    // Primary path: AVM with comparables. RentCast documents this endpoint for value estimates plus comps.
+    const avmUrl = new URL(RENTCAST_AVM_URL);
+    if (address) avmUrl.searchParams.set("address", address);
+    if (city) avmUrl.searchParams.set("city", city);
+    if (state) avmUrl.searchParams.set("state", state);
+    if (zipCode) avmUrl.searchParams.set("zipCode", zipCode);
+    avmUrl.searchParams.set("compCount", String(compCount));
+    avmUrl.searchParams.set("maxRadius", String(searchRadius));
+
+    const avmFetch = await fetchRentcast(avmUrl, apiKey);
+    const avmComparables = dedupeListings(extractItems(avmFetch.data?.comparables || avmFetch.data));
+    const avmSubject = avmFetch.data?.subjectProperty || null;
+
+    diagnostics.push({
+      source: "avm",
+      statusCode: avmFetch.response.status,
+      request: {
+        address,
+        city,
+        state,
+        zipCode,
+        compCount,
+        maxRadius: searchRadius,
+      },
+      subjectFound: Boolean(avmSubject),
+      resultCount: avmComparables.length,
+    });
+
+    if (avmFetch.response.ok && (avmComparables.length || avmSubject)) {
+      return json(200, {
+        source: "rentcast-avm",
+        request: {
+          address,
+          city,
+          state,
+          zipCode,
+          propertyType,
+          limit,
+          compCount,
+          searchRadius,
+        },
+        attempts: diagnostics,
+        data: {
+          subjectProperty: avmSubject,
+          comparables: avmComparables,
+          avm: avmFetch.data,
+        },
+      });
+    }
+
+    // Fallback path: sale listings search if AVM is empty or unavailable.
+    const listingAttempts = buildListingAttempts({ address, city, state, zipCode, limit, propertyType });
+    const combined = [];
+    let lastError = avmFetch.response.ok
+      ? null
+      : {
+          statusCode: avmFetch.response.status,
+          details: avmFetch.data?.message || avmFetch.data?.error || avmFetch.rawText || "Unknown upstream error",
+        };
+
+    for (const attempt of listingAttempts) {
+      const url = new URL(RENTCAST_LISTINGS_URL);
       Object.entries(attempt.params).forEach(([key, value]) => {
         if (clean(value)) url.searchParams.set(key, value);
       });
 
-      const { response, data, rawText } = await fetchRentcast(url, apiKey);
-      const items = response.ok ? extractItems(data) : [];
+      const listingFetch = await fetchRentcast(url, apiKey);
+      const items = listingFetch.response.ok ? extractItems(listingFetch.data) : [];
 
       diagnostics.push({
+        source: "listings",
         label: attempt.label,
         request: attempt.params,
-        statusCode: response.status,
+        statusCode: listingFetch.response.status,
         resultCount: items.length,
       });
 
-      if (!response.ok) {
+      if (!listingFetch.response.ok) {
         lastError = {
-          statusCode: response.status,
-          details: data?.message || data?.error || rawText || "Unknown upstream error",
+          statusCode: listingFetch.response.status,
+          details: listingFetch.data?.message || listingFetch.data?.error || listingFetch.rawText || "Unknown upstream error",
         };
         continue;
       }
@@ -171,36 +238,44 @@ export async function handler(event) {
       if (combined.length >= Number(limit || 60)) break;
     }
 
-    const data = dedupeListings(combined).slice(0, Number(limit || 60));
+    const listingData = dedupeListings(combined).slice(0, Number(limit || 60));
 
-    if (!data.length && lastError) {
-      return json(lastError.statusCode, {
-        error: "RentCast request failed",
-        details: lastError.details,
+    if (!listingData.length) {
+      const fallbackError = lastError?.details || "RentCast returned no comparable listings for this search.";
+      return json(lastError?.statusCode || 404, {
+        error: "No comparable data found",
+        details: fallbackError,
         request: {
           address,
           city,
           state,
           zipCode,
-          limit,
           propertyType,
+          limit,
+          compCount,
+          searchRadius,
         },
         attempts: diagnostics,
       });
     }
 
     return json(200, {
-      source: "rentcast",
+      source: "rentcast-listings",
       request: {
         address,
         city,
         state,
         zipCode,
-        limit,
         propertyType,
+        limit,
+        compCount,
+        searchRadius,
       },
       attempts: diagnostics,
-      data,
+      data: {
+        subjectProperty: null,
+        comparables: listingData,
+      },
     });
   } catch (error) {
     return json(500, {

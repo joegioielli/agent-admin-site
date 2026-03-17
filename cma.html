@@ -350,9 +350,38 @@
     function parseSubjectAddress(raw) {
       const full = cleanText(raw);
       const parts = full.split(",").map((part) => part.trim()).filter(Boolean);
-      const stateZip = parts[2] || "";
-      const match = stateZip.match(/^([A-Za-z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/);
-      return { full, street: parts[0] || full, city: parts[1] || "", state: match?.[1] || "", zipCode: match?.[2] || "" };
+      if (parts.length >= 3) {
+        const stateZip = parts[2] || "";
+        const match = stateZip.match(/^([A-Za-z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/);
+        return {
+          full,
+          street: parts[0] || full,
+          city: parts[1] || "",
+          state: match?.[1] || "",
+          zipCode: match?.[2] || ""
+        };
+      }
+      if (parts.length === 2) {
+        const cityStateZip = parts[1].match(/^(.*?)(?:\s+([A-Za-z]{2}))(?:\s+(\d{5}(?:-\d{4})?))?$/);
+        return {
+          full,
+          street: parts[0] || full,
+          city: cleanText(cityStateZip?.[1] || ""),
+          state: cleanText(cityStateZip?.[2] || ""),
+          zipCode: cleanText(cityStateZip?.[3] || "")
+        };
+      }
+      const trailingMatch = full.match(/^(.*?)(?:,\s*|\s+)([^,]+?)\s+([A-Za-z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/);
+      if (trailingMatch) {
+        return {
+          full,
+          street: cleanText(trailingMatch[1] || full),
+          city: cleanText(trailingMatch[2] || ""),
+          state: cleanText(trailingMatch[3] || ""),
+          zipCode: cleanText(trailingMatch[4] || "")
+        };
+      }
+      return { full, street: full, city: "", state: "", zipCode: "" };
     }
 
     function normalizeLotSize(value) {
@@ -882,10 +911,10 @@
     async function fetchLiveCma(values) {
       const parsed = parseSubjectAddress(values.subjectAddress);
       const params = new URLSearchParams();
-      params.set("address", parsed.street || parsed.full);
       if (parsed.city) params.set("city", parsed.city);
       if (parsed.state) params.set("state", parsed.state);
       if (parsed.zipCode) params.set("zipCode", parsed.zipCode);
+      if ((!parsed.city || !parsed.state) && (parsed.street || parsed.full)) params.set("address", parsed.street || parsed.full);
       if (values.subjectPropertyTypeRaw) params.set("propertyType", values.subjectPropertyTypeRaw);
       params.set("limit", "60");
       const response = await fetch(`/.netlify/functions/cma?${params.toString()}`, { headers: { Accept: "application/json" } });
@@ -1027,7 +1056,7 @@
     function resetReport() {
       reportSection.dataset.ready = "false";
       reportEmptyState.style.display = "";
-      reportEmptyState.textContent = "Enter a subject property address and generate the CMA to populate the report. Live RentCast data will load first, and the page will fall back gracefully if the result set is thin.";
+      reportEmptyState.textContent = "Enter a subject property address and generate the CMA to populate the report with live RentCast data.";
       reportTimestamp.textContent = "Generate a report to load live comps and build the pricing summary.";
       subjectPropertyAddress.textContent = "Not generated yet.";
       specialDetailsOutput.textContent = "No special details entered yet.";
@@ -1041,6 +1070,14 @@
       estimateGrid.innerHTML = "";
       soldCompGrid.innerHTML = "";
       activeCompGrid.innerHTML = "";
+    }
+
+    function showLiveDataError(values, error) {
+      resetReport();
+      const parsed = parseSubjectAddress(values.subjectAddress);
+      const areaLabel = [parsed.city, parsed.state].filter(Boolean).join(", ") || values.subjectAddress;
+      reportTimestamp.textContent = `Live CMA data could not be generated for ${areaLabel}.`;
+      reportEmptyState.textContent = `${error?.message || "Live data is currently unavailable."} Check the address format and make sure it includes city and state, for example "123 Main St, Springfield, IL 62704".`;
     }
 
     form.addEventListener("submit", async (event) => {
@@ -1059,9 +1096,7 @@
         const payload = await fetchLiveCma(values);
         renderReport(values, buildLiveReport(values, payload));
       } catch (error) {
-        const fallbackReport = buildMockReport(values);
-        fallbackReport.dataSourceNote = `${error.message || "Live data unavailable."} Sample data is shown below so you can keep building the report.`;
-        renderReport(values, fallbackReport);
+        showLiveDataError(values, error);
       } finally {
         setGenerateState(false);
       }

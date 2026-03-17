@@ -342,6 +342,8 @@
 
     function arrayify(value) {
       if (Array.isArray(value)) return value;
+      if (Array.isArray(value?.comparables)) return value.comparables;
+      if (Array.isArray(value?.comps)) return value.comps;
       if (Array.isArray(value?.results)) return value.results;
       if (Array.isArray(value?.items)) return value.items;
       if (Array.isArray(value?.listings)) return value.listings;
@@ -561,23 +563,21 @@
 
     function buildSubjectProfile(values, comps, subjectMatch = null) {
       const parsed = parseSubjectAddress(values.subjectAddress);
-      const typedPool = values.subjectPropertyType ? comps.filter((comp) => !comp.propertyType || comp.propertyType === values.subjectPropertyType) : comps;
-      const referencePool = typedPool.length ? typedPool : comps;
-      const fallbackComp = subjectMatch || referencePool[0] || null;
+      const fallbackComp = subjectMatch || null;
       return {
         address: values.subjectAddress,
         city: parsed.city || fallbackComp?.city || "",
         state: parsed.state || fallbackComp?.state || "",
         zipCode: parsed.zipCode || fallbackComp?.zipCode || "",
         schoolZone: "",
-        beds: values.subjectBeds ?? fallbackComp?.beds ?? median(referencePool.map((comp) => comp.beds)),
-        baths: values.subjectBaths ?? fallbackComp?.baths ?? median(referencePool.map((comp) => comp.baths)),
-        sqft: values.subjectSqft ?? fallbackComp?.sqft ?? median(referencePool.map((comp) => comp.sqft)),
-        yearBuilt: values.subjectYearBuilt ?? fallbackComp?.yearBuilt ?? median(referencePool.map((comp) => comp.yearBuilt)),
-        lotSize: values.subjectLotSize ?? fallbackComp?.lotSize ?? median(referencePool.map((comp) => comp.lotSize)),
-        propertyType: values.subjectPropertyType || fallbackComp?.propertyType || referencePool.find((comp) => comp.propertyType)?.propertyType || "",
-        subdivision: values.subjectSubdivision || fallbackComp?.subdivision || referencePool.find((comp) => comp.subdivision)?.subdivision || "",
-        storyCount: values.subjectStoryCount ?? fallbackComp?.storyCount ?? referencePool.find((comp) => Number.isFinite(comp.storyCount))?.storyCount ?? null,
+        beds: values.subjectBeds ?? fallbackComp?.beds ?? null,
+        baths: values.subjectBaths ?? fallbackComp?.baths ?? null,
+        sqft: values.subjectSqft ?? fallbackComp?.sqft ?? null,
+        yearBuilt: values.subjectYearBuilt ?? fallbackComp?.yearBuilt ?? null,
+        lotSize: values.subjectLotSize ?? fallbackComp?.lotSize ?? null,
+        propertyType: values.subjectPropertyType || fallbackComp?.propertyType || "",
+        subdivision: values.subjectSubdivision || fallbackComp?.subdivision || "",
+        storyCount: values.subjectStoryCount ?? fallbackComp?.storyCount ?? null,
         garageParking: values.subjectGarageParking || fallbackComp?.garageParking || "",
         specialDetails: values.specialDetails,
         conditionNotes: values.conditionNotes,
@@ -965,6 +965,8 @@
       if (parsed.state) params.set("state", parsed.state.toUpperCase());
       if (parsed.zipCode) params.set("zipCode", parsed.zipCode);
       if (values.subjectPropertyTypeRaw) params.set("propertyType", values.subjectPropertyTypeRaw);
+      params.set("searchRadius", String(values.searchRadius || 3));
+      params.set("compCount", "20");
       params.set("limit", "60");
       const response = await fetch(`/.netlify/functions/cma?${params.toString()}`, { headers: { Accept: "application/json" } });
       const payload = await response.json().catch(() => ({}));
@@ -972,16 +974,20 @@
       return payload;
     }
     function buildLiveReport(values, payload) {
-      const comps = arrayify(payload?.data).map((item) => normalizeComp(item)).filter((comp) => comp.address && (comp.listPrice != null || comp.soldPrice != null));
+      const subjectRecord = payload?.data?.subjectProperty ? normalizeComp(payload.data.subjectProperty) : null;
+      const comps = arrayify(payload?.data?.comparables || payload?.data)
+        .map((item) => normalizeComp(item))
+        .filter((comp) => comp.address && (comp.listPrice != null || comp.soldPrice != null));
       if (!comps.length) throw new Error("RentCast returned no comparable listings for this search.");
-      const subjectMatch = findSubjectComparable(values, comps);
+      const subjectMatch = subjectRecord || findSubjectComparable(values, comps);
       const compPool = subjectMatch ? comps.filter((comp) => comp.id !== subjectMatch.id && !addressesLikelyMatch(values, comp)) : comps;
       const subject = buildSubjectProfile(values, compPool, subjectMatch);
       const soldSelection = selectSoldComparables(subject, compPool, values);
       const activeSelection = selectActiveComparable(subject, compPool, values, new Set(soldSelection.soldComps.map((comp) => comp.id)));
+      const sourceLabel = payload?.source === "rentcast-avm" ? "live RentCast AVM data with comparable-property matching" : "live RentCast sale-listing data with staged comp filtering and similarity scoring";
       const sourceNote = soldSelection.usedLiveFallbackPool
-        ? `Generated ${formatDateTime(new Date())} using live RentCast data. The API returned a thin sold set, so the report used the closest live listings available while keeping the current CMA scoring logic in place.`
-        : `Generated ${formatDateTime(new Date())} using live RentCast sale-listing data with staged comp filtering and similarity scoring.`;
+        ? `Generated ${formatDateTime(new Date())} using ${sourceLabel}. The sold comp set was thin, so the report ranked the closest available live comparables in the returned pool.`
+        : `Generated ${formatDateTime(new Date())} using ${sourceLabel}.`;
       return buildReport(
         values,
         subject,

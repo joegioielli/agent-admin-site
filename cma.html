@@ -34,7 +34,7 @@
     .toolbar{display:flex;flex-wrap:wrap;gap:10px}.btn,.print-btn{min-height:42px;border:none;border-radius:var(--pill);padding:0 14px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:transform .12s ease,box-shadow .2s ease,background .2s ease}.btn-primary,.badge-accent{background:var(--primary-soft);color:#fff;box-shadow:0 10px 24px rgba(37,99,235,.24)}.btn-secondary,.print-btn{background:#eef2ff;color:#4338ca}.btn:hover,.print-btn:hover{transform:translateY(-1px)}
     .report-shell{padding:0;overflow:hidden}.report-head{padding:16px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.92);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}.report-title{font-size:20px;font-weight:700}.report-badges{display:flex;flex-wrap:wrap;gap:8px}.badge,.comp-status{min-height:28px;display:inline-flex;align-items:center;padding:0 10px;border-radius:var(--pill);background:#eef2ff;color:#4338ca;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.report-body{padding:16px;display:grid;gap:14px}.print-toolbar{display:flex;justify-content:flex-end}
     .empty-state{padding:34px 18px;text-align:center;color:var(--muted);font-size:14px;line-height:1.6;border:1px dashed var(--border);border-radius:12px;background:#f8fafc}.report-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px}.report-card{grid-column:span 12;padding:14px;border-radius:12px;border:1px solid var(--border);background:#fff;box-shadow:var(--shadow)}.span-7{grid-column:span 7}.span-5{grid-column:span 5}
-    .metrics,.estimate-grid,.comp-meta{display:grid;gap:10px}.metrics{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:12px}.estimate-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:12px}.metric,.estimate-card,.comp-card,.comp-meta div,.strategy-card{padding:12px;border-radius:12px;border:1px solid var(--border);background:#f8fafc}.metric span,.estimate-label,.comp-meta span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}.metric strong,.estimate-value,.comp-meta strong{display:block;margin-top:6px;font-size:16px;font-weight:700}.estimate-footnote,.comp-notes{margin-top:8px;font-size:13px;line-height:1.45;color:var(--muted)}
+    .metrics,.estimate-grid,.comp-meta{display:grid;gap:10px}.metrics{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:12px}.estimate-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:12px}.metric,.estimate-card,.comp-card,.comp-meta div,.strategy-card{padding:12px;border-radius:12px;border:1px solid var(--border);background:#f8fafc}.metric span,.estimate-label,.comp-meta span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}.metric strong,.estimate-value,.comp-meta strong{display:block;margin-top:6px;font-size:16px;font-weight:700}.estimate-footnote,.comp-notes,.comp-price-line{margin-top:8px;font-size:13px;line-height:1.45;color:var(--muted)}
     .estimate-card.featured{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;box-shadow:0 12px 28px rgba(37,99,235,.28)}.estimate-card.featured .estimate-label{color:#dbeafe}.estimate-card.featured .estimate-value{color:#fff}.estimate-card.featured .estimate-footnote{color:#eff6ff}
     .missing-data{border-color:#92400e !important;background:#fff7ed !important;color:#111827 !important;box-shadow:inset 0 0 0 1px rgba(146,64,14,.12)}.missing-data::placeholder{color:#111827;opacity:.72}
     .comp-grid{display:grid;gap:12px;margin-top:12px}.comp-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}.comp-address{font-size:16px;font-weight:700}.comp-status.active{background:linear-gradient(135deg,var(--success),#245740);color:#fff}.comp-meta{grid-template-columns:repeat(5,minmax(0,1fr));margin-top:12px}.strategy-grid{display:grid;gap:10px;margin-top:12px}.strategy-card strong{display:block;font-size:14px}.strategy-card p{margin-top:6px;font-size:13px;line-height:1.45;color:var(--muted)}
@@ -42,7 +42,31 @@
     @media (max-width:1080px){.layout{grid-template-columns:1fr}}
     @media (max-width:960px){.app-shell{flex-direction:column}.sidebar{width:100%;flex-direction:row;align-items:center;overflow-x:auto}.sidebar-section-title{display:none}.nav-list{flex-direction:row;flex-wrap:wrap}}
     @media (max-width:760px){.app-shell{margin:12px auto;padding:0 10px}.field-grid.two-col,.metrics,.estimate-grid,.comp-meta{grid-template-columns:1fr 1fr}.span-7,.span-5{grid-column:span 12}.toolbar{flex-direction:column}.btn,.print-btn{width:100%}}
-    @media print{body{background:#fff}.sidebar,.main-header,.hero,.card{display:none}.app-shell{display:block;margin:0;padding:0}.report-shell{border:none;box-shadow:none}.print-toolbar{display:none}}
+    @media print{
+      body{background:#fff;font-size:11px;line-height:1.35}
+      .sidebar,.main-header,.hero,.card{display:none}
+      .app-shell{display:block;max-width:none;margin:0;padding:0}
+      .report-shell{border:none;box-shadow:none;border-radius:0}
+      .report-head,.report-body{padding:10px 0}
+      .print-toolbar,.report-badges,.report-card.print-hide,.strategy-grid,.search-list{display:none !important}
+      .report-title{font-size:18px}
+      .report-subtitle,.section-copy{font-size:11px;line-height:1.35;margin-top:4px}
+      .report-grid{display:block}
+      .report-card{padding:10px 0;border:none;box-shadow:none;border-radius:0;break-inside:avoid;page-break-inside:avoid}
+      .section-title{font-size:15px}
+      .metrics,.estimate-grid,.comp-meta{gap:6px}
+      .metrics{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:8px}
+      .estimate-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:8px}
+      .comp-grid{gap:8px;margin-top:8px}
+      .metric,.estimate-card,.comp-card,.comp-meta div,.strategy-card{padding:8px;border-radius:8px;box-shadow:none}
+      .metric strong,.estimate-value,.comp-meta strong,.comp-address{font-size:13px}
+      .estimate-footnote,.comp-price-line{margin-top:3px;font-size:10px;line-height:1.25}
+      .comp-notes,.report-card > .muted-text{display:none !important}
+      .comp-meta{grid-template-columns:repeat(5,minmax(0,1fr));margin-top:6px}
+      .comp-head{gap:6px}
+      .comp-status{min-height:22px;padding:0 8px;font-size:10px}
+      .comp-card{break-inside:avoid;page-break-inside:avoid}
+    }
   </style>
 </head>
 <body>
@@ -171,9 +195,9 @@
                 <section class="report-card span-7"><div class="section-label">Subject Property</div><h3 class="section-title">Subject property overview</h3><p class="section-copy" id="subjectPropertyAddress">Not generated yet.</p><div class="metrics" id="subjectPropertyMetrics"></div></section>
                 <section class="report-card span-5"><div class="section-label">Special Details</div><h3 class="section-title">Value-impact notes</h3><p class="section-copy" id="specialDetailsOutput">No special details entered yet.</p></section>
                 <section class="report-card span-7"><div class="section-label">CMA Summary</div><h3 class="section-title">Pricing takeaway</h3><p class="section-copy" id="summaryText"></p></section>
-                <section class="report-card span-5"><div class="section-label">Search Summary</div><h3 class="section-title">Parameters used</h3><ul class="search-list" id="searchSummaryList"></ul></section>
+                <section class="report-card span-5 print-hide"><div class="section-label">Search Summary</div><h3 class="section-title">Parameters used</h3><ul class="search-list" id="searchSummaryList"></ul></section>
                 <section class="report-card span-7"><div class="section-label">PPSF Support</div><h3 class="section-title">Price per square foot and market read</h3><div class="metrics" id="ppsfMetrics"></div><p class="muted-text" id="marketTrendText"></p></section>
-                <section class="report-card span-5"><div class="section-label">Pricing Strategy</div><h3 class="section-title">Recommended positioning</h3><p class="section-copy" id="strategyNoteText"></p><div class="strategy-grid" id="strategyOptions"></div></section>
+                <section class="report-card span-5 print-hide"><div class="section-label">Pricing Strategy</div><h3 class="section-title">Recommended positioning</h3><p class="section-copy" id="strategyNoteText"></p><div class="strategy-grid" id="strategyOptions"></div></section>
                 <section class="report-card"><div class="section-label">Value Guidance</div><h3 class="section-title">Pricing recommendation</h3><div class="estimate-grid" id="estimateGrid"></div></section>
                 <section class="report-card"><div class="section-label">Comparable Sales</div><h3 class="section-title">Closed comparable properties</h3><p class="muted-text">These cards show the best sold matches returned after staged search filtering and similarity scoring.</p><div class="comp-grid" id="soldCompGrid"></div></section>
                 <section class="report-card"><div class="section-label">Competitive Listing</div><h3 class="section-title">Active comparable property</h3><p class="muted-text">This card shows the strongest current benchmark available from the live search.</p><div class="comp-grid" id="activeCompGrid"></div></section>
@@ -1140,7 +1164,7 @@
         <div class="comp-head">
           <div>
             <h4 class="comp-address">${comp.address || "Comparable property"}</h4>
-            <p class="muted-text" style="margin-top:6px;">${priceLine}</p>
+            <p class="comp-price-line">${priceLine}</p>
           </div>
           <span class="comp-status${/\bactive\b/i.test(comp.status || "") ? " active" : ""}">${comp.status || "Comparable"}</span>
         </div>

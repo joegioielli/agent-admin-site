@@ -744,17 +744,12 @@
 
     function selectSoldComparables(subject, comps, values) {
       const soldPool = uniqueBy(comps.filter(isSoldComp), (comp) => comp.id || comp.address);
-      const fallbackPool = uniqueBy(
-        comps.filter((comp) => comp.listPrice != null || comp.soldPrice != null),
-        (comp) => comp.id || comp.address
-      );
-      const candidatePool = soldPool.length ? soldPool : fallbackPool;
       const stages = buildSoldSearchStages(values);
       const selected = [];
-      let stageUsed = soldPool.length ? "full sold fallback pool" : "live listing fallback pool";
+      let stageUsed = soldPool.length ? "full sold fallback pool" : "no sold comps found";
 
       for (const stage of stages) {
-        const matches = candidatePool
+        const matches = soldPool
           .filter((comp) => passesSoldStage(subject, comp, values, stage))
           .map((comp) => scoreComparable(subject, comp, values, stage, "sold"))
           .sort((a, b) => b.similarityScore - a.similarityScore || (b.soldPrice ?? b.listPrice ?? 0) - (a.soldPrice ?? a.listPrice ?? 0));
@@ -769,7 +764,7 @@
 
       if (selected.length < 3) {
         const fallbackStage = stages[stages.length - 1];
-        candidatePool
+        soldPool
           .map((comp) => scoreComparable(subject, comp, values, fallbackStage, "sold"))
           .sort((a, b) => b.similarityScore - a.similarityScore)
           .forEach((candidate) => {
@@ -779,9 +774,9 @@
 
       return {
         soldComps: selected.slice(0, 3),
-        soldCandidateCount: candidatePool.length,
+        soldCandidateCount: soldPool.length,
         soldStageUsed: stageUsed,
-        usedLiveFallbackPool: !soldPool.length
+        usedLiveFallbackPool: false
       };
     }
 
@@ -1002,8 +997,8 @@
       const soldSelection = selectSoldComparables(subject, compPool, values);
       const activeSelection = selectActiveComparable(subject, compPool, values, new Set(soldSelection.soldComps.map((comp) => comp.id)));
       const sourceLabel = payload?.source === "rentcast-avm" ? "live RentCast AVM data with comparable-property matching" : "live RentCast sale-listing data with staged comp filtering and similarity scoring";
-      const sourceNote = soldSelection.usedLiveFallbackPool
-        ? `Generated ${formatDateTime(new Date())} using ${sourceLabel}. The sold comp set was thin, so the report ranked the closest available live comparables in the returned pool.`
+      const sourceNote = soldSelection.soldComps.length < 3
+        ? `Generated ${formatDateTime(new Date())} using ${sourceLabel}. RentCast only returned ${soldSelection.soldComps.length} closed comparable${soldSelection.soldComps.length === 1 ? "" : "s"} that fit the current rules, so active listings were kept separate.`
         : `Generated ${formatDateTime(new Date())} using ${sourceLabel}.`;
       return buildReport(
         values,

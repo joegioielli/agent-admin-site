@@ -47,7 +47,7 @@ export async function handler(event) {
   const city = clean(params.city);
   const state = clean(params.state);
   const zipCode = clean(params.zip || params.zipCode || params.postalCode);
-  const limit = clean(params.limit || "10");
+  const limit = clean(params.limit || "60");
   const propertyType = clean(params.propertyType);
 
   if (!address && !(city && state)) {

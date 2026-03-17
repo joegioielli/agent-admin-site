@@ -25,6 +25,86 @@ function clean(value) {
   return String(value ?? "").trim();
 }
 
+function normalizeState(value) {
+  return clean(value).toUpperCase();
+}
+
+function extractItems(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.listings)) return payload.listings;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+}
+
+function dedupeListings(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = clean(
+      item?.id ||
+      item?.listingId ||
+      item?.propertyId ||
+      item?.mlsNumber ||
+      item?.formattedAddress ||
+      item?.address ||
+      `${item?.addressLine1 || ""}|${item?.city || ""}|${item?.state || ""}|${item?.zipCode || item?.postalCode || ""}`
+    );
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function fetchRentcast(url, apiKey) {
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      "X-Api-Key": apiKey,
+    },
+  });
+
+  const rawText = await response.text();
+  let data;
+
+  try {
+    data = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    data = { raw: rawText };
+  }
+
+  return { response, data, rawText };
+}
+
+function buildAttemptConfigs({ address, city, state, zipCode, limit, propertyType }) {
+  const attempts = [];
+
+  function addAttempt(label, params) {
+    const normalized = Object.fromEntries(
+      Object.entries(params).filter(([, value]) => clean(value) !== "")
+    );
+    const key = JSON.stringify(normalized);
+    if (!attempts.some((attempt) => attempt.key === key)) {
+      attempts.push({ label, params: normalized, key });
+    }
+  }
+
+  addAttempt("street+city+state+zip", { address, city, state, zipCode, limit, propertyType });
+  addAttempt("city+state+zip", { city, state, zipCode, limit, propertyType });
+  addAttempt("city+state", { city, state, limit, propertyType });
+  addAttempt("zip only", { zipCode, limit, propertyType });
+  addAttempt("street+city+state", { address, city, state, limit, propertyType });
+  addAttempt("city+state without type", { city, state, limit });
+  addAttempt("zip only without type", { zipCode, limit });
+
+  return attempts.filter((attempt) => {
+    const hasAddress = clean(attempt.params.address);
+    const hasCityState = clean(attempt.params.city) && clean(attempt.params.state);
+    const hasZip = clean(attempt.params.zipCode);
+    return hasAddress || hasCityState || hasZip;
+  });
+}
+
 export async function handler(event) {
   if (event.httpMethod === "OPTIONS") {
     return {
@@ -45,48 +125,58 @@ export async function handler(event) {
   const params = event.queryStringParameters || {};
   const address = clean(params.address || params.address1 || params.street);
   const city = clean(params.city);
-  const state = clean(params.state);
+  const state = normalizeState(params.state);
   const zipCode = clean(params.zip || params.zipCode || params.postalCode);
   const limit = clean(params.limit || "60");
   const propertyType = clean(params.propertyType);
 
-  if (!address && !(city && state)) {
+  if (!address && !(city && state) && !zipCode) {
     return json(400, {
       error: "Missing search input",
-      details: "Provide at least an address, or send both city and state.",
+      details: "Provide an address, city and state, or a zip code.",
     });
   }
 
   try {
-    const url = new URL(RENTCAST_BASE_URL);
+    const attempts = buildAttemptConfigs({ address, city, state, zipCode, limit, propertyType });
+    const diagnostics = [];
+    const combined = [];
+    let lastError = null;
 
-    if (address) url.searchParams.set("address", address);
-    if (city) url.searchParams.set("city", city);
-    if (state) url.searchParams.set("state", state);
-    if (zipCode) url.searchParams.set("zipCode", zipCode);
-    if (limit) url.searchParams.set("limit", limit);
-    if (propertyType) url.searchParams.set("propertyType", propertyType);
+    for (const attempt of attempts) {
+      const url = new URL(RENTCAST_BASE_URL);
+      Object.entries(attempt.params).forEach(([key, value]) => {
+        if (clean(value)) url.searchParams.set(key, value);
+      });
 
-    const response = await fetch(url, {
-      headers: {
-        Accept: "application/json",
-        "X-Api-Key": apiKey,
-      },
-    });
+      const { response, data, rawText } = await fetchRentcast(url, apiKey);
+      const items = response.ok ? extractItems(data) : [];
 
-    const rawText = await response.text();
-    let data;
+      diagnostics.push({
+        label: attempt.label,
+        request: attempt.params,
+        statusCode: response.status,
+        resultCount: items.length,
+      });
 
-    try {
-      data = rawText ? JSON.parse(rawText) : null;
-    } catch {
-      data = { raw: rawText };
+      if (!response.ok) {
+        lastError = {
+          statusCode: response.status,
+          details: data?.message || data?.error || rawText || "Unknown upstream error",
+        };
+        continue;
+      }
+
+      combined.push(...items);
+      if (combined.length >= Number(limit || 60)) break;
     }
 
-    if (!response.ok) {
-      return json(response.status, {
+    const data = dedupeListings(combined).slice(0, Number(limit || 60));
+
+    if (!data.length && lastError) {
+      return json(lastError.statusCode, {
         error: "RentCast request failed",
-        details: data?.message || data?.error || rawText || "Unknown upstream error",
+        details: lastError.details,
         request: {
           address,
           city,
@@ -95,6 +185,7 @@ export async function handler(event) {
           limit,
           propertyType,
         },
+        attempts: diagnostics,
       });
     }
 
@@ -108,6 +199,7 @@ export async function handler(event) {
         limit,
         propertyType,
       },
+      attempts: diagnostics,
       data,
     });
   } catch (error) {

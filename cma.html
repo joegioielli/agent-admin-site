@@ -667,8 +667,8 @@
       if (!Number.isFinite(subject.yearBuilt)) return userCap;
       const age = new Date().getFullYear() - subject.yearBuilt;
       if (age < 5) return Math.min(2, userCap);
-      if (age >= 40) return relaxed ? Math.min(15, Math.max(userCap, 15)) : Math.min(15, userCap);
-      return relaxed ? Math.min(Math.max(userCap, 12), 15) : Math.min(10, userCap);
+      if (age >= 40) return Math.min(15, userCap);
+      return relaxed ? Math.min(12, userCap) : Math.min(10, userCap);
     }
 
     function isSameSubdivision(subject, comp) {
@@ -742,6 +742,7 @@
       if (comp.distanceMiles != null && comp.distanceMiles > values.searchRadius) return false;
       if (Number.isFinite(subject.beds) && Number.isFinite(comp.beds) && Math.abs(subject.beds - comp.beds) > values.bedVariance + 1) return false;
       if (Number.isFinite(subject.baths) && Number.isFinite(comp.baths) && Math.abs(subject.baths - comp.baths) > values.bathVariance + 0.5) return false;
+      if (Number.isFinite(subject.yearBuilt) && Number.isFinite(comp.yearBuilt) && Math.abs(subject.yearBuilt - comp.yearBuilt) > allowedYearDelta(subject, values, false)) return false;
       if (!storyStyleCompatible(subject, comp, values)) return false;
       return true;
     }
@@ -858,6 +859,7 @@
       if (selected.length < 3) {
         const fallbackStage = stages[stages.length - 1];
         candidatePool
+          .filter((comp) => passesSoldStage(subject, comp, values, fallbackStage))
           .map((comp) => scoreComparable(subject, comp, values, fallbackStage, "sold"))
           .sort((a, b) => b.similarityScore - a.similarityScore)
           .forEach((candidate) => {

@@ -177,31 +177,11 @@ export async function handler(event) {
       resultCount: avmComparables.length,
     });
 
-    if (avmFetch.response.ok && (avmComparables.length || avmSubject)) {
-      return json(200, {
-        source: "rentcast-avm",
-        request: {
-          address,
-          city,
-          state,
-          zipCode,
-          propertyType,
-          limit,
-          compCount,
-          searchRadius,
-        },
-        attempts: diagnostics,
-        data: {
-          subjectProperty: avmSubject,
-          comparables: avmComparables,
-          avm: avmFetch.data,
-        },
-      });
-    }
+    const combined = [...avmComparables];
+    let responseSource = avmComparables.length ? "rentcast-avm" : "rentcast-listings";
 
-    // Fallback path: sale listings search if AVM is empty or unavailable.
+    // Fallback path: sale listings search if AVM comps are empty or thin.
     const listingAttempts = buildListingAttempts({ address, city, state, zipCode, limit, propertyType });
-    const combined = [];
     let lastError = avmFetch.response.ok
       ? null
       : {
@@ -210,6 +190,7 @@ export async function handler(event) {
         };
 
     for (const attempt of listingAttempts) {
+      if (combined.length >= Number(limit || 60)) break;
       const url = new URL(RENTCAST_LISTINGS_URL);
       Object.entries(attempt.params).forEach(([key, value]) => {
         if (clean(value)) url.searchParams.set(key, value);
@@ -235,7 +216,7 @@ export async function handler(event) {
       }
 
       combined.push(...items);
-      if (combined.length >= Number(limit || 60)) break;
+      if (items.length) responseSource = avmSubject ? "rentcast-avm+listings" : "rentcast-listings";
     }
 
     const listingData = dedupeListings(combined).slice(0, Number(limit || 60));
@@ -260,7 +241,7 @@ export async function handler(event) {
     }
 
     return json(200, {
-      source: "rentcast-listings",
+      source: responseSource,
       request: {
         address,
         city,
@@ -273,8 +254,9 @@ export async function handler(event) {
       },
       attempts: diagnostics,
       data: {
-        subjectProperty: null,
+        subjectProperty: avmSubject,
         comparables: listingData,
+        avm: avmFetch.response.ok ? avmFetch.data : null,
       },
     });
   } catch (error) {

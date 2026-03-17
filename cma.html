@@ -744,12 +744,17 @@
 
     function selectSoldComparables(subject, comps, values) {
       const soldPool = uniqueBy(comps.filter(isSoldComp), (comp) => comp.id || comp.address);
+      const fallbackPool = uniqueBy(
+        comps.filter((comp) => comp.listPrice != null || comp.soldPrice != null),
+        (comp) => comp.id || comp.address
+      );
+      const candidatePool = soldPool.length ? soldPool : fallbackPool;
       const stages = buildSoldSearchStages(values);
       const selected = [];
-      let stageUsed = soldPool.length ? "full sold fallback pool" : "no sold comps found";
+      let stageUsed = soldPool.length ? "full sold fallback pool" : "live listing fallback pool";
 
       for (const stage of stages) {
-        const matches = soldPool
+        const matches = candidatePool
           .filter((comp) => passesSoldStage(subject, comp, values, stage))
           .map((comp) => scoreComparable(subject, comp, values, stage, "sold"))
           .sort((a, b) => b.similarityScore - a.similarityScore || (b.soldPrice ?? b.listPrice ?? 0) - (a.soldPrice ?? a.listPrice ?? 0));
@@ -764,7 +769,7 @@
 
       if (selected.length < 3) {
         const fallbackStage = stages[stages.length - 1];
-        soldPool
+        candidatePool
           .map((comp) => scoreComparable(subject, comp, values, fallbackStage, "sold"))
           .sort((a, b) => b.similarityScore - a.similarityScore)
           .forEach((candidate) => {
@@ -774,9 +779,9 @@
 
       return {
         soldComps: selected.slice(0, 3),
-        soldCandidateCount: soldPool.length,
+        soldCandidateCount: candidatePool.length,
         soldStageUsed: stageUsed,
-        usedLiveFallbackPool: false
+        usedLiveFallbackPool: !soldPool.length
       };
     }
 
@@ -934,27 +939,7 @@
     }
 
     function buildReport(values, subject, soldComps, activeComp, selectionMeta, sourceNote) {
-      if (!soldComps.length) {
-        const emptyTrend = {
-          trend: "insufficient closed sales",
-          note: "No closed comparable sales matched the current CMA rules. Review the active benchmark and consider broadening the search."
-        };
-        return {
-          generatedAt: new Date(),
-          subject,
-          soldComps: [],
-          activeComp,
-          recommendedRange: [null, null],
-          suggestedListPrice: null,
-          ppsfSummary: { low: null, average: null, high: null, averageDom: null },
-          marketTrend: emptyTrend,
-          pricingOptions: [],
-          strategyNote: "No closed comparable sales matched the current rules, so the pricing recommendation is incomplete until more sold data is available.",
-          summary: "The CMA search did not return any closed comparable sales that matched the current rules. Active properties can still be reviewed, but pricing guidance should be treated as incomplete until closed comps are found.",
-          searchSummary: buildSearchSummary(values, subject, selectionMeta, emptyTrend),
-          dataSourceNote: sourceNote
-        };
-      }
+      if (!soldComps.length) throw new Error("No sold comparable properties passed the CMA rules for this search.");
       const pricing = buildPricingModel(values, subject, soldComps, activeComp);
       subject.estimatedValue = pricing.suggestedListPrice;
       return {
@@ -1017,8 +1002,8 @@
       const soldSelection = selectSoldComparables(subject, compPool, values);
       const activeSelection = selectActiveComparable(subject, compPool, values, new Set(soldSelection.soldComps.map((comp) => comp.id)));
       const sourceLabel = payload?.source === "rentcast-avm" ? "live RentCast AVM data with comparable-property matching" : "live RentCast sale-listing data with staged comp filtering and similarity scoring";
-      const sourceNote = soldSelection.soldComps.length < 3
-        ? `Generated ${formatDateTime(new Date())} using ${sourceLabel}. RentCast only returned ${soldSelection.soldComps.length} closed comparable${soldSelection.soldComps.length === 1 ? "" : "s"} that fit the current rules, so active listings were kept separate.`
+      const sourceNote = soldSelection.usedLiveFallbackPool
+        ? `Generated ${formatDateTime(new Date())} using ${sourceLabel}. The sold comp set was thin, so the report ranked the closest available live comparables in the returned pool.`
         : `Generated ${formatDateTime(new Date())} using ${sourceLabel}.`;
       return buildReport(
         values,
@@ -1157,16 +1142,11 @@
       ppsfMetrics.appendChild(renderMetric("Market Trend", report.marketTrend?.trend ? report.marketTrend.trend.replace(/\b\w/g, (char) => char.toUpperCase()) : "Stable"));
 
       strategyOptions.innerHTML = "";
-      if (report.pricingOptions.length) report.pricingOptions.forEach((option) => strategyOptions.appendChild(renderStrategyCard(option)));
-      else strategyOptions.appendChild(renderCompEmpty("Pricing strategy will appear once closed comparable sales are available."));
+      report.pricingOptions.forEach((option) => strategyOptions.appendChild(renderStrategyCard(option)));
 
       estimateGrid.innerHTML = "";
-      if (report.soldComps.length) {
-        estimateGrid.appendChild(renderEstimateCard("Recommended price range", `${formatCurrency(report.recommendedRange[0])} - ${formatCurrency(report.recommendedRange[1])}`, "Comp-supported range from the selected sold comparables and PPSF cross-check.", false));
-        estimateGrid.appendChild(renderEstimateCard("Suggested list price", formatCurrency(report.suggestedListPrice), "Primary launch recommendation using market trend, condition, and pricing psychology.", true));
-      } else {
-        estimateGrid.appendChild(renderEstimateCard("Pricing guidance", "Need closed comps", "No closed comparable sales matched the current rules. Review active inventory or broaden the search parameters.", false));
-      }
+      estimateGrid.appendChild(renderEstimateCard("Recommended price range", `${formatCurrency(report.recommendedRange[0])} - ${formatCurrency(report.recommendedRange[1])}`, "Comp-supported range from the selected sold comparables and PPSF cross-check.", false));
+      estimateGrid.appendChild(renderEstimateCard("Suggested list price", formatCurrency(report.suggestedListPrice), "Primary launch recommendation using market trend, condition, and pricing psychology.", true));
 
       soldCompGrid.innerHTML = "";
       if (report.soldComps.length) report.soldComps.forEach((comp) => soldCompGrid.appendChild(renderCompCard(comp)));

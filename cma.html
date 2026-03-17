@@ -459,6 +459,7 @@
         subjectBaths: toNumber(form.subjectBaths.value, null),
         subjectYearBuilt: toNumber(form.subjectYearBuilt.value, null),
         subjectLotSize: toNumber(form.subjectLotSize.value, null),
+        subjectPropertyTypeRaw: cleanText(form.subjectPropertyType.value),
         subjectPropertyType: normalizePropertyType(form.subjectPropertyType.value),
         subjectSubdivision: cleanText(form.subjectSubdivision.value),
         subjectStoryCount: normalizeStoryCount(form.subjectStoryCount.value),
@@ -652,12 +653,17 @@
 
     function selectSoldComparables(subject, comps, values) {
       const soldPool = uniqueBy(comps.filter(isSoldComp), (comp) => comp.id || comp.address);
+      const fallbackPool = uniqueBy(
+        comps.filter((comp) => comp.listPrice != null || comp.soldPrice != null),
+        (comp) => comp.id || comp.address
+      );
+      const candidatePool = soldPool.length ? soldPool : fallbackPool;
       const stages = buildSoldSearchStages(values);
       const selected = [];
-      let stageUsed = "full fallback pool";
+      let stageUsed = soldPool.length ? "full sold fallback pool" : "live listing fallback pool";
 
       for (const stage of stages) {
-        const matches = soldPool
+        const matches = candidatePool
           .filter((comp) => passesSoldStage(subject, comp, values, stage))
           .map((comp) => scoreComparable(subject, comp, values, stage, "sold"))
           .sort((a, b) => b.similarityScore - a.similarityScore || (b.soldPrice ?? b.listPrice ?? 0) - (a.soldPrice ?? a.listPrice ?? 0));
@@ -672,7 +678,7 @@
 
       if (selected.length < 3) {
         const fallbackStage = stages[stages.length - 1];
-        soldPool
+        candidatePool
           .map((comp) => scoreComparable(subject, comp, values, fallbackStage, "sold"))
           .sort((a, b) => b.similarityScore - a.similarityScore)
           .forEach((candidate) => {
@@ -680,7 +686,12 @@
           });
       }
 
-      return { soldComps: selected.slice(0, 3), soldCandidateCount: soldPool.length, soldStageUsed: stageUsed };
+      return {
+        soldComps: selected.slice(0, 3),
+        soldCandidateCount: candidatePool.length,
+        soldStageUsed: stageUsed,
+        usedLiveFallbackPool: !soldPool.length
+      };
     }
 
     function selectActiveComparable(subject, comps, values, selectedSoldIds) {
@@ -875,7 +886,7 @@
       if (parsed.city) params.set("city", parsed.city);
       if (parsed.state) params.set("state", parsed.state);
       if (parsed.zipCode) params.set("zipCode", parsed.zipCode);
-      if (values.subjectPropertyType) params.set("propertyType", values.subjectPropertyType);
+      if (values.subjectPropertyTypeRaw) params.set("propertyType", values.subjectPropertyTypeRaw);
       params.set("limit", "60");
       const response = await fetch(`/.netlify/functions/cma?${params.toString()}`, { headers: { Accept: "application/json" } });
       const payload = await response.json().catch(() => ({}));
@@ -888,7 +899,21 @@
       const subject = buildSubjectProfile(values, comps);
       const soldSelection = selectSoldComparables(subject, comps, values);
       const activeSelection = selectActiveComparable(subject, comps, values, new Set(soldSelection.soldComps.map((comp) => comp.id)));
-      return buildReport(values, subject, soldSelection.soldComps, activeSelection.activeComp, { soldStageUsed: soldSelection.soldStageUsed, soldCandidateCount: soldSelection.soldCandidateCount, activeCandidateCount: activeSelection.activeCandidateCount }, `Generated ${formatDateTime(new Date())} using live RentCast sale-listing data with staged comp filtering and similarity scoring.`);
+      const sourceNote = soldSelection.usedLiveFallbackPool
+        ? `Generated ${formatDateTime(new Date())} using live RentCast data. The API returned a thin sold set, so the report used the closest live listings available while keeping the current CMA scoring logic in place.`
+        : `Generated ${formatDateTime(new Date())} using live RentCast sale-listing data with staged comp filtering and similarity scoring.`;
+      return buildReport(
+        values,
+        subject,
+        soldSelection.soldComps,
+        activeSelection.activeComp,
+        {
+          soldStageUsed: soldSelection.soldStageUsed,
+          soldCandidateCount: soldSelection.soldCandidateCount,
+          activeCandidateCount: activeSelection.activeCandidateCount
+        },
+        sourceNote
+      );
     }
 
     function renderMetric(label, value) {

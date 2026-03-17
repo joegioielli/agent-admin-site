@@ -1054,6 +1054,26 @@
       return article;
     }
 
+    function setFormFieldIfBlank(fieldName, value, formatter = (input) => String(input)) {
+      const field = form.elements?.[fieldName];
+      if (!field || cleanText(field.value)) return;
+      if (value == null || value === "") return;
+      field.value = formatter(value);
+    }
+
+    function populateSubjectFormFields(subject) {
+      if (!subject || typeof subject !== "object") return;
+      setFormFieldIfBlank("subjectSqft", subject.sqft, (value) => String(Math.round(value)));
+      setFormFieldIfBlank("subjectBeds", subject.beds, (value) => String(value));
+      setFormFieldIfBlank("subjectBaths", subject.baths, (value) => String(value));
+      setFormFieldIfBlank("subjectYearBuilt", subject.yearBuilt, (value) => String(value));
+      setFormFieldIfBlank("subjectLotSize", subject.lotSize, (value) => value >= 1 ? Number(value).toFixed(2) : Number(value).toFixed(3));
+      setFormFieldIfBlank("subjectPropertyType", subject.propertyType, (value) => displayPropertyType(value));
+      setFormFieldIfBlank("subjectSubdivision", subject.subdivision);
+      setFormFieldIfBlank("subjectStoryCount", subject.storyCount, (value) => Number.isFinite(value) ? String(value) : String(value));
+      setFormFieldIfBlank("subjectGarageParking", subject.garageParking);
+    }
+
     function renderReport(values, report) {
       reportSection.dataset.ready = "true";
       reportEmptyState.style.display = "none";
@@ -1151,7 +1171,9 @@
       reportTimestamp.textContent = "Loading live CMA data...";
       try {
         const payload = await fetchLiveCma(values);
-        renderReport(values, buildLiveReport(values, payload));
+        const report = buildLiveReport(values, payload);
+        populateSubjectFormFields(report.subject);
+        renderReport(values, report);
       } catch (error) {
         showLiveDataError(values, error);
       } finally {

@@ -75,7 +75,13 @@
 
     emptyDocumentsState.hidden = true;
     documents.forEach((documentRecord) => {
-      const methodLabel = documentRecord.extractionMethod || "text parser";
+      const metaItems = [
+        formatBytes(documentRecord.size),
+        `${documentRecord.extractedFieldCount} mapped fields`
+      ];
+
+      if (documentRecord.extractionMethod) metaItems.push(documentRecord.extractionMethod);
+      if (documentRecord.status) metaItems.push(documentRecord.status);
 
       const item = document.createElement("article");
       item.className = "document-item";
@@ -88,11 +94,7 @@
           <span class="pill">${formatPercent(documentRecord.classificationConfidence)} match</span>
         </div>
         <div class="document-item__meta">
-          <span>${formatBytes(documentRecord.size)}</span>
-          <span>${documentRecord.extractedFieldCount} mapped fields</span>
-          <span>${documentRecord.formFieldCount || 0} form fields</span>
-          <span>${methodLabel}</span>
-          <span>${documentRecord.status}</span>
+          ${metaItems.map((itemValue) => `<span>${itemValue}</span>`).join("")}
         </div>
         <p class="document-item__note">${documentRecord.note || ""}</p>
       `;

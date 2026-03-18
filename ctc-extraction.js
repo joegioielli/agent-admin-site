@@ -318,6 +318,68 @@
     };
   }
 
+  function hasFieldValue(field) {
+    return field?.value != null && field?.value !== "";
+  }
+
+  function countMappedFields(fieldMap) {
+    return Object.values(fieldMap || {}).filter((field) => hasFieldValue(field)).length;
+  }
+
+  function scoreFieldMap(fieldMap) {
+    const weights = {
+      property_address: 1,
+      buyer_names: 2,
+      seller_names: 2,
+      purchase_price: 3,
+      earnest_money_amount: 2,
+      financing_type: 1,
+      binding_date: 2,
+      closing_date: 2,
+      inspection_deadline: 2,
+      possession_date: 2
+    };
+
+    return Object.entries(fieldMap || {}).reduce((total, [fieldName, field]) => {
+      if (!hasFieldValue(field)) return total;
+      return total + (weights[fieldName] || 1);
+    }, 0);
+  }
+
+  function shouldRunOcrFallback(text, extractedFields, typeInfo) {
+    if (text.length < 80) return true;
+
+    const mappedCount = countMappedFields(extractedFields);
+    const weightedScore = scoreFieldMap(extractedFields);
+    const isPurchaseContract = typeInfo?.type === "purchase_contract";
+    const missingCoreDealTerms = !hasFieldValue(extractedFields.purchase_price)
+      && !hasFieldValue(extractedFields.earnest_money_amount)
+      && !hasFieldValue(extractedFields.closing_date);
+
+    if (mappedCount <= 1) return true;
+    if (weightedScore <= 3) return true;
+    if (isPurchaseContract && missingCoreDealTerms) return true;
+
+    return false;
+  }
+
+  function pickPreferredField(primaryField, secondaryField) {
+    if (!hasFieldValue(primaryField)) return secondaryField || null;
+    if (!hasFieldValue(secondaryField)) return primaryField || null;
+
+    const primaryConfidence = typeof primaryField.confidence === "number" ? primaryField.confidence : 0;
+    const secondaryConfidence = typeof secondaryField.confidence === "number" ? secondaryField.confidence : 0;
+    return secondaryConfidence > primaryConfidence ? secondaryField : primaryField;
+  }
+
+  function mergeExtractedFields(primaryFields, secondaryFields) {
+    const merged = {};
+    Object.keys(FIELD_LABELS).forEach((fieldName) => {
+      merged[fieldName] = pickPreferredField(primaryFields?.[fieldName], secondaryFields?.[fieldName]);
+    });
+    return merged;
+  }
+
   function parseCurrency(rawValue) {
     if (!rawValue) return null;
     const cleaned = String(rawValue).replace(/[^0-9.]/g, "");
@@ -662,10 +724,7 @@
       size: documentRecord.size,
       lastModified: documentRecord.lastModified,
       textLength: documentRecord.textLength,
-      extractedFieldCount: Object.keys(documentRecord.extractedFields || {}).filter((fieldName) => {
-        const field = documentRecord.extractedFields[fieldName];
-        return field?.value != null && field?.value !== "";
-      }).length,
+      extractedFieldCount: countMappedFields(documentRecord.extractedFields),
       textPreview: documentRecord.textPreview
     }));
   }
@@ -690,31 +749,54 @@
     });
 
     const pdf = await loadPdfDocument(file);
-    let text = await readPdfText(pdf).catch(() => "");
+    const textLayer = await readPdfText(pdf).catch(() => "");
+    const textTypeInfo = detectDocumentType(file.name || "", textLayer);
+    const textLines = splitLines(textLayer);
+    const textFields = textLayer ? extractFieldsFromText(textLayer, textLines) : {};
+
+    let finalText = textLayer;
+    let finalFields = textFields;
     let extractionMethod = "pdf_text";
 
-    if (text.length < 80) {
+    if (shouldRunOcrFallback(textLayer, textFields, textTypeInfo)) {
       reportProgress(onProgress, {
         stage: "ocr-start",
         fileName: file.name,
-        message: `No usable embedded text found in ${file.name}. Trying OCR...`
+        message: `Embedded text was too sparse in ${file.name}. Trying OCR...`
       });
-      text = await ocrPdfText(pdf, file.name, onProgress).catch(() => "");
-      extractionMethod = "ocr";
+
+      const ocrText = await ocrPdfText(pdf, file.name, onProgress).catch(() => "");
+      const ocrLines = splitLines(ocrText);
+      const ocrFields = ocrText ? extractFieldsFromText(ocrText, ocrLines) : {};
+
+      const textScore = scoreFieldMap(textFields);
+      const ocrScore = scoreFieldMap(ocrFields);
+      const mergedFields = mergeExtractedFields(textFields, ocrFields);
+      const mergedScore = scoreFieldMap(mergedFields);
+
+      if (mergedScore > Math.max(textScore, ocrScore)) {
+        finalText = [textLayer, ocrText].filter(Boolean).join("\n\n");
+        finalFields = mergedFields;
+        extractionMethod = "hybrid";
+      } else if (ocrScore > textScore) {
+        finalText = ocrText;
+        finalFields = ocrFields;
+        extractionMethod = "ocr";
+      }
     }
 
-    const lines = splitLines(text);
-    const typeInfo = detectDocumentType(file.name || "", text);
-    const extractedFields = text ? extractFieldsFromText(text, lines) : {};
-    const populatedFieldCount = Object.values(extractedFields).filter((field) => field?.value != null && field?.value !== "").length;
-    const status = !text
+    const typeInfo = detectDocumentType(file.name || "", finalText);
+    const populatedFieldCount = countMappedFields(finalFields);
+    const status = !finalText
       ? "no text found"
       : populatedFieldCount
         ? "processed"
         : "text found, no confident matches";
-    const note = !text
+    const note = !finalText
       ? "No usable text could be extracted from this PDF, even after OCR."
-      : extractionMethod === "ocr" && populatedFieldCount
+      : extractionMethod === "hybrid" && populatedFieldCount
+        ? "Embedded PDF text was too weak on its own, so OCR was blended in for the final result."
+        : extractionMethod === "ocr" && populatedFieldCount
         ? "Values were extracted using OCR from a scanned or image-based PDF."
         : extractionMethod === "ocr"
           ? "OCR recovered text, but the current field heuristics did not match enough labels confidently."
@@ -732,12 +814,12 @@
       detectionConfidence: typeInfo.confidence,
       priority: DOCUMENT_PRIORITIES[typeInfo.type] || DOCUMENT_PRIORITIES.unknown,
       uploadOrder: index,
-      extractedFields,
+      extractedFields: finalFields,
       status,
       note,
       extractionMethod,
-      textLength: text.length,
-      textPreview: text.slice(0, 220)
+      textLength: finalText.length,
+      textPreview: finalText.slice(0, 220)
     };
   }
 

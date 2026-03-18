@@ -193,6 +193,10 @@
                     <div class="field" style="margin-top: 12px;"><label for="manualComp3Notes">Notes</label><textarea id="manualComp3Notes" name="manualComp3Notes" placeholder="Optional third override if you want to bracket the subject with another strong current-market comparable."></textarea></div>
                   </section>
                 </div>
+                <div class="field" style="margin-top: 12px;">
+                  <label for="excludedComparableAddresses">Exclude weak feed comps by address</label>
+                  <textarea id="excludedComparableAddresses" name="excludedComparableAddresses" placeholder="Enter one address per line for any closed or live comps you do not want the CMA to use. Example:\n12 Weak Comp Ln, Springfield, IL 62704\n45 Busy Road Dr, Springfield, IL 62704"></textarea>
+                </div>
               </section>
               <section class="sub-card">
                 <div class="section-label">Fixed Search Parameters</div>
@@ -614,6 +618,15 @@
       return canonicalizeAddress(comp?.address) || cleanText(comp?.id) || "";
     }
 
+    function parseExcludedComparableKeys(raw) {
+      return new Set(
+        String(raw || "")
+          .split(/\r?\n/)
+          .map((value) => canonicalizeAddress(value))
+          .filter(Boolean)
+      );
+    }
+
     function inferSubdivisionFromRemarks(remarks) {
       const text = cleanText(remarks);
       if (!text) return "";
@@ -758,7 +771,8 @@
         lookbackMonths: clamp(toNumber(form.lookbackMonths.value, 6), 1, 12),
         prioritizeSubdivision: form.prioritizeSubdivision.checked,
         prioritizeStyle: form.prioritizeStyle.checked,
-        manualCurrentMarketComps: readManualCurrentMarketComps()
+        manualCurrentMarketComps: readManualCurrentMarketComps(),
+        excludedComparableKeys: parseExcludedComparableKeys(form.excludedComparableAddresses.value)
       };
     }
 
@@ -785,6 +799,11 @@
         }
       });
       return merged;
+    }
+
+    function filterExcludedComparables(comps, excludedKeys) {
+      if (!excludedKeys?.size) return comps;
+      return comps.filter((comp) => !excludedKeys.has(compIdentityKey(comp)));
     }
 
     function buildSubjectProfile(values, comps, subjectMatch = null) {
@@ -1212,15 +1231,59 @@
       return { score, label: "Guarded", note: "The comp set or subject data is less consistent, so the pricing range is intentionally wider to stay defensible." };
     }
 
+    function buildSoldPricingWeights(subject, soldComps, pendingComps = [], activeComp = null) {
+      const weights = new Map();
+      if (!soldComps.length) return weights;
+      const bestSimilarity = Math.max(...soldComps.map((comp) => comp.similarityScore || 0), 0);
+      const soldMedianPrice = median(soldComps.map((comp) => comp.soldPrice ?? comp.listPrice));
+      const soldMedianPpsf = median(soldComps.map((comp) => comp.pricePerSqft));
+      const currentMarketAnchor = average([
+        weightedAverage(pendingComps, (comp) => comp.listPrice ?? comp.soldPrice, (comp) => Math.max(comp.similarityScore || 0, 1)),
+        Number.isFinite(activeComp?.listPrice) ? activeComp.listPrice : null
+      ].filter((value) => Number.isFinite(value)));
+
+      soldComps.forEach((comp, index) => {
+        const key = compIdentityKey(comp) || comp.id || `sold-comp-${index}`;
+        const similarity = comp.similarityScore || 0;
+        const similarityGap = bestSimilarity - similarity;
+        const compPrice = comp.soldPrice ?? comp.listPrice;
+        let weight = clamp(similarity / 18, 1, 5.5);
+
+        if (isSameSubdivision(subject, comp)) weight *= 1.18;
+        else if (isNearbyMicroMarket(subject, comp)) weight *= 1.08;
+
+        let lowOutlierSignals = 0;
+        if (Number.isFinite(soldMedianPrice) && Number.isFinite(compPrice) && compPrice < soldMedianPrice * 0.94) lowOutlierSignals += 1;
+        if (Number.isFinite(soldMedianPpsf) && Number.isFinite(comp.pricePerSqft) && comp.pricePerSqft < soldMedianPpsf * 0.95) lowOutlierSignals += 1;
+        if (Number.isFinite(currentMarketAnchor) && Number.isFinite(compPrice) && compPrice < currentMarketAnchor * 0.92) lowOutlierSignals += 1;
+        if (similarityGap >= 8) lowOutlierSignals += 1;
+
+        if (lowOutlierSignals >= 3) weight *= 0.45;
+        else if (lowOutlierSignals >= 2) weight *= 0.62;
+        else if (lowOutlierSignals === 1 && similarityGap >= 6) weight *= 0.8;
+
+        weights.set(key, clamp(weight, 0.35, 6));
+      });
+
+      return weights;
+    }
+
+    function getCompPricingWeight(comp, pricingWeights, fallback = 1) {
+      const key = compIdentityKey(comp) || comp.id;
+      return pricingWeights.get(key) ?? fallback;
+    }
+
     function buildPricingModel(values, subject, soldComps, activeComp, pendingComps = []) {
       const compWeight = (comp) => Math.max(comp.similarityScore || 0, 1);
+      const soldPricingWeights = buildSoldPricingWeights(subject, soldComps, pendingComps, activeComp);
+      const soldCompWeight = (comp) => getCompPricingWeight(comp, soldPricingWeights, compWeight(comp));
       const sortedBySimilarity = [...soldComps].sort((a, b) => (b.similarityScore || 0) - (a.similarityScore || 0));
       const compPpsf = soldComps.map((comp) => comp.pricePerSqft).filter((value) => Number.isFinite(value));
       const compPrices = soldComps.map((comp) => comp.soldPrice ?? comp.listPrice).filter((value) => Number.isFinite(value));
       const pendingPrices = pendingComps.map((comp) => comp.listPrice ?? comp.soldPrice).filter((value) => Number.isFinite(value));
       const subjectSqft = Number.isFinite(subject.sqft) ? subject.sqft : median(soldComps.map((comp) => comp.sqft));
-      const weightedSalePrice = weightedAverage(soldComps, (comp) => comp.soldPrice ?? comp.listPrice, compWeight);
-      const weightedPpsf = weightedAverage(soldComps, "pricePerSqft", compWeight);
+      const weightedSalePrice = weightedAverage(soldComps, (comp) => comp.soldPrice ?? comp.listPrice, soldCompWeight);
+      const weightedPpsf = weightedAverage(soldComps, "pricePerSqft", soldCompWeight);
       let baseAnchor = average([
         weightedSalePrice,
         Number.isFinite(weightedPpsf) && Number.isFinite(subjectSqft) ? weightedPpsf * subjectSqft : null
@@ -1259,16 +1322,19 @@
       const strongestCompAnchor = weightedAverage(
         sortedBySimilarity.slice(0, Math.min(2, sortedBySimilarity.length)),
         (comp) => comp.soldPrice ?? comp.listPrice,
-        compWeight
+        soldCompWeight
       );
-      const priceQ1 = weightedPercentile(soldComps, (comp) => comp.soldPrice ?? comp.listPrice, compWeight, 0.25) ?? percentile(compPrices, 0.25);
-      const priceMedianWeighted = weightedPercentile(soldComps, (comp) => comp.soldPrice ?? comp.listPrice, compWeight, 0.5) ?? median(compPrices);
-      const priceQ3 = weightedPercentile(soldComps, (comp) => comp.soldPrice ?? comp.listPrice, compWeight, 0.75) ?? percentile(compPrices, 0.75);
-      const ppsfQ1 = weightedPercentile(soldComps, "pricePerSqft", compWeight, 0.25) ?? percentile(compPpsf, 0.25);
-      const ppsfMedianWeighted = weightedPercentile(soldComps, "pricePerSqft", compWeight, 0.5) ?? median(compPpsf);
-      const ppsfQ3 = weightedPercentile(soldComps, "pricePerSqft", compWeight, 0.75) ?? percentile(compPpsf, 0.75);
+      const priceQ1 = weightedPercentile(soldComps, (comp) => comp.soldPrice ?? comp.listPrice, soldCompWeight, 0.25) ?? percentile(compPrices, 0.25);
+      const priceMedianWeighted = weightedPercentile(soldComps, (comp) => comp.soldPrice ?? comp.listPrice, soldCompWeight, 0.5) ?? median(compPrices);
+      const priceQ3 = weightedPercentile(soldComps, (comp) => comp.soldPrice ?? comp.listPrice, soldCompWeight, 0.75) ?? percentile(compPrices, 0.75);
+      const ppsfQ1 = weightedPercentile(soldComps, "pricePerSqft", soldCompWeight, 0.25) ?? percentile(compPpsf, 0.25);
+      const ppsfMedianWeighted = weightedPercentile(soldComps, "pricePerSqft", soldCompWeight, 0.5) ?? median(compPpsf);
+      const ppsfQ3 = weightedPercentile(soldComps, "pricePerSqft", soldCompWeight, 0.75) ?? percentile(compPpsf, 0.75);
       const priceMedian = median(compPrices);
       const subjectCompleteness = computeSubjectDataCompleteness(subject);
+      const strongActiveFloorAnchor = Number.isFinite(activeComp?.listPrice) && (activeComp?.similarityScore || 0) >= 72
+        ? activeComp.listPrice
+        : null;
       const priceDispersionPct = Number.isFinite(priceMedian) && Number.isFinite(priceQ1) && Number.isFinite(priceQ3) && priceMedian > 0
         ? clamp((priceQ3 - priceQ1) / (priceMedian * 2), 0.02, 0.08)
         : null;
@@ -1292,8 +1358,12 @@
         Number.isFinite(pendingPpsfMedianWeighted) && Number.isFinite(subjectSqft) ? { value: pendingPpsfMedianWeighted * subjectSqft, weight: 0.9 } : null,
         Number.isFinite(strongestPendingAnchor) ? { value: strongestPendingAnchor, weight: 0.95 } : null,
         Number.isFinite(historicalAnchor) ? { value: historicalAnchor, weight: historicalReference.recentAppraisal ? 1.35 : 0.8 } : null,
-        Number.isFinite(activeComp?.listPrice) && (!Number.isFinite(baseAnchor) || Math.abs(activeComp.listPrice - baseAnchor) / baseAnchor <= 0.12)
-          ? { value: activeComp.listPrice, weight: 0.65 }
+        Number.isFinite(activeComp?.listPrice) && (
+          (activeComp?.similarityScore || 0) >= 72 ||
+          !Number.isFinite(baseAnchor) ||
+          Math.abs(activeComp.listPrice - baseAnchor) / baseAnchor <= 0.12
+        )
+          ? { value: activeComp.listPrice, weight: (activeComp?.similarityScore || 0) >= 72 ? 0.9 : 0.65 }
           : null
       ].filter(Boolean);
       const pricingAnchor = weightedAverage(pricingAnchorCandidates, "value", "weight") ?? baseAnchor;
@@ -1322,6 +1392,8 @@
       if (Number.isFinite(strongestPendingAnchor)) {
         low = Math.max(low, strongestPendingAnchor * 0.975);
         high = Math.max(high, strongestPendingAnchor * 1.01);
+      } else if (Number.isFinite(strongActiveFloorAnchor)) {
+        low = Math.max(low, strongActiveFloorAnchor * 0.94);
       }
       if (activeComp?.listPrice && marketTrend.trend === "softening") high = Math.min(high, activeComp.listPrice + 5000);
       if (activeComp?.listPrice && marketTrend.trend === "strengthening") low = Math.max(low, activeComp.listPrice - 10000);
@@ -1413,6 +1485,7 @@
         `Pricing confidence: ${pricing.confidenceLabel}`
       ];
       if (selection.manualCurrentMarketCount) items.push(`Manual current-market overrides: ${selection.manualCurrentMarketCount}`);
+      if (selection.excludedComparableCount) items.push(`Excluded feed comps: ${selection.excludedComparableCount}`);
       if (Number.isFinite(pricing.historicalAnchor)) items.push(`Historical anchor blended: ${formatCurrency(pricing.historicalAnchor)}`);
       return items;
     }
@@ -1446,7 +1519,7 @@
         normalizeComp({ id: "sample-3", formattedAddress: "85 Oak Hollow Ln, Springfield, IL 62704", status: "Sold", soldPrice: 389500, listPrice: 384900, squareFootage: 2140, bedrooms: 3, bathrooms: 3, yearBuilt: 2012, lotSizeAcres: 0.22, daysOnMarket: 18, soldDate: "2025-12-22", subdivision: "Oak Hollow", propertyType: subject.propertyType || "Single Family", stories: "2" })
       ].map((comp) => scoreComparable(subject, comp, values, { radius: 1.5 }, "sold"));
       const sampleActiveComp = scoreComparable(subject, normalizeComp({ id: "sample-4", formattedAddress: "109 Willow Creek Ct, Springfield, IL 62704", status: "Active", listPrice: 414900, squareFootage: 2288, bedrooms: 4, bathrooms: 3, yearBuilt: 2016, lotSizeAcres: 0.25, daysOnMarket: 22, listDate: "2026-03-01", subdivision: "Willow Creek", propertyType: subject.propertyType || "Single Family", stories: "2" }), values, { radius: 1.5 }, "active");
-      const manualCurrentMarketComps = values.manualCurrentMarketComps || [];
+      const manualCurrentMarketComps = filterExcludedComparables(values.manualCurrentMarketComps || [], values.excludedComparableKeys);
       const usedIds = new Set(soldComps.map((comp) => compIdentityKey(comp)));
       const pendingSelection = selectPendingComparables(subject, manualCurrentMarketComps, values, usedIds);
       pendingSelection.pendingComps.forEach((comp) => usedIds.add(compIdentityKey(comp)));
@@ -1463,7 +1536,8 @@
           soldCandidateCount: soldComps.length,
           pendingCandidateCount: pendingSelection.pendingCandidateCount,
           activeCandidateCount: activeSelection.activeCandidateCount || 1,
-          manualCurrentMarketCount: manualCurrentMarketComps.length
+          manualCurrentMarketCount: manualCurrentMarketComps.length,
+          excludedComparableCount: values.excludedComparableKeys?.size || 0
         },
         "Live RentCast data was unavailable or too thin for a reliable set, so sample comps are shown as a working fallback."
       );
@@ -1497,8 +1571,9 @@
       if (!comps.length) throw new Error("RentCast returned no comparable listings for this search.");
       const subjectMatch = subjectRecord || findSubjectComparable(values, comps);
       const compPool = subjectMatch ? comps.filter((comp) => comp.id !== subjectMatch.id && !addressesLikelyMatch(values, comp)) : comps;
-      const manualCurrentMarketComps = values.manualCurrentMarketComps || [];
-      const mergedCompPool = mergeManualCurrentMarketComps(compPool, manualCurrentMarketComps);
+      const filteredCompPool = filterExcludedComparables(compPool, values.excludedComparableKeys);
+      const manualCurrentMarketComps = filterExcludedComparables(values.manualCurrentMarketComps || [], values.excludedComparableKeys);
+      const mergedCompPool = mergeManualCurrentMarketComps(filteredCompPool, manualCurrentMarketComps);
       const subject = buildSubjectProfile(values, mergedCompPool, subjectMatch);
       if (!subject.subdivision) subject.subdivision = inferSubjectSubdivision(subject, mergedCompPool);
       const soldSelection = selectSoldComparables(subject, mergedCompPool, values);
@@ -1522,7 +1597,8 @@
           soldCandidateCount: soldSelection.soldCandidateCount,
           pendingCandidateCount: pendingSelection.pendingCandidateCount,
           activeCandidateCount: activeSelection.activeCandidateCount,
-          manualCurrentMarketCount: manualCurrentMarketComps.length
+          manualCurrentMarketCount: manualCurrentMarketComps.length,
+          excludedComparableCount: values.excludedComparableKeys?.size || 0
         },
         sourceNote
       );

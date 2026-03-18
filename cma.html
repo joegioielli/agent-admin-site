@@ -338,6 +338,25 @@
       return valid[lower] + ((valid[upper] - valid[lower]) * weight);
     }
 
+    function weightedPercentile(items, valueKey, weightKey, ratio) {
+      const sorted = items
+        .map((item) => ({
+          value: typeof valueKey === "function" ? valueKey(item) : item?.[valueKey],
+          weight: typeof weightKey === "function" ? weightKey(item) : item?.[weightKey]
+        }))
+        .filter(({ value, weight }) => Number.isFinite(value) && Number.isFinite(weight) && weight > 0)
+        .sort((a, b) => a.value - b.value);
+      if (!sorted.length) return null;
+      const totalWeight = sorted.reduce((sum, item) => sum + item.weight, 0);
+      const target = clamp(ratio, 0, 1) * totalWeight;
+      let running = 0;
+      for (const item of sorted) {
+        running += item.weight;
+        if (running >= target) return item.value;
+      }
+      return sorted[sorted.length - 1].value;
+    }
+
     function weightedAverage(items, valueKey, weightKey) {
       let numerator = 0;
       let denominator = 0;
@@ -1050,11 +1069,13 @@
     }
 
     function buildPricingModel(values, subject, soldComps, activeComp) {
+      const compWeight = (comp) => Math.max(comp.similarityScore || 0, 1);
+      const sortedBySimilarity = [...soldComps].sort((a, b) => (b.similarityScore || 0) - (a.similarityScore || 0));
       const compPpsf = soldComps.map((comp) => comp.pricePerSqft).filter((value) => Number.isFinite(value));
       const compPrices = soldComps.map((comp) => comp.soldPrice ?? comp.listPrice).filter((value) => Number.isFinite(value));
       const subjectSqft = Number.isFinite(subject.sqft) ? subject.sqft : median(soldComps.map((comp) => comp.sqft));
-      const weightedSalePrice = weightedAverage(soldComps, (comp) => comp.soldPrice ?? comp.listPrice, (comp) => Math.max(comp.similarityScore || 0, 1));
-      const weightedPpsf = weightedAverage(soldComps, "pricePerSqft", (comp) => Math.max(comp.similarityScore || 0, 1));
+      const weightedSalePrice = weightedAverage(soldComps, (comp) => comp.soldPrice ?? comp.listPrice, compWeight);
+      const weightedPpsf = weightedAverage(soldComps, "pricePerSqft", compWeight);
       let baseAnchor = average([
         weightedSalePrice,
         Number.isFinite(weightedPpsf) && Number.isFinite(subjectSqft) ? weightedPpsf * subjectSqft : null
@@ -1083,10 +1104,17 @@
       const lowPpsf = compPpsf.length ? Math.min(...compPpsf) : null;
       const highPpsf = compPpsf.length ? Math.max(...compPpsf) : null;
       const avgPpsf = average(compPpsf);
-      const priceQ1 = percentile(compPrices, 0.25);
-      const priceQ3 = percentile(compPrices, 0.75);
-      const ppsfQ1 = percentile(compPpsf, 0.25);
-      const ppsfQ3 = percentile(compPpsf, 0.75);
+      const strongestCompAnchor = weightedAverage(
+        sortedBySimilarity.slice(0, Math.min(2, sortedBySimilarity.length)),
+        (comp) => comp.soldPrice ?? comp.listPrice,
+        compWeight
+      );
+      const priceQ1 = weightedPercentile(soldComps, (comp) => comp.soldPrice ?? comp.listPrice, compWeight, 0.25) ?? percentile(compPrices, 0.25);
+      const priceMedianWeighted = weightedPercentile(soldComps, (comp) => comp.soldPrice ?? comp.listPrice, compWeight, 0.5) ?? median(compPrices);
+      const priceQ3 = weightedPercentile(soldComps, (comp) => comp.soldPrice ?? comp.listPrice, compWeight, 0.75) ?? percentile(compPrices, 0.75);
+      const ppsfQ1 = weightedPercentile(soldComps, "pricePerSqft", compWeight, 0.25) ?? percentile(compPpsf, 0.25);
+      const ppsfMedianWeighted = weightedPercentile(soldComps, "pricePerSqft", compWeight, 0.5) ?? median(compPpsf);
+      const ppsfQ3 = weightedPercentile(soldComps, "pricePerSqft", compWeight, 0.75) ?? percentile(compPpsf, 0.75);
       const priceMedian = median(compPrices);
       const subjectCompleteness = computeSubjectDataCompleteness(subject);
       const priceDispersionPct = Number.isFinite(priceMedian) && Number.isFinite(priceQ1) && Number.isFinite(priceQ3) && priceMedian > 0
@@ -1103,19 +1131,31 @@
       rangePaddingPct += clamp((historicalGapPct - 0.025) * 0.35, 0, 0.02);
       rangePaddingPct = clamp(rangePaddingPct, 0.03, 0.095);
 
+      const pricingAnchorCandidates = [
+        Number.isFinite(baseAnchor) ? { value: baseAnchor, weight: 1.8 } : null,
+        Number.isFinite(priceMedianWeighted) ? { value: priceMedianWeighted, weight: 1.45 } : null,
+        Number.isFinite(ppsfMedianWeighted) && Number.isFinite(subjectSqft) ? { value: ppsfMedianWeighted * subjectSqft, weight: 1.2 } : null,
+        Number.isFinite(strongestCompAnchor) ? { value: strongestCompAnchor, weight: 1.25 } : null,
+        Number.isFinite(historicalAnchor) ? { value: historicalAnchor, weight: historicalReference.recentAppraisal ? 1.35 : 0.8 } : null,
+        Number.isFinite(activeComp?.listPrice) && (!Number.isFinite(baseAnchor) || Math.abs(activeComp.listPrice - baseAnchor) / baseAnchor <= 0.12)
+          ? { value: activeComp.listPrice, weight: 0.65 }
+          : null
+      ].filter(Boolean);
+      const pricingAnchor = weightedAverage(pricingAnchorCandidates, "value", "weight") ?? baseAnchor;
+
       let low = average([
         Number.isFinite(priceQ1) ? priceQ1 : compPrices.length ? Math.min(...compPrices) : null,
         Number.isFinite(ppsfQ1) && Number.isFinite(subjectSqft) ? ppsfQ1 * subjectSqft : null,
-        Number.isFinite(baseAnchor) ? baseAnchor * (1 - rangePaddingPct) : null
+        Number.isFinite(pricingAnchor) ? pricingAnchor * (1 - rangePaddingPct) : null
       ].filter((value) => Number.isFinite(value)));
       let high = average([
         Number.isFinite(priceQ3) ? priceQ3 : compPrices.length ? Math.max(...compPrices) : null,
         Number.isFinite(ppsfQ3) && Number.isFinite(subjectSqft) ? ppsfQ3 * subjectSqft : null,
-        Number.isFinite(baseAnchor) ? baseAnchor * (1 + rangePaddingPct) : null
+        Number.isFinite(pricingAnchor) ? pricingAnchor * (1 + rangePaddingPct) : null
       ].filter((value) => Number.isFinite(value)));
       if (!Number.isFinite(low) || !Number.isFinite(high)) {
-        low = Number.isFinite(baseAnchor) ? baseAnchor * (1 - Math.max(rangePaddingPct, 0.04)) : 0;
-        high = Number.isFinite(baseAnchor) ? baseAnchor * (1 + Math.max(rangePaddingPct, 0.04)) : 0;
+        low = Number.isFinite(pricingAnchor) ? pricingAnchor * (1 - Math.max(rangePaddingPct, 0.04)) : 0;
+        high = Number.isFinite(pricingAnchor) ? pricingAnchor * (1 + Math.max(rangePaddingPct, 0.04)) : 0;
       }
       if (historicalReference.recentAppraisal?.value) {
         low = Math.min(low, historicalReference.recentAppraisal.value * 0.985);
@@ -1126,7 +1166,11 @@
       }
       if (activeComp?.listPrice && marketTrend.trend === "softening") high = Math.min(high, activeComp.listPrice + 5000);
       if (activeComp?.listPrice && marketTrend.trend === "strengthening") low = Math.max(low, activeComp.listPrice - 10000);
-      const widthAnchor = baseAnchor || compDerivedAnchor || historicalAnchor || average(compPrices) || 250000;
+      if (Number.isFinite(strongestCompAnchor)) {
+        const upperCompBuffer = 1 + Math.min(rangePaddingPct * 0.45, 0.03);
+        high = Math.max(high, strongestCompAnchor * upperCompBuffer);
+      }
+      const widthAnchor = pricingAnchor || baseAnchor || compDerivedAnchor || historicalAnchor || average(compPrices) || 250000;
       const minWidth = clamp(widthAnchor * Math.max(rangePaddingPct * 1.4, 0.05), 15000, 45000);
       if (high - low < minWidth) {
         const midpoint = average([low, high]);
@@ -1137,9 +1181,21 @@
       const rangeLow = psychPrice(low, "down");
       const rangeHigh = psychPrice(high, "up");
       const pricingConfidence = buildPricingConfidence(soldComps, subjectCompleteness, rangePaddingPct, historicalGapPct);
-      let bias = marketTrend.pricingLean === "aggressive" ? 0.72 : marketTrend.pricingLean === "conservative" ? 0.35 : 0.55;
+      let bias = marketTrend.pricingLean === "aggressive" ? 0.74 : marketTrend.pricingLean === "conservative" ? 0.45 : 0.58;
       bias = clamp(bias + clamp(subjectCondition.netScore * 0.03, -0.09, 0.09), 0.2, 0.8);
-      let suggested = psychPrice(rangeLow + (rangeHigh - rangeLow) * bias, "nearest");
+      if (Number.isFinite(pricingAnchor) && rangeHigh > rangeLow) {
+        const anchorBias = clamp((pricingAnchor - rangeLow) / (rangeHigh - rangeLow), 0.3, 0.82);
+        bias = clamp((bias * 0.4) + (anchorBias * 0.6), 0.32, 0.82);
+      }
+      const strategyAnchor = average([
+        Number.isFinite(pricingAnchor) ? pricingAnchor : null,
+        Number.isFinite(strongestCompAnchor) ? strongestCompAnchor : null,
+        historicalReference.recentAppraisal?.value ?? null
+      ].filter((value) => Number.isFinite(value)));
+      let suggested = psychPrice(average([
+        rangeLow + (rangeHigh - rangeLow) * bias,
+        Number.isFinite(strategyAnchor) ? strategyAnchor : null
+      ].filter((value) => Number.isFinite(value))), "nearest");
       suggested = clamp(suggested, rangeLow, rangeHigh);
 
       const strategyBase = marketTrend.pricingLean === "aggressive"

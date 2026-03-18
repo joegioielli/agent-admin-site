@@ -373,6 +373,13 @@
       color: var(--muted);
     }
 
+    .document-item__note {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
     .pill {
       min-height: 28px;
       display: inline-flex;
@@ -556,7 +563,7 @@
       <header class="main-header">
         <div>
           <div class="main-title">CTC Contract Extraction Workspace</div>
-          <div class="main-subtitle">Upload contract PDFs, normalize key deal data, and review important dates in one place.</div>
+          <div class="main-subtitle">Upload contract PDFs, extract text from the file itself, and review important dates in one place.</div>
         </div>
         <div class="status-pill">Proof of Concept</div>
       </header>
@@ -564,7 +571,7 @@
       <section class="hero">
         <div class="hero-eyebrow">Contract To Close</div>
         <h1 class="hero-title">A clean extraction dashboard for purchase contracts, counteroffers, and amendments.</h1>
-        <p class="hero-copy">This page is built as a working front-end proof of concept. The extraction engine is mocked with replaceable logic so we can later swap in real PDF parsing, OCR, provider APIs, precedence rules, and calendar automation without changing the interface structure.</p>
+        <p class="hero-copy">This page now reads text directly from uploaded PDFs in the browser and applies field heuristics to the document content. Text-searchable PDFs should perform much better than before. Scanned image PDFs will still need OCR later.</p>
       </section>
 
       <!-- Upload controls and extraction results -->
@@ -572,14 +579,14 @@
         <section class="card">
           <div class="section-label">Upload Area</div>
           <h2 class="card-title">Load contract PDFs</h2>
-          <p class="section-copy">Upload the purchase contract first if you have it, then add any counteroffers or amendments. The current sample extractor classifies files by filename and returns a normalized JSON payload that is easy to replace later.</p>
+          <p class="section-copy">Upload the purchase contract first if you have it, then add any counteroffers or amendments. This extractor now uses PDF text parsing in the browser instead of fixed sample values.</p>
 
           <form id="ctcUploadForm" class="upload-form">
             <div class="dropzone">
               <input id="pdfFiles" name="pdfFiles" type="file" accept=".pdf,application/pdf" multiple />
               <div class="upload-helper">
                 <span>Accepted now: one or more PDF files.</span>
-                <span>Current proof of concept uses mock extraction logic that can be replaced with PDF.js, OCR, or API-based extraction later.</span>
+                <span>Best results come from text-searchable PDFs. Scanned or image-only PDFs will still need OCR support later.</span>
               </div>
             </div>
 
@@ -591,7 +598,7 @@
 
           <div class="info-strip">
             <span id="uploadSummary">No PDFs loaded yet</span>
-            <span>Extraction logic: mock provider</span>
+            <span>Extraction logic: PDF text parser</span>
           </div>
         </section>
 
@@ -713,12 +720,13 @@
       <section class="card">
         <div class="section-label">Notes</div>
         <h2 class="card-title">Why the code is structured this way</h2>
-        <p class="section-copy">`ctc-extraction.js` contains the normalized schema, file classification, and mock field extraction logic. `ctc-ui.js` handles upload state, rendering, validation, and debug output. That separation keeps this easy to extend for counteroffer precedence, calendar integration, new fields, and alternate OCR providers.</p>
+        <p class="section-copy">`ctc-extraction.js` now handles PDF.js text extraction plus the normalization heuristics. `ctc-ui.js` still handles upload state, rendering, validation, and debug output. That separation keeps this easy to extend for counteroffer precedence, OCR, calendar integration, new fields, and alternate providers.</p>
         <p class="muted-text">Last extraction run: <strong id="lastRunLabel">Not run yet</strong></p>
       </section>
     </main>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.js"></script>
   <script src="ctc-extraction.js"></script>
   <script src="ctc-ui.js"></script>
 </body>

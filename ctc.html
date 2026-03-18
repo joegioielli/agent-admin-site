@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>CTC Contract Extraction</title>
   <style>
     :root {
@@ -565,13 +568,13 @@
           <div class="main-title">CTC Contract Extraction Workspace</div>
           <div class="main-subtitle">Upload contract PDFs, extract text from the file itself, and review important dates in one place.</div>
         </div>
-        <div class="status-pill">Proof of Concept</div>
+        <div class="status-pill">OCR Build</div>
       </header>
 
       <section class="hero">
         <div class="hero-eyebrow">Contract To Close</div>
         <h1 class="hero-title">A clean extraction dashboard for purchase contracts, counteroffers, and amendments.</h1>
-        <p class="hero-copy">This page now reads text directly from uploaded PDFs in the browser and applies field heuristics to the document content. Text-searchable PDFs should perform much better than before. Scanned image PDFs will still need OCR later.</p>
+        <p class="hero-copy">This page reads text directly from uploaded PDFs in the browser and falls back to OCR when the file is scanned or image-based. Text-searchable PDFs should still run faster, while scanned contracts may take longer to process.</p>
       </section>
 
       <!-- Upload controls and extraction results -->
@@ -579,14 +582,14 @@
         <section class="card">
           <div class="section-label">Upload Area</div>
           <h2 class="card-title">Load contract PDFs</h2>
-          <p class="section-copy">Upload the purchase contract first if you have it, then add any counteroffers or amendments. This extractor now uses PDF text parsing in the browser instead of fixed sample values.</p>
+          <p class="section-copy">Upload the purchase contract first if you have it, then add any counteroffers or amendments. This extractor uses PDF text parsing first, then OCR fallback if no usable text layer is found.</p>
 
           <form id="ctcUploadForm" class="upload-form">
             <div class="dropzone">
               <input id="pdfFiles" name="pdfFiles" type="file" accept=".pdf,application/pdf" multiple />
               <div class="upload-helper">
                 <span>Accepted now: one or more PDF files.</span>
-                <span>Best results come from text-searchable PDFs. Scanned or image-only PDFs will still need OCR support later.</span>
+                <span>Scanned or image-only PDFs will trigger OCR automatically and may take longer to finish.</span>
               </div>
             </div>
 
@@ -598,7 +601,7 @@
 
           <div class="info-strip">
             <span id="uploadSummary">No PDFs loaded yet</span>
-            <span>Extraction logic: PDF text parser</span>
+            <span>Extraction logic: PDF text + OCR fallback</span>
           </div>
         </section>
 
@@ -720,14 +723,15 @@
       <section class="card">
         <div class="section-label">Notes</div>
         <h2 class="card-title">Why the code is structured this way</h2>
-        <p class="section-copy">`ctc-extraction.js` now handles PDF.js text extraction plus the normalization heuristics. `ctc-ui.js` still handles upload state, rendering, validation, and debug output. That separation keeps this easy to extend for counteroffer precedence, OCR, calendar integration, new fields, and alternate providers.</p>
+        <p class="section-copy">`ctc-extraction.js` now handles PDF.js text extraction, OCR fallback, and the normalization heuristics. `ctc-ui.js` still handles upload state, rendering, validation, and debug output. That separation keeps this easy to extend for counteroffer precedence, calendar integration, new fields, and alternate providers.</p>
         <p class="muted-text">Last extraction run: <strong id="lastRunLabel">Not run yet</strong></p>
       </section>
     </main>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.js"></script>
-  <script src="ctc-extraction.js"></script>
-  <script src="ctc-ui.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="ctc-extraction.js?v=20260317-ocr1"></script>
+  <script src="ctc-ui.js?v=20260317-ocr1"></script>
 </body>
 </html>

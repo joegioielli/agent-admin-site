@@ -1,5 +1,18 @@
 (function () {
-  const PDFJS_WORKER_SRC = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.js";
+  const PDFJS_SCRIPT_SOURCES = [
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+    "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"
+  ];
+  const PDFJS_WORKER_SOURCES = [
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
+    "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js"
+  ];
+  const OCR_SCRIPT_SOURCES = [
+    "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js",
+    "https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"
+  ];
+
+  const scriptLoadPromises = new Map();
   let ocrWorkerPromise = null;
 
   const DOCUMENT_PRIORITIES = {
@@ -107,24 +120,66 @@
       .filter(Boolean);
   }
 
-  function ensurePdfJsReady() {
-    if (!window.pdfjsLib) {
-      throw new Error("PDF.js did not load. Refresh the page and try again.");
+  function loadScript(src) {
+    if (scriptLoadPromises.has(src)) {
+      return scriptLoadPromises.get(src);
     }
 
-    if (!window.pdfjsLib.GlobalWorkerOptions.workerSrc) {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
+    const promise = new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[src="${src}"]`);
+      if (existing) {
+        existing.addEventListener("load", () => resolve(), { once: true });
+        existing.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), { once: true });
+        if (existing.dataset.loaded === "true") resolve();
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src = src;
+      script.async = true;
+      script.crossOrigin = "anonymous";
+      script.addEventListener("load", () => {
+        script.dataset.loaded = "true";
+        resolve();
+      }, { once: true });
+      script.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), { once: true });
+      document.head.appendChild(script);
+    });
+
+    scriptLoadPromises.set(src, promise);
+    return promise;
+  }
+
+  async function ensureGlobalLibrary(globalName, sources) {
+    if (window[globalName]) return;
+
+    let lastError = null;
+    for (const src of sources) {
+      try {
+        await loadScript(src);
+        if (window[globalName]) return;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError || new Error(`${globalName} did not load.`);
+  }
+
+  async function ensurePdfJsReady() {
+    await ensureGlobalLibrary("pdfjsLib", PDFJS_SCRIPT_SOURCES);
+
+    if (!window.pdfjsLib?.GlobalWorkerOptions?.workerSrc) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SOURCES[0];
     }
   }
 
-  function ensureOcrReady() {
-    if (!window.Tesseract) {
-      throw new Error("OCR library did not load. Refresh the page and try again.");
-    }
+  async function ensureOcrReady() {
+    await ensureGlobalLibrary("Tesseract", OCR_SCRIPT_SOURCES);
   }
 
   async function getOcrWorker() {
-    ensureOcrReady();
+    await ensureOcrReady();
     if (!ocrWorkerPromise) {
       ocrWorkerPromise = window.Tesseract.createWorker("eng");
     }
@@ -132,7 +187,7 @@
   }
 
   async function loadPdfDocument(file) {
-    ensurePdfJsReady();
+    await ensurePdfJsReady();
     const data = await file.arrayBuffer();
     return window.pdfjsLib.getDocument({ data }).promise;
   }

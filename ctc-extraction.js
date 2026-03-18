@@ -1,5 +1,6 @@
 (function () {
   const PDFJS_WORKER_SRC = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.js";
+  let ocrWorkerPromise = null;
 
   const DOCUMENT_PRIORITIES = {
     purchase_contract: 100,
@@ -116,42 +117,106 @@
     }
   }
 
-  async function readPdfText(file) {
+  function ensureOcrReady() {
+    if (!window.Tesseract) {
+      throw new Error("OCR library did not load. Refresh the page and try again.");
+    }
+  }
+
+  async function getOcrWorker() {
+    ensureOcrReady();
+    if (!ocrWorkerPromise) {
+      ocrWorkerPromise = window.Tesseract.createWorker("eng");
+    }
+    return ocrWorkerPromise;
+  }
+
+  async function loadPdfDocument(file) {
     ensurePdfJsReady();
     const data = await file.arrayBuffer();
-    const pdf = await window.pdfjsLib.getDocument({ data }).promise;
+    return window.pdfjsLib.getDocument({ data }).promise;
+  }
+
+  async function extractTextRowsFromPage(page) {
+    const content = await page.getTextContent();
+    const rows = [];
+
+    content.items.forEach((item) => {
+      const value = cleanText(item.str);
+      if (!value) return;
+
+      const y = Math.round(item.transform?.[5] || 0);
+      const currentRow = rows[rows.length - 1];
+
+      if (currentRow && Math.abs(currentRow.y - y) <= 2) {
+        currentRow.parts.push(value);
+        if (item.hasEOL) currentRow.forceBreak = true;
+        return;
+      }
+
+      rows.push({
+        y,
+        parts: [value],
+        forceBreak: Boolean(item.hasEOL)
+      });
+    });
+
+    return rows
+      .map((row) => cleanText(row.parts.join(" ")))
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  async function readPdfText(pdf) {
     const pageText = [];
 
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber);
-      const content = await page.getTextContent();
-      const rows = [];
+      const text = await extractTextRowsFromPage(page);
+      if (text) pageText.push(text);
+    }
 
-      content.items.forEach((item) => {
-        const value = cleanText(item.str);
-        if (!value) return;
+    return normalizePdfText(pageText.join("\n"));
+  }
 
-        const y = Math.round(item.transform?.[5] || 0);
-        const currentRow = rows[rows.length - 1];
+  async function renderPageToCanvas(page, scale) {
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d", { alpha: false });
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
 
-        if (currentRow && Math.abs(currentRow.y - y) <= 2) {
-          currentRow.parts.push(value);
-          if (item.hasEOL) currentRow.forceBreak = true;
-          return;
-        }
+    await page.render({
+      canvasContext: context,
+      viewport
+    }).promise;
 
-        rows.push({
-          y,
-          parts: [value],
-          forceBreak: Boolean(item.hasEOL)
-        });
+    return canvas;
+  }
+
+  function reportProgress(onProgress, detail) {
+    if (typeof onProgress === "function") {
+      onProgress(detail);
+    }
+  }
+
+  async function ocrPdfText(pdf, fileName, onProgress) {
+    const worker = await getOcrWorker();
+    const pageText = [];
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      reportProgress(onProgress, {
+        stage: "ocr-page",
+        fileName,
+        pageNumber,
+        pageCount: pdf.numPages,
+        message: `Running OCR on page ${pageNumber} of ${pdf.numPages} for ${fileName}...`
       });
 
-      const text = rows
-        .map((row) => cleanText(row.parts.join(" ")))
-        .filter(Boolean)
-        .join("\n");
-
+      const page = await pdf.getPage(pageNumber);
+      const canvas = await renderPageToCanvas(page, 1.75);
+      const result = await worker.recognize(canvas);
+      const text = normalizePdfText(result?.data?.text || "");
       if (text) pageText.push(text);
     }
 
@@ -478,6 +543,7 @@
       classificationConfidence: documentRecord.detectionConfidence,
       status: documentRecord.status,
       note: documentRecord.note,
+      extractionMethod: documentRecord.extractionMethod,
       size: documentRecord.size,
       lastModified: documentRecord.lastModified,
       textLength: documentRecord.textLength,
@@ -493,7 +559,7 @@
     const fieldMap = resolveFieldMap(documents);
     return {
       schema_version: "ctc.contract.extraction.v1",
-      provider: "pdfjs-text-extraction",
+      provider: "pdfjs-text-plus-ocr-fallback",
       extracted_at: new Date().toISOString(),
       documents: buildDocumentsSummary(documents),
       fields: fieldMap,
@@ -501,8 +567,27 @@
     };
   }
 
-  async function buildDocumentRecord(file, index) {
-    const text = await readPdfText(file).catch(() => "");
+  async function buildDocumentRecord(file, index, onProgress) {
+    reportProgress(onProgress, {
+      stage: "load-file",
+      fileName: file.name,
+      message: `Reading ${file.name}...`
+    });
+
+    const pdf = await loadPdfDocument(file);
+    let text = await readPdfText(pdf).catch(() => "");
+    let extractionMethod = "pdf_text";
+
+    if (text.length < 80) {
+      reportProgress(onProgress, {
+        stage: "ocr-start",
+        fileName: file.name,
+        message: `No usable embedded text found in ${file.name}. Trying OCR...`
+      });
+      text = await ocrPdfText(pdf, file.name, onProgress).catch(() => "");
+      extractionMethod = "ocr";
+    }
+
     const lines = splitLines(text);
     const typeInfo = detectDocumentType(file.name || "", text);
     const extractedFields = text ? extractFieldsFromText(text, lines) : {};
@@ -513,10 +598,14 @@
         ? "processed"
         : "text found, no confident matches";
     const note = !text
-      ? "This PDF may be scanned or image-only. OCR would be needed for reliable extraction."
-      : populatedFieldCount
-        ? "Values were extracted from PDF text content."
-        : "Text was read, but the field labels in this form did not match the current heuristics well enough.";
+      ? "No usable text could be extracted from this PDF, even after OCR."
+      : extractionMethod === "ocr" && populatedFieldCount
+        ? "Values were extracted using OCR from a scanned or image-based PDF."
+        : extractionMethod === "ocr"
+          ? "OCR recovered text, but the current field heuristics did not match enough labels confidently."
+          : populatedFieldCount
+            ? "Values were extracted from the embedded PDF text layer."
+            : "Text was read, but the field labels in this form did not match the current heuristics well enough.";
 
     return {
       id: slugify(`${stripExtension(file.name || "")}-${file.lastModified || Date.now()}`),
@@ -531,17 +620,18 @@
       extractedFields,
       status,
       note,
+      extractionMethod,
       textLength: text.length,
       textPreview: text.slice(0, 220)
     };
   }
 
-  async function extractFromFiles(files) {
+  async function extractFromFiles(files, options = {}) {
     const pdfFiles = Array.from(files || []).filter((file) => /\.pdf$/i.test(file.name || ""));
     const documentRecords = [];
 
     for (let index = 0; index < pdfFiles.length; index += 1) {
-      documentRecords.push(await buildDocumentRecord(pdfFiles[index], index));
+      documentRecords.push(await buildDocumentRecord(pdfFiles[index], index, options.onProgress));
     }
 
     return buildNormalizedPayload(documentRecords);

@@ -90,6 +90,7 @@
           <span>${documentRecord.extractedFieldCount} mapped fields</span>
           <span>${documentRecord.status}</span>
         </div>
+        <p class="document-item__note">${documentRecord.note || ""}</p>
       `;
       uploadList.appendChild(item);
     });
@@ -167,7 +168,7 @@
     processButton.textContent = isProcessing ? "Processing..." : "Run Extraction";
   }
 
-  uploadForm.addEventListener("submit", (event) => {
+  uploadForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const validation = validateSelectedFiles();
     if (!validation.valid) {
@@ -177,8 +178,10 @@
 
     setProcessingState(true);
     try {
-      const payload = window.CTCExtraction.extractFromFiles(validation.files);
+      const payload = await window.CTCExtraction.extractFromFiles(validation.files);
       renderPayload(payload);
+    } catch (error) {
+      uploadSummary.textContent = error?.message || "Extraction failed.";
     } finally {
       setProcessingState(false);
     }

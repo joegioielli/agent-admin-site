@@ -601,7 +601,7 @@
 
           <div class="info-strip">
             <span id="uploadSummary">No PDFs loaded yet</span>
-            <span>Extraction logic: Server AI extraction</span>
+            <span>Extraction logic: Local PDF parse + Server AI extraction</span>
           </div>
         </section>
 
@@ -723,13 +723,13 @@
       <section class="card">
         <div class="section-label">Notes</div>
         <h2 class="card-title">Why the code is structured this way</h2>
-        <p class="section-copy">`ctc-extraction.js` is now a client-side upload adapter that sends PDFs to the backend. The heavy lifting happens in `functions/ctc-extract.js`, which is where document extraction, normalization, and future provider-swapping should live. `ctc-ui.js` still handles upload state, rendering, validation, and debug output.</p>
+        <p class="section-copy">`ctc-extraction.js` uploads PDFs to the backend, `functions/ctc-extract.js` extracts embedded text and form fields locally before sending compact document context to AI, and `ctc-ui.js` handles upload state, rendering, validation, and debug output. That keeps the UI stable while we improve extraction providers over time.</p>
         <p class="muted-text">Last extraction run: <strong id="lastRunLabel">Not run yet</strong></p>
       </section>
     </main>
   </div>
 
-  <script src="ctc-extraction.js?v=20260317-server1"></script>
-  <script src="ctc-ui.js?v=20260317-server1"></script>
+  <script src="ctc-extraction.js?v=20260318-server2"></script>
+  <script src="ctc-ui.js?v=20260318-server2"></script>
 </body>
 </html>

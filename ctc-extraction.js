@@ -1,4 +1,13 @@
 (function () {
+  function normalizeServerError(rawText, status) {
+    const text = String(rawText || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (text) return text;
+    if (status === 504) {
+      return "The extraction request timed out before the server responded.";
+    }
+    return "";
+  }
+
   function fileToBase64(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -56,7 +65,16 @@
       body: JSON.stringify({ documents })
     });
 
-    const payload = await response.json().catch(() => ({}));
+    const rawText = await response.text();
+    let payload = {};
+
+    try {
+      payload = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      const message = normalizeServerError(rawText, response.status);
+      payload = message ? { error: message } : {};
+    }
+
     if (!response.ok) {
       throw new Error(payload?.error || `Extraction failed (${response.status}).`);
     }

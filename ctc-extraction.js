@@ -159,7 +159,7 @@
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber);
       const text = await extractTextRowsFromPage(page);
-      if (text) pageText.push(text);
+      if (text) pageText.push(`[[Page ${pageNumber}]]\n${text}`);
     }
 
     return {

@@ -312,12 +312,249 @@ const EXTRACTION_SCHEMA = {
   required: ["documents", "fields", "warnings"]
 };
 
+const DATE_REGEX = /\b(?:\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}|(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2},?\s+\d{2,4})\b/i;
+const TIME_REGEX = /\b\d{1,2}(?::\d{2})?\s?(?:a\.?m\.?|p\.?m\.?)\b/i;
+const ADDRESS_REGEX = /\b\d{1,6}\s+[A-Za-z0-9.'#-]+(?:\s+[A-Za-z0-9.'#-]+){0,7}\s+(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Court|Ct|Circle|Cir|Way|Boulevard|Blvd|Place|Pl|Terrace|Ter|Trail|Trl|Parkway|Pkwy)\b(?:[^\n,]*)(?:,\s*[A-Za-z .'-]+,\s*[A-Z]{2}\s*\d{5}(?:-\d{4})?)?/i;
+const NAME_STOPWORDS = /\b(closing|costs|prepaid|items|temporary|permanent|rate|buy|down|mortgage|loan|seller|buyer|pay|paid|credit|commission|broker|agent|inspection|possession|date|earnest|money|price|financing)\b/i;
+
+function splitLines(text) {
+  return normalizePdfText(text)
+    .split(/\n+/)
+    .map((line) => cleanText(line))
+    .filter(Boolean);
+}
+
+function cleanupCandidate(value) {
+  return cleanText(value)
+    .replace(/^[\s:;-]+/, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function looksLikePersonName(value) {
+  const cleaned = cleanupCandidate(value)
+    .replace(/\([^)]*\)/g, "")
+    .trim();
+
+  if (!cleaned || cleaned.length < 4 || cleaned.length > 120) return false;
+  if (/\d/.test(cleaned)) return false;
+  if (NAME_STOPWORDS.test(cleaned)) return false;
+  if (!/[A-Za-z]/.test(cleaned)) return false;
+
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 6) return false;
+
+  return words.every((word) => (
+    /^[A-Z][A-Za-z.'-]+$/.test(word)
+    || /^[A-Z]{2,}$/.test(word)
+    || /^(LLC|INC|LLP|LP|TRUST)$/i.test(word)
+  ));
+}
+
+function splitPartyNames(value) {
+  const cleaned = cleanupCandidate(value)
+    .replace(/\bas (?:joint tenants|tenants in common|husband and wife)[\s\S]*$/i, "")
+    .replace(/\bmarital status[\s\S]*$/i, "")
+    .replace(/\bwhose address is[\s\S]*$/i, "")
+    .trim();
+
+  if (!cleaned) return [];
+
+  return [...new Set(
+    cleaned
+      .split(/\s*;\s*|\s+\band\b\s+|\s*&\s*|\s*\/\s*/i)
+      .map((part) => cleanupCandidate(part))
+      .filter((part) => looksLikePersonName(part))
+  )];
+}
+
+function getLineValueAfterLabel(lines, patterns) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+
+    for (const pattern of patterns) {
+      const match = line.match(pattern);
+      if (!match) continue;
+
+      const sameLineValue = cleanupCandidate(match[1] || "");
+      if (sameLineValue && sameLineValue.length > 1) return sameLineValue;
+
+      const nextLineValue = cleanupCandidate(lines[index + 1] || "");
+      if (nextLineValue) return nextLineValue;
+    }
+  }
+
+  return "";
+}
+
+function findBestFormField(formFields, patterns, validator) {
+  for (const field of formFields) {
+    const matches = patterns.some((pattern) => pattern.test(field.normalizedName || ""));
+    if (!matches) continue;
+    if (typeof validator === "function" && !validator(field.value, field)) continue;
+    return field;
+  }
+  return null;
+}
+
+function findFinanceKeyword(value) {
+  const match = cleanText(value).match(/\b(conventional|cash|fha|va|usda|assumption|owner financing|seller financing)\b/i);
+  return match ? match[1].replace(/\b\w/g, (char) => char.toUpperCase()) : "";
+}
+
+function extractTextDateHint(text, labels) {
+  for (const label of labels) {
+    const regex = new RegExp(`${label}[\\s\\S]{0,120}`, "i");
+    const snippetMatch = text.match(regex);
+    if (!snippetMatch) continue;
+
+    const snippet = snippetMatch[0];
+    const dateMatch = snippet.match(DATE_REGEX);
+    if (!dateMatch) continue;
+
+    const date = normalizeDate(dateMatch[0]);
+    if (!date) continue;
+
+    const timeMatch = snippet.match(TIME_REGEX);
+    return `${date}${timeMatch ? ` ${normalizeTime(timeMatch[0])}` : ""}`;
+  }
+
+  return "";
+}
+
+function buildCandidateHints(document) {
+  const lines = splitLines(document.text);
+  const text = document.text || "";
+  const hints = {};
+
+  function setHint(fieldName, value, source) {
+    const cleaned = cleanupCandidate(value);
+    if (!cleaned || hints[fieldName]) return;
+    hints[fieldName] = {
+      value: cleaned,
+      source
+    };
+  }
+
+  const addressFormField = findBestFormField(document.formFields, [
+    /\b(property|street|subject)\b.*\baddress\b/,
+    /\baddress\b/
+  ], (value) => ADDRESS_REGEX.test(value));
+  if (addressFormField) {
+    setHint("property_address", addressFormField.value, `form field: ${addressFormField.name}`);
+  } else {
+    const addressFromLabel = getLineValueAfterLabel(lines, [
+      /(?:property address|property located at|street address|property to be conveyed)\s*[:\-]?\s*(.*)$/i
+    ]);
+    if (ADDRESS_REGEX.test(addressFromLabel)) {
+      setHint("property_address", addressFromLabel, "text label");
+    } else {
+      const inlineAddress = text.match(ADDRESS_REGEX);
+      if (inlineAddress) setHint("property_address", inlineAddress[0], "text pattern");
+    }
+  }
+
+  const buyerField = findBestFormField(document.formFields, [/\bbuyer\b/, /\bpurchaser\b/], (value) => looksLikePersonName(value));
+  if (buyerField) {
+    setHint("buyer_names", buyerField.value, `form field: ${buyerField.name}`);
+  } else {
+    const buyerLine = getLineValueAfterLabel(lines, [
+      /^(?:buyer(?:\(s\))?|purchaser(?:\(s\))?)\s*[:\-]?\s*(.*)$/i,
+      /^(?:name of buyer|buyer name(?:\(s\))?)\s*[:\-]?\s*(.*)$/i
+    ]);
+    const names = splitPartyNames(buyerLine);
+    if (names.length) setHint("buyer_names", names.join(", "), "text label");
+  }
+
+  const sellerField = findBestFormField(document.formFields, [/\bseller\b/, /\bowner\b/], (value) => looksLikePersonName(value));
+  if (sellerField) {
+    setHint("seller_names", sellerField.value, `form field: ${sellerField.name}`);
+  } else {
+    const sellerLine = getLineValueAfterLabel(lines, [
+      /^(?:seller(?:\(s\))?|owner(?:\(s\))?)\s*[:\-]?\s*(.*)$/i,
+      /^(?:name of seller|seller name(?:\(s\))?)\s*[:\-]?\s*(.*)$/i
+    ]);
+    const names = splitPartyNames(sellerLine);
+    if (names.length) setHint("seller_names", names.join(", "), "text label");
+  }
+
+  const priceField = findBestFormField(document.formFields, [/\bpurchase\b.*\bprice\b/, /\bsales?\b.*\bprice\b/], (value) => parseCurrency(value) != null);
+  if (priceField) {
+    setHint("purchase_price", String(parseCurrency(priceField.value)), `form field: ${priceField.name}`);
+  } else {
+    const priceLine = getLineValueAfterLabel(lines, [
+      /(?:purchase price|sales price|contract price)\s*[:\-]?\s*(.*)$/i
+    ]);
+    const price = parseCurrency(priceLine);
+    if (price != null) setHint("purchase_price", String(price), "text label");
+  }
+
+  const earnestField = findBestFormField(document.formFields, [/\bearnest\b.*\bmoney\b/, /\bdeposit\b/], (value) => parseCurrency(value) != null);
+  if (earnestField) {
+    setHint("earnest_money_amount", String(parseCurrency(earnestField.value)), `form field: ${earnestField.name}`);
+  } else {
+    const earnestLine = getLineValueAfterLabel(lines, [
+      /(?:earnest money|earnest money amount|deposit)\s*[:\-]?\s*(.*)$/i
+    ]);
+    const earnest = parseCurrency(earnestLine);
+    if (earnest != null) setHint("earnest_money_amount", String(earnest), "text label");
+  }
+
+  const financingField = findBestFormField(document.formFields, [/\bfinancing\b/, /\bloan\b.*\btype\b/], (value) => Boolean(findFinanceKeyword(value)));
+  if (financingField) {
+    setHint("financing_type", findFinanceKeyword(financingField.value), `form field: ${financingField.name}`);
+  } else {
+    const financingLine = getLineValueAfterLabel(lines, [
+      /(?:financing type|type of financing|loan type)\s*[:\-]?\s*(.*)$/i
+    ]);
+    const financing = findFinanceKeyword(financingLine || text);
+    if (financing) setHint("financing_type", financing, financingLine ? "text label" : "text pattern");
+  }
+
+  const bindingField = findBestFormField(document.formFields, [/\bbinding\b.*\bdate\b/, /\beffective\b.*\bdate\b/, /\bacceptance\b.*\bdate\b/], (value) => Boolean(normalizeDate(value)));
+  if (bindingField) {
+    setHint("binding_date", normalizeDate(bindingField.value), `form field: ${bindingField.name}`);
+  } else {
+    const bindingDate = extractTextDateHint(text, ["binding date", "effective date", "acceptance date"]);
+    if (bindingDate) setHint("binding_date", bindingDate, "text label");
+  }
+
+  const closingField = findBestFormField(document.formFields, [/\bclosing\b.*\bdate\b/, /\bdate\b.*\bclosing\b/], (value) => Boolean(normalizeDate(value)));
+  if (closingField) {
+    setHint("closing_date", normalizeDate(closingField.value), `form field: ${closingField.name}`);
+  } else {
+    const closingDate = extractTextDateHint(text, ["closing date", "date of closing", "close of escrow"]);
+    if (closingDate) setHint("closing_date", closingDate, "text label");
+  }
+
+  const inspectionField = findBestFormField(document.formFields, [/\binspection\b.*\bdate\b/, /\binspection\b.*\bdeadline\b/, /\bdue diligence\b/, /\boption\b.*\bperiod\b/], (value) => Boolean(normalizeDate(value)));
+  if (inspectionField) {
+    setHint("inspection_deadline", normalizeDate(inspectionField.value), `form field: ${inspectionField.name}`);
+  } else {
+    const inspectionDate = extractTextDateHint(text, ["inspection deadline", "inspection period", "due diligence", "option period"]);
+    if (inspectionDate) setHint("inspection_deadline", inspectionDate, "text label");
+  }
+
+  const possessionField = findBestFormField(document.formFields, [/\bpossession\b.*\bdate\b/, /\boccupancy\b.*\bdate\b/], (value) => Boolean(normalizeDate(value)));
+  if (possessionField) {
+    setHint("possession_date", normalizeDate(possessionField.value), `form field: ${possessionField.name}`);
+  } else {
+    const possessionDate = extractTextDateHint(text, ["possession date", "date of possession", "occupancy date"]);
+    if (possessionDate) setHint("possession_date", possessionDate, "text label");
+  }
+
+  return hints;
+}
+
 function truncateText(value, maxLength) {
   const text = normalizePdfText(value);
   if (!text) return { text: "", truncated: false };
   if (text.length <= maxLength) return { text, truncated: false };
+
+  const headLength = Math.floor(maxLength * 0.7);
+  const tailLength = maxLength - headLength;
   return {
-    text: `${text.slice(0, maxLength).trim()}\n\n[truncated]`,
+    text: `${text.slice(0, headLength).trim()}\n\n[truncated middle]\n\n${text.slice(-tailLength).trim()}`,
     truncated: true
   };
 }
@@ -363,6 +600,14 @@ function buildDocumentContext(document) {
     sections.push(`Note: extracted text was truncated to the first ${MAX_TEXT_CHARS_PER_DOCUMENT} characters for model input.`);
   }
 
+  const candidateEntries = Object.entries(document.candidateHints || {});
+  if (candidateEntries.length) {
+    sections.push("Field candidate hints from label/form-field parsing. Validate them against the text before using them:");
+    candidateEntries.forEach(([fieldName, hint]) => {
+      sections.push(`- ${FIELD_LABELS[fieldName]}: ${hint.value} (${hint.source})`);
+    });
+  }
+
   return sections.join("\n");
 }
 
@@ -373,6 +618,11 @@ function buildPrompt(documents) {
     "Extract normalized contract data from the provided real estate contract packet.",
     "The packet may include a purchase contract plus counteroffers, amendments, or addenda in different formats and markets.",
     "Use only what is explicitly supported by the extracted text and form-field data below. Do not guess.",
+    "Treat the field candidate hints below as non-binding suggestions only. They are helpers, not source of truth.",
+    "Buyer names and seller names must be actual person or entity names only. Never use cost allocation text, financing language, or phrases like closing costs, prepaid items, to pay, rate buy down, or similar non-name content as party names.",
+    "If a filename or document text says Purchase and Sale Agreement or RF 401, prefer classifying it as a purchase contract unless the document clearly says amendment, counteroffer, or addendum.",
+    "Only extract financing type when the contract explicitly names a financing program or says cash.",
+    "If an inspection or possession term is expressed only as a relative period or condition and not an actual date, leave the date blank and mention that in warnings.",
     "If a field is not clearly present, return an empty string for scalar values, an empty array for name arrays, -1 for source_document_index, 0 for confidence, and an empty string for evidence.",
     "For date fields, normalize to YYYY-MM-DD when possible. If a time is present, return it in the time field; otherwise use an empty string.",
     "For money fields, return numeric strings without currency symbols or commas when possible.",
@@ -532,7 +782,10 @@ function buildFallbackPayload(documents, warnings) {
         textLength: (document.text || "").length,
         textTruncated: document.textTruncated,
         formFieldCount: document.formFields.length,
-        status: document.status
+        status: document.status,
+        textPreview: (document.text || "").slice(0, 1600),
+        formFieldPreview: document.formFields.slice(0, 20),
+        candidateHints: document.candidateHints
       }))
     }
   };
@@ -594,7 +847,10 @@ function normalizePayload(modelParsed, documents) {
         textLength: (document.text || "").length,
         textTruncated: document.textTruncated,
         formFieldCount: document.formFields.length,
-        status: document.status
+        status: document.status,
+        textPreview: (document.text || "").slice(0, 1600),
+        formFieldPreview: document.formFields.slice(0, 20),
+        candidateHints: document.candidateHints
       }))
     }
   };
@@ -603,6 +859,11 @@ function normalizePayload(modelParsed, documents) {
 function normalizeInputDocument(document, index) {
   const textInfo = truncateText(document?.text, MAX_TEXT_CHARS_PER_DOCUMENT);
   const formFields = normalizeFormFields(document?.formFields);
+  const normalizedText = normalizePdfText(document?.text);
+  const candidateHints = buildCandidateHints({
+    text: normalizedText,
+    formFields
+  });
 
   return {
     id: slugify(`${document?.name || "document"}-${index}`),
@@ -610,10 +871,11 @@ function normalizeInputDocument(document, index) {
     name: cleanText(document?.name),
     size: Number(document?.size) || 0,
     pageCount: Number(document?.pageCount) || null,
-    text: normalizePdfText(document?.text),
+    text: normalizedText,
     modelText: textInfo.text,
     textTruncated: textInfo.truncated,
     formFields,
+    candidateHints,
     status: cleanText(document?.status) || ((textInfo.text || formFields.length) ? "processed" : "needs ocr"),
     note: cleanText(document?.note) || "",
     extractionMethod: cleanText(document?.extractionMethod) || "client pdf parse"

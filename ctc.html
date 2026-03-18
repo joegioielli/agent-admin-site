@@ -566,15 +566,15 @@
       <header class="main-header">
         <div>
           <div class="main-title">CTC Contract Extraction Workspace</div>
-          <div class="main-subtitle">Upload contract PDFs, extract text from the file itself, and review important dates in one place.</div>
+          <div class="main-subtitle">Upload contract PDFs, send them through server-side extraction, and review important dates in one place.</div>
         </div>
-        <div class="status-pill">OCR Build</div>
+        <div class="status-pill">Server AI</div>
       </header>
 
       <section class="hero">
         <div class="hero-eyebrow">Contract To Close</div>
         <h1 class="hero-title">A clean extraction dashboard for purchase contracts, counteroffers, and amendments.</h1>
-        <p class="hero-copy">This page reads text directly from uploaded PDFs in the browser and falls back to OCR when the file is scanned or image-based. Text-searchable PDFs should still run faster, while scanned contracts may take longer to process.</p>
+        <p class="hero-copy">This page now sends uploaded PDFs to a server-side extraction pipeline designed to work across different contract formats. The browser handles upload and review, while the backend handles document understanding and normalization.</p>
       </section>
 
       <!-- Upload controls and extraction results -->
@@ -582,14 +582,14 @@
         <section class="card">
           <div class="section-label">Upload Area</div>
           <h2 class="card-title">Load contract PDFs</h2>
-          <p class="section-copy">Upload the purchase contract first if you have it, then add any counteroffers or amendments. This extractor uses PDF text parsing first, then OCR fallback if no usable text layer is found.</p>
+          <p class="section-copy">Upload the purchase contract first if you have it, then add any counteroffers or amendments. The files are sent to a backend extractor that returns normalized contract data with source-document details.</p>
 
           <form id="ctcUploadForm" class="upload-form">
             <div class="dropzone">
               <input id="pdfFiles" name="pdfFiles" type="file" accept=".pdf,application/pdf" multiple />
               <div class="upload-helper">
                 <span>Accepted now: one or more PDF files.</span>
-                <span>Scanned or image-only PDFs will trigger OCR automatically and may take longer to finish.</span>
+                <span>This version is built for a scalable server-side workflow instead of browser-only parsing.</span>
               </div>
             </div>
 
@@ -601,7 +601,7 @@
 
           <div class="info-strip">
             <span id="uploadSummary">No PDFs loaded yet</span>
-            <span>Extraction logic: PDF text + OCR fallback</span>
+            <span>Extraction logic: Server AI extraction</span>
           </div>
         </section>
 
@@ -723,13 +723,13 @@
       <section class="card">
         <div class="section-label">Notes</div>
         <h2 class="card-title">Why the code is structured this way</h2>
-        <p class="section-copy">`ctc-extraction.js` now handles PDF.js text extraction, OCR fallback, and the normalization heuristics. `ctc-ui.js` still handles upload state, rendering, validation, and debug output. That separation keeps this easy to extend for counteroffer precedence, calendar integration, new fields, and alternate providers.</p>
+        <p class="section-copy">`ctc-extraction.js` is now a client-side upload adapter that sends PDFs to the backend. The heavy lifting happens in `functions/ctc-extract.js`, which is where document extraction, normalization, and future provider-swapping should live. `ctc-ui.js` still handles upload state, rendering, validation, and debug output.</p>
         <p class="muted-text">Last extraction run: <strong id="lastRunLabel">Not run yet</strong></p>
       </section>
     </main>
   </div>
 
-  <script src="ctc-extraction.js?v=20260317-ocr5"></script>
-  <script src="ctc-ui.js?v=20260317-ocr5"></script>
+  <script src="ctc-extraction.js?v=20260317-server1"></script>
+  <script src="ctc-ui.js?v=20260317-server1"></script>
 </body>
 </html>

@@ -37,7 +37,7 @@
     .metrics,.estimate-grid,.comp-meta{display:grid;gap:10px}.metrics{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:12px}.estimate-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:12px}.metric,.estimate-card,.comp-card,.comp-meta div,.strategy-card{padding:12px;border-radius:12px;border:1px solid var(--border);background:#f8fafc}.metric span,.estimate-label,.comp-meta span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}.metric strong,.estimate-value,.comp-meta strong{display:block;margin-top:6px;font-size:16px;font-weight:700}.estimate-footnote,.comp-notes,.comp-price-line{margin-top:8px;font-size:13px;line-height:1.45;color:var(--muted)}
     .estimate-card.featured{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;box-shadow:0 12px 28px rgba(37,99,235,.28)}.estimate-card.featured .estimate-label{color:#dbeafe}.estimate-card.featured .estimate-value{color:#fff}.estimate-card.featured .estimate-footnote{color:#eff6ff}
     .missing-data{border-color:#92400e !important;background:#fff7ed !important;color:#111827 !important;box-shadow:inset 0 0 0 1px rgba(146,64,14,.12)}.missing-data::placeholder{color:#111827;opacity:.72}
-    .comp-grid{display:grid;gap:12px;margin-top:12px}.comp-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}.comp-address{font-size:16px;font-weight:700}.comp-status.active{background:linear-gradient(135deg,var(--success),#245740);color:#fff}.comp-meta{grid-template-columns:repeat(5,minmax(0,1fr));margin-top:12px}.strategy-grid{display:grid;gap:10px;margin-top:12px}.strategy-card strong{display:block;font-size:14px}.strategy-card p{margin-top:6px;font-size:13px;line-height:1.45;color:var(--muted)}
+    .comp-grid{display:grid;gap:12px;margin-top:12px}.comp-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}.comp-address{font-size:16px;font-weight:700}.comp-status.active{background:linear-gradient(135deg,var(--success),#245740);color:#fff}.comp-status.pending{background:linear-gradient(135deg,#b45309,#92400e);color:#fff}.comp-meta{grid-template-columns:repeat(5,minmax(0,1fr));margin-top:12px}.strategy-grid{display:grid;gap:10px;margin-top:12px}.strategy-card strong{display:block;font-size:14px}.strategy-card p{margin-top:6px;font-size:13px;line-height:1.45;color:var(--muted)}
     .report-shell[data-ready="false"] .print-toolbar,.report-shell[data-ready="false"] .report-grid{display:none}
     @media (max-width:1080px){.layout{grid-template-columns:1fr}}
     @media (max-width:960px){.app-shell{flex-direction:column}.sidebar{width:100%;flex-direction:row;align-items:center;overflow-x:auto}.sidebar-section-title{display:none}.nav-list{flex-direction:row;flex-wrap:wrap}}
@@ -200,7 +200,7 @@
                 <section class="report-card span-5 print-hide"><div class="section-label">Pricing Strategy</div><h3 class="section-title">Recommended positioning</h3><p class="section-copy" id="strategyNoteText"></p><div class="strategy-grid" id="strategyOptions"></div></section>
                 <section class="report-card"><div class="section-label">Value Guidance</div><h3 class="section-title">Pricing recommendation</h3><div class="estimate-grid" id="estimateGrid"></div></section>
                 <section class="report-card"><div class="section-label">Comparable Sales</div><h3 class="section-title">Closed comparable properties</h3><p class="muted-text">These cards show the best sold matches returned after staged search filtering and similarity scoring.</p><div class="comp-grid" id="soldCompGrid"></div></section>
-                <section class="report-card"><div class="section-label">Competitive Listing</div><h3 class="section-title">Active comparable property</h3><p class="muted-text">This card shows the strongest current benchmark available from the live search.</p><div class="comp-grid" id="activeCompGrid"></div></section>
+                <section class="report-card"><div class="section-label">Competitive Listing</div><h3 class="section-title">Current market comparable</h3><p class="muted-text">This card shows the strongest current benchmark available from the live search, including pending or under-contract listings.</p><div class="comp-grid" id="activeCompGrid"></div></section>
               </div>
             </div>
           </section>
@@ -637,7 +637,8 @@
     }
 
     const isSoldComp = (comp) => Boolean(comp.soldPrice != null || /\b(sold|closed|settled|off market)\b/i.test(comp.status));
-    const isActiveComp = (comp) => Boolean(/\b(active|new|coming soon|for sale)\b/i.test(comp.status)) && !isSoldComp(comp);
+    const isPendingComp = (comp) => Boolean(/\b(pending|contingent|backup|under contract|under-contract|active under contract)\b/i.test(comp.status)) && !isSoldComp(comp);
+    const isActiveComp = (comp) => Boolean(/\b(active|new|coming soon|for sale)\b/i.test(comp.status)) && !isSoldComp(comp) && !isPendingComp(comp);
 
     function readFormValues() {
       return {
@@ -795,6 +796,16 @@
     function passesActiveSearch(subject, comp, values) {
       if (!isActiveComp(comp) || !matchesPropertyType(subject, comp)) return false;
       if (comp.distanceMiles != null && comp.distanceMiles > values.searchRadius) return false;
+      if (Number.isFinite(subject.beds) && Number.isFinite(comp.beds) && Math.abs(subject.beds - comp.beds) > values.bedVariance + 1) return false;
+      if (Number.isFinite(subject.baths) && Number.isFinite(comp.baths) && Math.abs(subject.baths - comp.baths) > values.bathVariance + 0.5) return false;
+      if (Number.isFinite(subject.yearBuilt) && Number.isFinite(comp.yearBuilt) && Math.abs(subject.yearBuilt - comp.yearBuilt) > allowedYearDelta(subject, values, false)) return false;
+      if (!storyStyleCompatible(subject, comp, values)) return false;
+      return true;
+    }
+
+    function passesPendingSearch(subject, comp, values) {
+      if (!isPendingComp(comp) || !matchesPropertyType(subject, comp)) return false;
+      if (comp.distanceMiles != null && comp.distanceMiles > Math.min(values.searchRadius, 3)) return false;
       if (Number.isFinite(subject.beds) && Number.isFinite(comp.beds) && Math.abs(subject.beds - comp.beds) > values.bedVariance + 1) return false;
       if (Number.isFinite(subject.baths) && Number.isFinite(comp.baths) && Math.abs(subject.baths - comp.baths) > values.bathVariance + 0.5) return false;
       if (Number.isFinite(subject.yearBuilt) && Number.isFinite(comp.yearBuilt) && Math.abs(subject.yearBuilt - comp.yearBuilt) > allowedYearDelta(subject, values, false)) return false;
@@ -964,6 +975,16 @@
         .sort((a, b) => b.similarityScore - a.similarityScore)[0] || null;
       return { activeComp, activeCandidateCount: activePool.length };
     }
+
+    function selectPendingComparables(subject, comps, values, excludedIds) {
+      const pendingPool = uniqueBy(comps.filter((comp) => passesPendingSearch(subject, comp, values)), (comp) => comp.id || comp.address);
+      const pendingComps = pendingPool
+        .filter((comp) => !excludedIds.has(comp.id))
+        .map((comp) => scoreComparable(subject, comp, values, { radius: Math.min(values.searchRadius, 3) }, "pending"))
+        .sort((a, b) => b.similarityScore - a.similarityScore || (a.daysOnMarket ?? 999) - (b.daysOnMarket ?? 999))
+        .slice(0, 2);
+      return { pendingComps, pendingCandidateCount: pendingPool.length };
+    }
     function psychPrice(value, direction = "nearest") {
       if (!Number.isFinite(value) || value <= 0) return null;
       const step = value < 250000 ? 2500 : 5000;
@@ -973,7 +994,7 @@
       return Math.max(rounded - 100, step - 100);
     }
 
-    function inferMarketTrend(soldComps, activeComp) {
+    function inferMarketTrend(soldComps, activeComp, pendingComps = []) {
       const datedSold = soldComps.filter((comp) => Number.isFinite(comp.pricePerSqft) && comp.soldDate).sort((a, b) => a.soldDate - b.soldDate);
       const avgDom = average(soldComps.map((comp) => comp.daysOnMarket));
       let trend = "stable";
@@ -986,6 +1007,13 @@
           if (change >= 0.03) trend = "strengthening";
           else if (change <= -0.03) trend = "softening";
         }
+      } else if (pendingComps.length && soldComps.length) {
+        const soldAvg = average(soldComps.map((comp) => comp.pricePerSqft));
+        const pendingAvg = average(pendingComps.map((comp) => comp.pricePerSqft));
+        if (Number.isFinite(soldAvg) && Number.isFinite(pendingAvg)) {
+          if (pendingAvg >= soldAvg * 1.02) trend = "strengthening";
+          else if (pendingAvg <= soldAvg * 0.98) trend = "softening";
+        }
       } else if (activeComp?.pricePerSqft && soldComps.length) {
         const soldAvg = average(soldComps.map((comp) => comp.pricePerSqft));
         if (Number.isFinite(soldAvg)) {
@@ -993,11 +1021,12 @@
           else if (activeComp.pricePerSqft <= soldAvg * 0.97) trend = "softening";
         }
       }
+      const trendSource = pendingComps.length ? "pending and under-contract activity" : activeComp ? "current competitive listings" : "recent closed sales";
       return {
         trend,
         pricingLean: trend === "strengthening" ? "aggressive" : trend === "softening" ? "conservative" : "balanced",
         avgDom,
-        note: trend === "strengthening" ? "Recent comparable pricing suggests the local market is still firming up." : trend === "softening" ? "Recent comparable pricing suggests buyers are becoming more price-sensitive." : "Recent comparable pricing looks fairly stable in the current market pocket."
+        note: trend === "strengthening" ? `Recent closed sales and ${trendSource} suggest the local market is still firming up.` : trend === "softening" ? `Recent closed sales and ${trendSource} suggest buyers are becoming more price-sensitive.` : `Recent closed sales and ${trendSource} look fairly stable in the current market pocket.`
       };
     }
 
@@ -1068,11 +1097,12 @@
       return { score, label: "Guarded", note: "The comp set or subject data is less consistent, so the pricing range is intentionally wider to stay defensible." };
     }
 
-    function buildPricingModel(values, subject, soldComps, activeComp) {
+    function buildPricingModel(values, subject, soldComps, activeComp, pendingComps = []) {
       const compWeight = (comp) => Math.max(comp.similarityScore || 0, 1);
       const sortedBySimilarity = [...soldComps].sort((a, b) => (b.similarityScore || 0) - (a.similarityScore || 0));
       const compPpsf = soldComps.map((comp) => comp.pricePerSqft).filter((value) => Number.isFinite(value));
       const compPrices = soldComps.map((comp) => comp.soldPrice ?? comp.listPrice).filter((value) => Number.isFinite(value));
+      const pendingPrices = pendingComps.map((comp) => comp.listPrice ?? comp.soldPrice).filter((value) => Number.isFinite(value));
       const subjectSqft = Number.isFinite(subject.sqft) ? subject.sqft : median(soldComps.map((comp) => comp.sqft));
       const weightedSalePrice = weightedAverage(soldComps, (comp) => comp.soldPrice ?? comp.listPrice, compWeight);
       const weightedPpsf = weightedAverage(soldComps, "pricePerSqft", compWeight);
@@ -1084,7 +1114,7 @@
 
       const subjectCondition = analyzeConditionText(`${subject.specialDetails} ${subject.conditionNotes}`);
       const conditionPct = clamp(subjectCondition.netScore * 0.006, -0.03, 0.03);
-      const marketTrend = inferMarketTrend(soldComps, activeComp);
+      const marketTrend = inferMarketTrend(soldComps, activeComp, pendingComps);
       if (Number.isFinite(baseAnchor)) baseAnchor *= 1 + conditionPct;
       const compDerivedAnchor = baseAnchor;
       const historicalReference = buildHistoricalReference(values, marketTrend, conditionPct);
@@ -1104,6 +1134,13 @@
       const lowPpsf = compPpsf.length ? Math.min(...compPpsf) : null;
       const highPpsf = compPpsf.length ? Math.max(...compPpsf) : null;
       const avgPpsf = average(compPpsf);
+      const strongestPendingAnchor = weightedAverage(
+        pendingComps.slice(0, Math.min(2, pendingComps.length)),
+        (comp) => comp.listPrice ?? comp.soldPrice,
+        compWeight
+      );
+      const pendingMedianWeighted = weightedPercentile(pendingComps, (comp) => comp.listPrice ?? comp.soldPrice, compWeight, 0.5) ?? median(pendingPrices);
+      const pendingPpsfMedianWeighted = weightedPercentile(pendingComps, "pricePerSqft", compWeight, 0.5) ?? median(pendingComps.map((comp) => comp.pricePerSqft));
       const strongestCompAnchor = weightedAverage(
         sortedBySimilarity.slice(0, Math.min(2, sortedBySimilarity.length)),
         (comp) => comp.soldPrice ?? comp.listPrice,
@@ -1136,6 +1173,9 @@
         Number.isFinite(priceMedianWeighted) ? { value: priceMedianWeighted, weight: 1.45 } : null,
         Number.isFinite(ppsfMedianWeighted) && Number.isFinite(subjectSqft) ? { value: ppsfMedianWeighted * subjectSqft, weight: 1.2 } : null,
         Number.isFinite(strongestCompAnchor) ? { value: strongestCompAnchor, weight: 1.25 } : null,
+        Number.isFinite(pendingMedianWeighted) ? { value: pendingMedianWeighted, weight: 1.05 } : null,
+        Number.isFinite(pendingPpsfMedianWeighted) && Number.isFinite(subjectSqft) ? { value: pendingPpsfMedianWeighted * subjectSqft, weight: 0.9 } : null,
+        Number.isFinite(strongestPendingAnchor) ? { value: strongestPendingAnchor, weight: 0.95 } : null,
         Number.isFinite(historicalAnchor) ? { value: historicalAnchor, weight: historicalReference.recentAppraisal ? 1.35 : 0.8 } : null,
         Number.isFinite(activeComp?.listPrice) && (!Number.isFinite(baseAnchor) || Math.abs(activeComp.listPrice - baseAnchor) / baseAnchor <= 0.12)
           ? { value: activeComp.listPrice, weight: 0.65 }
@@ -1163,6 +1203,10 @@
       } else if (Number.isFinite(historicalAnchor) && historicalGapPct > 0.03) {
         low = Math.min(low, historicalAnchor * 0.99);
         high = Math.max(high, historicalAnchor * 1.01);
+      }
+      if (Number.isFinite(strongestPendingAnchor)) {
+        low = Math.max(low, strongestPendingAnchor * 0.975);
+        high = Math.max(high, strongestPendingAnchor * 1.01);
       }
       if (activeComp?.listPrice && marketTrend.trend === "softening") high = Math.min(high, activeComp.listPrice + 5000);
       if (activeComp?.listPrice && marketTrend.trend === "strengthening") low = Math.max(low, activeComp.listPrice - 10000);
@@ -1203,12 +1247,15 @@
         : marketTrend.pricingLean === "conservative"
           ? "The selected comps support a slightly tighter opening position so the listing stays competitive with current buyer behavior."
           : "The selected comps support a balanced launch that preserves negotiating room without chasing the market.";
+      const pendingNote = pendingComps.length
+        ? ` Pending or under-contract comparables were blended in as current market support.`
+        : "";
       const historicalNote = historicalReference.recentAppraisal
         ? ` A recent appraisal-adjusted anchor of ${formatCurrency(historicalReference.recentAppraisal.value)} was blended in as a secondary check.`
         : Number.isFinite(historicalAnchor)
           ? ` Historical pricing evidence was blended into the final anchor.`
           : "";
-      const strategyNote = `${strategyBase}${historicalNote} Pricing confidence is ${pricingConfidence.label.toLowerCase()}.`;
+      const strategyNote = `${strategyBase}${pendingNote}${historicalNote} Pricing confidence is ${pricingConfidence.label.toLowerCase()}.`;
 
       const conditionSupport = subjectCondition.netScore > 0
         ? "The subject's upgrades and condition notes support positioning near the upper half of the range."
@@ -1230,7 +1277,7 @@
           { label: "Balanced market pricing", price: suggested, note: "Best mix of exposure, perceived value, and negotiation flexibility." },
           { label: "Faster sale strategy", price: psychPrice(rangeLow, "up"), note: "Lower-range strategy for stronger early activity and faster absorption." }
         ],
-        explanation: `Recommend listing at ${formatCurrency(suggested)} with a defensible range of ${formatCurrency(rangeLow)} to ${formatCurrency(rangeHigh)}. The best comparable sales are recent homes of similar size and utility in the same market area. ${conditionSupport} ${pricingConfidence.note}${historicalNote} Pricing just under the next search threshold helps visibility while staying competitive with the active benchmark.`
+        explanation: `Recommend listing at ${formatCurrency(suggested)} with a defensible range of ${formatCurrency(rangeLow)} to ${formatCurrency(rangeHigh)}. The best comparable sales are recent homes of similar size and utility in the same market area. ${conditionSupport} ${pricingConfidence.note}${pendingNote}${historicalNote} Pricing just under the next search threshold helps visibility while staying competitive with the current market benchmark.`
       };
     }
 
@@ -1238,7 +1285,7 @@
       const items = [
         `Property type target: ${displayPropertyType(subject.propertyType)}`,
         `Sold search stage used: ${selection.soldStageUsed}`,
-        `Candidate pool reviewed: ${selection.soldCandidateCount} sold and ${selection.activeCandidateCount} active candidates`,
+        `Candidate pool reviewed: ${selection.soldCandidateCount} sold, ${selection.pendingCandidateCount || 0} pending, and ${selection.activeCandidateCount} active candidates`,
         `Search radius cap: ${values.searchRadius} miles`,
         `Closed sales lookback cap: ${values.lookbackMonths} months`,
         `Square footage tolerance: primary 10%, then 15%, then up to ${values.sqftVariance}% as a fallback`,
@@ -1254,9 +1301,9 @@
       return items;
     }
 
-    function buildReport(values, subject, soldComps, activeComp, selectionMeta, sourceNote) {
+    function buildReport(values, subject, soldComps, activeComp, pendingComps, selectionMeta, sourceNote) {
       if (!soldComps.length) throw new Error("No sold comparable properties passed the CMA rules for this search.");
-      const pricing = buildPricingModel(values, subject, soldComps, activeComp);
+      const pricing = buildPricingModel(values, subject, soldComps, activeComp, pendingComps);
       subject.estimatedValue = pricing.suggestedListPrice;
       return {
         generatedAt: new Date(),
@@ -1283,7 +1330,7 @@
         normalizeComp({ id: "sample-3", formattedAddress: "85 Oak Hollow Ln, Springfield, IL 62704", status: "Sold", soldPrice: 389500, listPrice: 384900, squareFootage: 2140, bedrooms: 3, bathrooms: 3, yearBuilt: 2012, lotSizeAcres: 0.22, daysOnMarket: 18, soldDate: "2025-12-22", subdivision: "Oak Hollow", propertyType: subject.propertyType || "Single Family", stories: "2" })
       ].map((comp) => scoreComparable(subject, comp, values, { radius: 1.5 }, "sold"));
       const activeComp = scoreComparable(subject, normalizeComp({ id: "sample-4", formattedAddress: "109 Willow Creek Ct, Springfield, IL 62704", status: "Active", listPrice: 414900, squareFootage: 2288, bedrooms: 4, bathrooms: 3, yearBuilt: 2016, lotSizeAcres: 0.25, daysOnMarket: 22, listDate: "2026-03-01", subdivision: "Willow Creek", propertyType: subject.propertyType || "Single Family", stories: "2" }), values, { radius: 1.5 }, "active");
-      return buildReport(values, subject, soldComps, activeComp, { soldStageUsed: "sample fallback set", soldCandidateCount: soldComps.length, activeCandidateCount: 1 }, "Live RentCast data was unavailable or too thin for a reliable set, so sample comps are shown as a working fallback.");
+      return buildReport(values, subject, soldComps, activeComp, [], { soldStageUsed: "sample fallback set", soldCandidateCount: soldComps.length, pendingCandidateCount: 0, activeCandidateCount: 1 }, "Live RentCast data was unavailable or too thin for a reliable set, so sample comps are shown as a working fallback.");
     }
 
     async function fetchLiveCma(values) {
@@ -1317,7 +1364,11 @@
       const subject = buildSubjectProfile(values, compPool, subjectMatch);
       if (!subject.subdivision) subject.subdivision = inferSubjectSubdivision(subject, compPool);
       const soldSelection = selectSoldComparables(subject, compPool, values);
-      const activeSelection = selectActiveComparable(subject, compPool, values, new Set(soldSelection.soldComps.map((comp) => comp.id)));
+      const usedIds = new Set(soldSelection.soldComps.map((comp) => comp.id));
+      const pendingSelection = selectPendingComparables(subject, compPool, values, usedIds);
+      pendingSelection.pendingComps.forEach((comp) => usedIds.add(comp.id));
+      const activeSelection = selectActiveComparable(subject, compPool, values, usedIds);
+      const marketComp = pendingSelection.pendingComps[0] || activeSelection.activeComp || null;
       const sourceLabel = payload?.source === "rentcast-avm" ? "live RentCast AVM data with comparable-property matching" : "live RentCast sale-listing data with staged comp filtering and similarity scoring";
       const sourceNote = soldSelection.usedLiveFallbackPool
         ? `Generated ${formatDateTime(new Date())} using ${sourceLabel}. The sold comp set was thin, so the report ranked the closest available live comparables in the returned pool.`
@@ -1326,10 +1377,12 @@
         values,
         subject,
         soldSelection.soldComps,
-        activeSelection.activeComp,
+        marketComp,
+        pendingSelection.pendingComps,
         {
           soldStageUsed: soldSelection.soldStageUsed,
           soldCandidateCount: soldSelection.soldCandidateCount,
+          pendingCandidateCount: pendingSelection.pendingCandidateCount,
           activeCandidateCount: activeSelection.activeCandidateCount
         },
         sourceNote
@@ -1368,7 +1421,7 @@
             <h4 class="comp-address">${comp.address || "Comparable property"}</h4>
             <p class="comp-price-line">${priceLine}</p>
           </div>
-          <span class="comp-status${/\bactive\b/i.test(comp.status || "") ? " active" : ""}">${comp.status || "Comparable"}</span>
+          <span class="comp-status${isPendingComp(comp) ? " pending" : /\bactive\b/i.test(comp.status || "") ? " active" : ""}">${comp.status || "Comparable"}</span>
         </div>
         <div class="comp-meta">
           <div><span>Square Feet</span><strong>${comp.sqft != null ? `${Number(comp.sqft).toLocaleString()} sq ft` : "N/A"}</strong></div>
@@ -1474,7 +1527,7 @@
 
       activeCompGrid.innerHTML = "";
       if (report.activeComp) activeCompGrid.appendChild(renderCompCard(report.activeComp));
-      else activeCompGrid.appendChild(renderCompEmpty("No active comparable passed the current search rules."));
+      else activeCompGrid.appendChild(renderCompEmpty("No current market comparable passed the current search rules."));
     }
 
     function resetReport() {

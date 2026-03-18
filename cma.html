@@ -29,7 +29,7 @@
     .main{flex:1;display:flex;flex-direction:column;gap:14px}.main-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-radius:var(--radius);background:rgba(255,255,255,.9);box-shadow:var(--shadow);backdrop-filter:blur(10px)}.main-title{font-size:18px;font-weight:700;letter-spacing:.04em}.main-subtitle{font-size:12px;color:var(--muted);margin-top:3px}.main-content{flex:1;display:flex;flex-direction:column;gap:12px}
     .hero,.card,.report-shell{background:var(--bg-card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;border:1px solid var(--border)}
     .hero-eyebrow,.section-label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--primary);font-weight:700}.hero-title{font-size:clamp(1.7rem,4vw,2.4rem);line-height:1.05;margin-top:6px}.hero-copy,.section-copy,.muted-text,.report-subtitle{color:var(--muted);font-size:14px;line-height:1.55;margin-top:8px}.layout{display:grid;grid-template-columns:minmax(320px,420px) minmax(0,1fr);gap:14px;align-items:start}.section-title{font-size:18px;font-weight:700;margin-top:4px}
-    .form-stack{display:grid;gap:14px;margin-top:14px}.field-grid{display:grid;gap:12px}.field-grid.two-col{grid-template-columns:repeat(2,minmax(0,1fr))}.field{display:grid;gap:6px}.field label,legend{font-size:13px;font-weight:600}input[type="text"],input[type="number"],textarea{width:100%;min-height:46px;padding:11px 12px;border-radius:12px;border:1px solid #dbe1ea;background:#fff;color:var(--text);font:inherit}textarea{min-height:110px;resize:vertical}input:focus,textarea:focus{outline:none;border-color:rgba(37,99,235,.45);box-shadow:0 0 0 4px rgba(37,99,235,.12)}
+    .form-stack{display:grid;gap:14px;margin-top:14px}.field-grid{display:grid;gap:12px}.field-grid.two-col{grid-template-columns:repeat(2,minmax(0,1fr))}.field{display:grid;gap:6px}.field label,legend{font-size:13px;font-weight:600}input[type="text"],input[type="number"],select,textarea{width:100%;min-height:46px;padding:11px 12px;border-radius:12px;border:1px solid #dbe1ea;background:#fff;color:var(--text);font:inherit}textarea{min-height:110px;resize:vertical}input:focus,select:focus,textarea:focus{outline:none;border-color:rgba(37,99,235,.45);box-shadow:0 0 0 4px rgba(37,99,235,.12)}
     .sub-card{border:1px solid var(--border);border-radius:12px;background:#f8fafc;padding:14px}.fixed-list,.search-list{margin-top:10px;padding-left:18px;color:var(--muted);display:grid;gap:8px;font-size:14px;line-height:1.45}fieldset{border:0;min-width:0}.checkbox-row{display:grid;gap:10px;margin-top:12px}.toggle{display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:12px;border:1px solid var(--border);background:#fff}.toggle input{width:18px;height:18px;margin-top:2px;accent-color:var(--primary)}.toggle strong{display:block;font-size:14px}.toggle span:last-child{color:var(--muted);font-size:13px;line-height:1.45}
     .toolbar{display:flex;flex-wrap:wrap;gap:10px}.btn,.print-btn{min-height:42px;border:none;border-radius:var(--pill);padding:0 14px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:transform .12s ease,box-shadow .2s ease,background .2s ease}.btn-primary,.badge-accent{background:var(--primary-soft);color:#fff;box-shadow:0 10px 24px rgba(37,99,235,.24)}.btn-secondary,.print-btn{background:#eef2ff;color:#4338ca}.btn:hover,.print-btn:hover{transform:translateY(-1px)}
     .report-shell{padding:0;overflow:hidden}.report-head{padding:16px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.92);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}.report-title{font-size:20px;font-weight:700}.report-badges{display:flex;flex-wrap:wrap;gap:8px}.badge,.comp-status{min-height:28px;display:inline-flex;align-items:center;padding:0 10px;border-radius:var(--pill);background:#eef2ff;color:#4338ca;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.report-body{padding:16px;display:grid;gap:14px}.print-toolbar{display:flex;justify-content:flex-end}
@@ -137,6 +137,61 @@
                 <div class="field" style="margin-top: 12px;">
                   <label for="conditionNotes">Condition notes</label>
                   <textarea id="conditionNotes" name="conditionNotes" placeholder="Example: dated baths, backs to greenbelt, strong curb appeal, busy road, fenced yard, deferred maintenance..."></textarea>
+                </div>
+              </section>
+              <section class="sub-card">
+                <div class="section-label">Manual Market Overrides</div>
+                <h3 class="section-title">Add pending or under-contract comps from MLS</h3>
+                <p class="section-copy">Use these fields when RentCast misses the strongest current-market listings. These manual comps will supplement the live feed and can move the price bracket.</p>
+                <div class="form-stack" style="margin-top: 12px;">
+                  <section class="sub-card">
+                    <div class="section-label">Override 1</div>
+                    <div class="field-grid two-col" style="margin-top: 10px;">
+                      <div class="field"><label for="manualComp1Address">Address</label><input id="manualComp1Address" name="manualComp1Address" type="text" placeholder="244 Cheshire Rd, Elizabethtown, KY 42701" /></div>
+                      <div class="field"><label for="manualComp1Status">Status</label><select id="manualComp1Status" name="manualComp1Status"><option value="Pending" selected>Pending</option><option value="Under Contract">Under Contract</option><option value="Contingent">Contingent</option><option value="Active">Active</option></select></div>
+                      <div class="field"><label for="manualComp1Price">List price</label><input id="manualComp1Price" name="manualComp1Price" type="number" min="0" step="1000" placeholder="365000" /></div>
+                      <div class="field"><label for="manualComp1Sqft">Square footage</label><input id="manualComp1Sqft" name="manualComp1Sqft" type="number" min="0" step="1" placeholder="1959" /></div>
+                      <div class="field"><label for="manualComp1Beds">Bedrooms</label><input id="manualComp1Beds" name="manualComp1Beds" type="number" min="0" max="20" step="1" placeholder="3" /></div>
+                      <div class="field"><label for="manualComp1Baths">Bathrooms</label><input id="manualComp1Baths" name="manualComp1Baths" type="number" min="0" max="20" step="0.5" placeholder="2" /></div>
+                      <div class="field"><label for="manualComp1YearBuilt">Year built</label><input id="manualComp1YearBuilt" name="manualComp1YearBuilt" type="number" min="1800" max="2100" step="1" placeholder="1998" /></div>
+                      <div class="field"><label for="manualComp1Subdivision">Subdivision</label><input id="manualComp1Subdivision" name="manualComp1Subdivision" type="text" placeholder="Cheshire Estates" /></div>
+                      <div class="field"><label for="manualComp1Dom">Days on market</label><input id="manualComp1Dom" name="manualComp1Dom" type="number" min="0" step="1" placeholder="12" /></div>
+                      <div class="field"><label for="manualComp1GarageParking">Garage / parking</label><input id="manualComp1GarageParking" name="manualComp1GarageParking" type="text" placeholder="2-car garage" /></div>
+                    </div>
+                    <div class="field" style="margin-top: 12px;"><label for="manualComp1Notes">Notes</label><textarea id="manualComp1Notes" name="manualComp1Notes" placeholder="Why this is a strong current-market comp: same subdivision, one-level ranch, updated kitchen, better lot, under contract quickly..."></textarea></div>
+                  </section>
+                  <section class="sub-card">
+                    <div class="section-label">Override 2</div>
+                    <div class="field-grid two-col" style="margin-top: 10px;">
+                      <div class="field"><label for="manualComp2Address">Address</label><input id="manualComp2Address" name="manualComp2Address" type="text" placeholder="260 Cheshire Rd, Elizabethtown, KY 42701" /></div>
+                      <div class="field"><label for="manualComp2Status">Status</label><select id="manualComp2Status" name="manualComp2Status"><option value="Pending" selected>Pending</option><option value="Under Contract">Under Contract</option><option value="Contingent">Contingent</option><option value="Active">Active</option></select></div>
+                      <div class="field"><label for="manualComp2Price">List price</label><input id="manualComp2Price" name="manualComp2Price" type="number" min="0" step="1000" placeholder="395000" /></div>
+                      <div class="field"><label for="manualComp2Sqft">Square footage</label><input id="manualComp2Sqft" name="manualComp2Sqft" type="number" min="0" step="1" placeholder="2191" /></div>
+                      <div class="field"><label for="manualComp2Beds">Bedrooms</label><input id="manualComp2Beds" name="manualComp2Beds" type="number" min="0" max="20" step="1" placeholder="4" /></div>
+                      <div class="field"><label for="manualComp2Baths">Bathrooms</label><input id="manualComp2Baths" name="manualComp2Baths" type="number" min="0" max="20" step="0.5" placeholder="3" /></div>
+                      <div class="field"><label for="manualComp2YearBuilt">Year built</label><input id="manualComp2YearBuilt" name="manualComp2YearBuilt" type="number" min="1800" max="2100" step="1" placeholder="2004" /></div>
+                      <div class="field"><label for="manualComp2Subdivision">Subdivision</label><input id="manualComp2Subdivision" name="manualComp2Subdivision" type="text" placeholder="Cheshire Estates" /></div>
+                      <div class="field"><label for="manualComp2Dom">Days on market</label><input id="manualComp2Dom" name="manualComp2Dom" type="number" min="0" step="1" placeholder="8" /></div>
+                      <div class="field"><label for="manualComp2GarageParking">Garage / parking</label><input id="manualComp2GarageParking" name="manualComp2GarageParking" type="text" placeholder="2-car garage" /></div>
+                    </div>
+                    <div class="field" style="margin-top: 12px;"><label for="manualComp2Notes">Notes</label><textarea id="manualComp2Notes" name="manualComp2Notes" placeholder="Use notes for upgrades, one-level living, bonus room, premium lot, staging strength, or why the contract timing matters."></textarea></div>
+                  </section>
+                  <section class="sub-card">
+                    <div class="section-label">Override 3</div>
+                    <div class="field-grid two-col" style="margin-top: 10px;">
+                      <div class="field"><label for="manualComp3Address">Address</label><input id="manualComp3Address" name="manualComp3Address" type="text" placeholder="123 Example Ln, Springfield, IL 62704" /></div>
+                      <div class="field"><label for="manualComp3Status">Status</label><select id="manualComp3Status" name="manualComp3Status"><option value="Pending" selected>Pending</option><option value="Under Contract">Under Contract</option><option value="Contingent">Contingent</option><option value="Active">Active</option></select></div>
+                      <div class="field"><label for="manualComp3Price">List price</label><input id="manualComp3Price" name="manualComp3Price" type="number" min="0" step="1000" placeholder="379900" /></div>
+                      <div class="field"><label for="manualComp3Sqft">Square footage</label><input id="manualComp3Sqft" name="manualComp3Sqft" type="number" min="0" step="1" placeholder="2050" /></div>
+                      <div class="field"><label for="manualComp3Beds">Bedrooms</label><input id="manualComp3Beds" name="manualComp3Beds" type="number" min="0" max="20" step="1" placeholder="3" /></div>
+                      <div class="field"><label for="manualComp3Baths">Bathrooms</label><input id="manualComp3Baths" name="manualComp3Baths" type="number" min="0" max="20" step="0.5" placeholder="2" /></div>
+                      <div class="field"><label for="manualComp3YearBuilt">Year built</label><input id="manualComp3YearBuilt" name="manualComp3YearBuilt" type="number" min="1800" max="2100" step="1" placeholder="2001" /></div>
+                      <div class="field"><label for="manualComp3Subdivision">Subdivision</label><input id="manualComp3Subdivision" name="manualComp3Subdivision" type="text" placeholder="Neighborhood name" /></div>
+                      <div class="field"><label for="manualComp3Dom">Days on market</label><input id="manualComp3Dom" name="manualComp3Dom" type="number" min="0" step="1" placeholder="15" /></div>
+                      <div class="field"><label for="manualComp3GarageParking">Garage / parking</label><input id="manualComp3GarageParking" name="manualComp3GarageParking" type="text" placeholder="2-car garage" /></div>
+                    </div>
+                    <div class="field" style="margin-top: 12px;"><label for="manualComp3Notes">Notes</label><textarea id="manualComp3Notes" name="manualComp3Notes" placeholder="Optional third override if you want to bracket the subject with another strong current-market comparable."></textarea></div>
+                  </section>
                 </div>
               </section>
               <section class="sub-card">
@@ -263,6 +318,7 @@
       "subjectStoryCount",
       "subjectGarageParking"
     ];
+    const MANUAL_CURRENT_MARKET_COMP_SLOTS = [1, 2, 3];
 
     FIXED_SEARCH_PARAMS.forEach((item) => {
       const li = document.createElement("li");
@@ -554,6 +610,10 @@
       return match?.[1] || "";
     }
 
+    function compIdentityKey(comp) {
+      return canonicalizeAddress(comp?.address) || cleanText(comp?.id) || "";
+    }
+
     function inferSubdivisionFromRemarks(remarks) {
       const text = cleanText(remarks);
       if (!text) return "";
@@ -640,6 +700,35 @@
     const isPendingComp = (comp) => Boolean(/\b(pending|contingent|backup|under contract|under-contract|active under contract)\b/i.test(comp.status)) && !isSoldComp(comp);
     const isActiveComp = (comp) => Boolean(/\b(active|new|coming soon|for sale)\b/i.test(comp.status)) && !isSoldComp(comp) && !isPendingComp(comp);
 
+    function readManualCurrentMarketComps() {
+      return MANUAL_CURRENT_MARKET_COMP_SLOTS.map((slot) => {
+        const address = cleanText(form.elements?.[`manualComp${slot}Address`]?.value);
+        const listPrice = toNumber(form.elements?.[`manualComp${slot}Price`]?.value, null);
+        if (!address || !Number.isFinite(listPrice)) return null;
+        const rawComp = {
+          formattedAddress: address,
+          address,
+          status: cleanText(form.elements?.[`manualComp${slot}Status`]?.value) || "Pending",
+          listPrice,
+          squareFootage: toNumber(form.elements?.[`manualComp${slot}Sqft`]?.value, null),
+          bedrooms: toNumber(form.elements?.[`manualComp${slot}Beds`]?.value, null),
+          bathrooms: toNumber(form.elements?.[`manualComp${slot}Baths`]?.value, null),
+          yearBuilt: toNumber(form.elements?.[`manualComp${slot}YearBuilt`]?.value, null),
+          subdivision: cleanText(form.elements?.[`manualComp${slot}Subdivision`]?.value),
+          garage: cleanText(form.elements?.[`manualComp${slot}GarageParking`]?.value),
+          parking: cleanText(form.elements?.[`manualComp${slot}GarageParking`]?.value),
+          daysOnMarket: toNumber(form.elements?.[`manualComp${slot}Dom`]?.value, null),
+          remarks: cleanText(form.elements?.[`manualComp${slot}Notes`]?.value),
+          propertyType: cleanText(form.subjectPropertyType.value),
+          listDate: new Date().toISOString().slice(0, 10)
+        };
+        const comp = normalizeComp(rawComp);
+        comp.notes = rawComp.remarks ? `Manual market override. ${rawComp.remarks}` : "Manual market override entered from MLS or agent research.";
+        comp.source = "manual-current-market";
+        return comp;
+      }).filter(Boolean);
+    }
+
     function readFormValues() {
       return {
         subjectAddress: cleanText(form.subjectAddress.value),
@@ -668,8 +757,34 @@
         lotVariance: clamp(toNumber(form.lotVariance.value, 25), 5, 80),
         lookbackMonths: clamp(toNumber(form.lookbackMonths.value, 6), 1, 12),
         prioritizeSubdivision: form.prioritizeSubdivision.checked,
-        prioritizeStyle: form.prioritizeStyle.checked
+        prioritizeStyle: form.prioritizeStyle.checked,
+        manualCurrentMarketComps: readManualCurrentMarketComps()
       };
+    }
+
+    function mergeManualCurrentMarketComps(baseComps, manualComps) {
+      if (!manualComps.length) return baseComps;
+      const merged = [...baseComps];
+      manualComps.forEach((manualComp) => {
+        const key = compIdentityKey(manualComp);
+        if (!key) {
+          merged.push(manualComp);
+          return;
+        }
+        const existingIndex = merged.findIndex((comp) => compIdentityKey(comp) === key);
+        if (existingIndex === -1) {
+          merged.push(manualComp);
+          return;
+        }
+        if (!isSoldComp(merged[existingIndex])) {
+          merged[existingIndex] = {
+            ...merged[existingIndex],
+            ...manualComp,
+            notes: manualComp.notes || merged[existingIndex].notes
+          };
+        }
+      });
+      return merged;
     }
 
     function buildSubjectProfile(values, comps, subjectMatch = null) {
@@ -900,7 +1015,7 @@
     function rankFallbackComparables(subject, comps, values, stage) {
       return uniqueBy(
         comps.filter((comp) => (comp.listPrice != null || comp.soldPrice != null) && matchesPropertyType(subject, comp) && !comp.distressed),
-        (comp) => comp.id || comp.address
+        compIdentityKey
       )
         .map((comp) => scoreComparable(subject, comp, values, stage, isSoldComp(comp) ? "sold" : "active"))
         .sort((a, b) =>
@@ -912,10 +1027,10 @@
     }
 
     function selectSoldComparables(subject, comps, values) {
-      const soldPool = uniqueBy(comps.filter(isSoldComp), (comp) => comp.id || comp.address);
+      const soldPool = uniqueBy(comps.filter(isSoldComp), compIdentityKey);
       const fallbackPool = uniqueBy(
         comps.filter((comp) => comp.listPrice != null || comp.soldPrice != null),
-        (comp) => comp.id || comp.address
+        compIdentityKey
       );
       const candidatePool = soldPool.length ? soldPool : fallbackPool;
       const stages = buildSoldSearchStages(values);
@@ -930,7 +1045,7 @@
             .map((comp) => scoreComparable(subject, comp, values, stage, "sold"))
             .sort((a, b) => b.similarityScore - a.similarityScore || (b.soldPrice ?? b.listPrice ?? 0) - (a.soldPrice ?? a.listPrice ?? 0));
           matches.forEach((candidate) => {
-            if (selected.length < 3 && !selected.some((item) => item.id === candidate.id)) selected.push(candidate);
+            if (selected.length < 3 && !selected.some((item) => compIdentityKey(item) === compIdentityKey(candidate))) selected.push(candidate);
           });
           if (selected.length >= 3) {
             stageUsed = stage.label;
@@ -944,7 +1059,7 @@
         const startingCount = selected.length;
         rankFallbackComparables(subject, fallbackPool, values, fallbackStage)
           .forEach((candidate) => {
-            if (selected.length >= 3 || selected.some((item) => item.id === candidate.id)) return;
+            if (selected.length >= 3 || selected.some((item) => compIdentityKey(item) === compIdentityKey(candidate))) return;
             const fallbackNote = isSoldComp(candidate)
               ? "Selected from the broader live fallback pool."
               : "No qualified sold comps were returned, so this live listing was promoted as a backup pricing reference.";
@@ -968,18 +1083,18 @@
     }
 
     function selectActiveComparable(subject, comps, values, selectedSoldIds) {
-      const activePool = uniqueBy(comps.filter((comp) => passesActiveSearch(subject, comp, values)), (comp) => comp.id || comp.address);
+      const activePool = uniqueBy(comps.filter((comp) => passesActiveSearch(subject, comp, values)), compIdentityKey);
       const activeComp = activePool
-        .filter((comp) => !selectedSoldIds.has(comp.id))
+        .filter((comp) => !selectedSoldIds.has(compIdentityKey(comp)))
         .map((comp) => scoreComparable(subject, comp, values, { radius: values.searchRadius }, "active"))
         .sort((a, b) => b.similarityScore - a.similarityScore)[0] || null;
       return { activeComp, activeCandidateCount: activePool.length };
     }
 
     function selectPendingComparables(subject, comps, values, excludedIds) {
-      const pendingPool = uniqueBy(comps.filter((comp) => passesPendingSearch(subject, comp, values)), (comp) => comp.id || comp.address);
+      const pendingPool = uniqueBy(comps.filter((comp) => passesPendingSearch(subject, comp, values)), compIdentityKey);
       const pendingComps = pendingPool
-        .filter((comp) => !excludedIds.has(comp.id))
+        .filter((comp) => !excludedIds.has(compIdentityKey(comp)))
         .map((comp) => scoreComparable(subject, comp, values, { radius: Math.min(values.searchRadius, 3) }, "pending"))
         .sort((a, b) => b.similarityScore - a.similarityScore || (a.daysOnMarket ?? 999) - (b.daysOnMarket ?? 999))
         .slice(0, 2);
@@ -1297,6 +1412,7 @@
         `Market read: ${pricing.marketTrend.trend}`,
         `Pricing confidence: ${pricing.confidenceLabel}`
       ];
+      if (selection.manualCurrentMarketCount) items.push(`Manual current-market overrides: ${selection.manualCurrentMarketCount}`);
       if (Number.isFinite(pricing.historicalAnchor)) items.push(`Historical anchor blended: ${formatCurrency(pricing.historicalAnchor)}`);
       return items;
     }
@@ -1329,8 +1445,28 @@
         normalizeComp({ id: "sample-2", formattedAddress: "142 Willow Creek Dr, Springfield, IL 62704", status: "Sold", soldPrice: 409000, listPrice: 405000, squareFootage: 2310, bedrooms: 4, bathrooms: 2.5, yearBuilt: 2013, lotSizeAcres: 0.24, daysOnMarket: 9, soldDate: "2026-02-10", subdivision: "Willow Creek", propertyType: subject.propertyType || "Single Family", stories: "2" }),
         normalizeComp({ id: "sample-3", formattedAddress: "85 Oak Hollow Ln, Springfield, IL 62704", status: "Sold", soldPrice: 389500, listPrice: 384900, squareFootage: 2140, bedrooms: 3, bathrooms: 3, yearBuilt: 2012, lotSizeAcres: 0.22, daysOnMarket: 18, soldDate: "2025-12-22", subdivision: "Oak Hollow", propertyType: subject.propertyType || "Single Family", stories: "2" })
       ].map((comp) => scoreComparable(subject, comp, values, { radius: 1.5 }, "sold"));
-      const activeComp = scoreComparable(subject, normalizeComp({ id: "sample-4", formattedAddress: "109 Willow Creek Ct, Springfield, IL 62704", status: "Active", listPrice: 414900, squareFootage: 2288, bedrooms: 4, bathrooms: 3, yearBuilt: 2016, lotSizeAcres: 0.25, daysOnMarket: 22, listDate: "2026-03-01", subdivision: "Willow Creek", propertyType: subject.propertyType || "Single Family", stories: "2" }), values, { radius: 1.5 }, "active");
-      return buildReport(values, subject, soldComps, activeComp, [], { soldStageUsed: "sample fallback set", soldCandidateCount: soldComps.length, pendingCandidateCount: 0, activeCandidateCount: 1 }, "Live RentCast data was unavailable or too thin for a reliable set, so sample comps are shown as a working fallback.");
+      const sampleActiveComp = scoreComparable(subject, normalizeComp({ id: "sample-4", formattedAddress: "109 Willow Creek Ct, Springfield, IL 62704", status: "Active", listPrice: 414900, squareFootage: 2288, bedrooms: 4, bathrooms: 3, yearBuilt: 2016, lotSizeAcres: 0.25, daysOnMarket: 22, listDate: "2026-03-01", subdivision: "Willow Creek", propertyType: subject.propertyType || "Single Family", stories: "2" }), values, { radius: 1.5 }, "active");
+      const manualCurrentMarketComps = values.manualCurrentMarketComps || [];
+      const usedIds = new Set(soldComps.map((comp) => compIdentityKey(comp)));
+      const pendingSelection = selectPendingComparables(subject, manualCurrentMarketComps, values, usedIds);
+      pendingSelection.pendingComps.forEach((comp) => usedIds.add(compIdentityKey(comp)));
+      const activeSelection = selectActiveComparable(subject, manualCurrentMarketComps, values, usedIds);
+      const marketComp = pendingSelection.pendingComps[0] || activeSelection.activeComp || sampleActiveComp;
+      return buildReport(
+        values,
+        subject,
+        soldComps,
+        marketComp,
+        pendingSelection.pendingComps,
+        {
+          soldStageUsed: "sample fallback set",
+          soldCandidateCount: soldComps.length,
+          pendingCandidateCount: pendingSelection.pendingCandidateCount,
+          activeCandidateCount: activeSelection.activeCandidateCount || 1,
+          manualCurrentMarketCount: manualCurrentMarketComps.length
+        },
+        "Live RentCast data was unavailable or too thin for a reliable set, so sample comps are shown as a working fallback."
+      );
     }
 
     async function fetchLiveCma(values) {
@@ -1361,13 +1497,15 @@
       if (!comps.length) throw new Error("RentCast returned no comparable listings for this search.");
       const subjectMatch = subjectRecord || findSubjectComparable(values, comps);
       const compPool = subjectMatch ? comps.filter((comp) => comp.id !== subjectMatch.id && !addressesLikelyMatch(values, comp)) : comps;
-      const subject = buildSubjectProfile(values, compPool, subjectMatch);
-      if (!subject.subdivision) subject.subdivision = inferSubjectSubdivision(subject, compPool);
-      const soldSelection = selectSoldComparables(subject, compPool, values);
-      const usedIds = new Set(soldSelection.soldComps.map((comp) => comp.id));
-      const pendingSelection = selectPendingComparables(subject, compPool, values, usedIds);
-      pendingSelection.pendingComps.forEach((comp) => usedIds.add(comp.id));
-      const activeSelection = selectActiveComparable(subject, compPool, values, usedIds);
+      const manualCurrentMarketComps = values.manualCurrentMarketComps || [];
+      const mergedCompPool = mergeManualCurrentMarketComps(compPool, manualCurrentMarketComps);
+      const subject = buildSubjectProfile(values, mergedCompPool, subjectMatch);
+      if (!subject.subdivision) subject.subdivision = inferSubjectSubdivision(subject, mergedCompPool);
+      const soldSelection = selectSoldComparables(subject, mergedCompPool, values);
+      const usedIds = new Set(soldSelection.soldComps.map((comp) => compIdentityKey(comp)));
+      const pendingSelection = selectPendingComparables(subject, mergedCompPool, values, usedIds);
+      pendingSelection.pendingComps.forEach((comp) => usedIds.add(compIdentityKey(comp)));
+      const activeSelection = selectActiveComparable(subject, mergedCompPool, values, usedIds);
       const marketComp = pendingSelection.pendingComps[0] || activeSelection.activeComp || null;
       const sourceLabel = payload?.source === "rentcast-avm" ? "live RentCast AVM data with comparable-property matching" : "live RentCast sale-listing data with staged comp filtering and similarity scoring";
       const sourceNote = soldSelection.usedLiveFallbackPool
@@ -1383,7 +1521,8 @@
           soldStageUsed: soldSelection.soldStageUsed,
           soldCandidateCount: soldSelection.soldCandidateCount,
           pendingCandidateCount: pendingSelection.pendingCandidateCount,
-          activeCandidateCount: activeSelection.activeCandidateCount
+          activeCandidateCount: activeSelection.activeCandidateCount,
+          manualCurrentMarketCount: manualCurrentMarketComps.length
         },
         sourceNote
       );

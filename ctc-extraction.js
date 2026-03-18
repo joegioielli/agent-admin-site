@@ -25,11 +25,11 @@
   };
 
   const DOC_TYPE_PATTERNS = [
-    { type: "counteroffer", label: "Counteroffer", pattern: /(counter|counteroffer|counter-offer)/i },
-    { type: "amendment", label: "Amendment", pattern: /(amend|amendment)/i },
-    { type: "addendum", label: "Addendum", pattern: /(addendum|addenda)/i },
-    { type: "disclosure", label: "Disclosure", pattern: /(disclosure|lead|paint|hoa|seller[- ]?disclosure)/i },
-    { type: "purchase_contract", label: "Purchase Contract", pattern: /(purchase|sale|contract|psa|offer)/i }
+    { type: "purchase_contract", label: "Purchase Contract", pattern: /(purchase and sale agreement|purchase contract|sale contract|contract to buy|contract to purchase|rf\s*401|residential purchase)/i, score: 140 },
+    { type: "counteroffer", label: "Counteroffer", pattern: /(counter[\s-]?offer|counterproposal)/i, score: 120 },
+    { type: "amendment", label: "Amendment", pattern: /\bamend(?:ment)?\b/i, score: 110 },
+    { type: "addendum", label: "Addendum", pattern: /\baddend(?:um|a)\b/i, score: 90 },
+    { type: "disclosure", label: "Disclosure", pattern: /(disclosure|lead[- ]based paint|seller property disclosure|hoa disclosure)/i, score: 80 }
   ];
 
   const FIELD_LABELS = {
@@ -85,6 +85,9 @@
     dec: 11,
     december: 11
   };
+
+  const NAME_STOPWORDS = /\b(closing|costs|prepaid|items|temporary|permanent|rate|buy|down|mortgage|loan|seller|buyer|pay|paid|credit|closing costs|addendum|financing|conventional|cash|fha|va|usda|inspection|possession|date)\b/i;
+  const NAMEISH_TOKEN = /^[A-Z][a-zA-Z.'-]+$/;
 
   function slugify(input) {
     return String(input || "")
@@ -279,15 +282,26 @@
   }
 
   function detectDocumentType(fileName, text) {
-    const haystack = `${fileName || ""}\n${text || ""}`;
-    const match = DOC_TYPE_PATTERNS.find((entry) => entry.pattern.test(haystack));
+    const topText = splitLines(text).slice(0, 20).join("\n");
+    const haystack = `${fileName || ""}\n${topText}`;
+    const scoredMatches = DOC_TYPE_PATTERNS
+      .map((entry) => {
+        let score = 0;
+        if (entry.pattern.test(fileName || "")) score += entry.score + 30;
+        if (entry.pattern.test(topText)) score += entry.score;
+        return score ? { ...entry, score } : null;
+      })
+      .filter(Boolean)
+      .sort((left, right) => right.score - left.score);
+
+    const match = scoredMatches[0];
     if (!match) {
       return { type: "unknown", label: "Unknown Document", confidence: 0.4 };
     }
     return {
       type: match.type,
       label: match.label,
-      confidence: match.type === "purchase_contract" ? 0.9 : 0.84
+      confidence: Math.min(0.97, 0.55 + match.score / 250)
     };
   }
 
@@ -418,8 +432,44 @@
     return cleanText(value)
       .replace(/\s{2,}/g, " ")
       .replace(/[|]+/g, " ")
+      .replace(/^[,;:\-]+/, "")
+      .replace(/[,;:\-]+$/, "")
       .replace(/\b(?:page|buyer|seller|purchase price|sales price|earnest money|binding date|closing date|inspection deadline|possession date)\b[\s\S]*$/i, "")
       .trim();
+  }
+
+  function looksLikePersonName(value) {
+    const candidate = cleanupCandidate(value);
+    if (!candidate || candidate.length < 5) return false;
+    if (NAME_STOPWORDS.test(candidate)) return false;
+    if (/\d/.test(candidate)) return false;
+
+    const tokens = candidate
+      .split(/\s+/)
+      .map((token) => token.replace(/[^A-Za-z.'-]/g, ""))
+      .filter(Boolean);
+
+    if (tokens.length < 2 || tokens.length > 5) return false;
+    return tokens.every((token) => NAMEISH_TOKEN.test(token));
+  }
+
+  function extractNamedPartiesFromText(text, role) {
+    const patterns = role === "buyer"
+      ? [
+          /\bBuyer(?:\(s\))?\b\s*[:\-]?\s*([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4}(?:\s*(?:,|and|&)\s*[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4})*)/g
+        ]
+      : [
+          /\bSeller(?:\(s\))?\b\s*[:\-]?\s*([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4}(?:\s*(?:,|and|&)\s*[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4})*)/g
+        ];
+
+    for (const pattern of patterns) {
+      const match = pattern.exec(text);
+      if (!match) continue;
+      const names = splitPartyNames(match[1]).filter(looksLikePersonName);
+      if (names.length) return names;
+    }
+
+    return [];
   }
 
   function getLineValueAfterLabel(lines, labelPatterns) {
@@ -443,6 +493,7 @@
     const cleaned = cleanupCandidate(value)
       .replace(/\bas (?:joint tenants|tenants in common|husband and wife)[\s\S]*$/i, "")
       .replace(/\bmarital status[\s\S]*$/i, "")
+      .replace(/\bwhose address is[\s\S]*$/i, "")
       .trim();
 
     if (!cleaned) return [];
@@ -452,7 +503,7 @@
       .map((part) => cleanupCandidate(part))
       .filter(Boolean);
 
-    const names = rawParts.filter((part) => /[A-Za-z]/.test(part) && !/\d/.test(part));
+    const names = rawParts.filter((part) => looksLikePersonName(part));
     return [...new Set(names)];
   }
 
@@ -477,15 +528,18 @@
   function extractPartyField(lines, role) {
     const labelPatterns = role === "buyer"
       ? [
-          /(?:buyer(?:\(s\))?|buyer\(s\)|purchaser(?:\(s\))?)\s*[:\-]?\s*(.*)$/i
+          /^(?:buyer(?:\(s\))?|buyer\(s\)|purchaser(?:\(s\))?)\s*[:\-]?\s*(.*)$/i,
+          /^(?:name of buyer|buyer name(?:\(s\))?)\s*[:\-]?\s*(.*)$/i
         ]
       : [
-          /(?:seller(?:\(s\))?|seller\(s\)|owner(?:\(s\))?)\s*[:\-]?\s*(.*)$/i
+          /^(?:seller(?:\(s\))?|seller\(s\)|owner(?:\(s\))?)\s*[:\-]?\s*(.*)$/i,
+          /^(?:name of seller|seller name(?:\(s\))?)\s*[:\-]?\s*(.*)$/i
         ];
 
     const candidate = getLineValueAfterLabel(lines, labelPatterns);
     const names = splitPartyNames(candidate);
-    return names.length ? buildField(names, 0.74) : null;
+    if (names.length) return buildField(names, 0.86);
+    return null;
   }
 
   function extractMoneyField(text, labels, confidence) {
@@ -501,7 +555,8 @@
 
   function extractFinancingType(text, lines) {
     const labeledValue = getLineValueAfterLabel(lines, [
-      /(?:financing type|type of financing|loan type)\s*[:\-]?\s*(.*)$/i
+      /^(?:financing type|type of financing|loan type)\s*[:\-]?\s*(.*)$/i,
+      /^(?:loan)\s*[:\-]?\s*(.*)$/i
     ]);
 
     const financingKeywords = ["Conventional", "Cash", "FHA", "VA", "USDA", "Owner Financing", "Seller Financing", "Assumption"];
@@ -511,7 +566,7 @@
       if (match) return buildField(match, 0.86);
     }
 
-    const regex = /\b(conventional|cash|fha|va|usda|owner financing|seller financing|assumption)\b/i;
+    const regex = /\bfinancing\b[\s\S]{0,40}\b(conventional|cash|fha|va|usda|owner financing|seller financing|assumption)\b/i;
     const match = text.match(regex);
     if (match) {
       return buildField(match[1].replace(/\b\w/g, (char) => char.toUpperCase()), 0.62);
@@ -522,7 +577,7 @@
 
   function extractDateField(text, labels, confidence) {
     for (const label of labels) {
-      const regex = new RegExp(`${escapeRegExp(label)}[\\s\\S]{0,140}`, "i");
+      const regex = new RegExp(`${escapeRegExp(label)}[\\s\\S]{0,80}`, "i");
       const snippetMatch = text.match(regex);
       if (!snippetMatch) continue;
 
@@ -542,10 +597,15 @@
   }
 
   function extractFieldsFromText(text, lines) {
+    const buyerNamesFromText = extractNamedPartiesFromText(text, "buyer");
+    const sellerNamesFromText = extractNamedPartiesFromText(text, "seller");
+    const buyerField = extractPartyField(lines, "buyer");
+    const sellerField = extractPartyField(lines, "seller");
+
     return {
       property_address: extractAddress(lines, text),
-      buyer_names: extractPartyField(lines, "buyer"),
-      seller_names: extractPartyField(lines, "seller"),
+      buyer_names: buyerField || (buyerNamesFromText.length ? buildField(buyerNamesFromText, 0.72) : null),
+      seller_names: sellerField || (sellerNamesFromText.length ? buildField(sellerNamesFromText, 0.72) : null),
       purchase_price: extractMoneyField(text, ["purchase price", "sales price", "contract price"], 0.91),
       earnest_money_amount: extractMoneyField(text, ["earnest money", "earnest money amount", "deposit"], 0.86),
       financing_type: extractFinancingType(text, lines),

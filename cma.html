@@ -855,6 +855,20 @@
       return { ...comp, similarityScore: Math.round(details.total), notes: buildComparableNotes(subject, comp, details) };
     }
 
+    function rankFallbackComparables(subject, comps, values, stage) {
+      return uniqueBy(
+        comps.filter((comp) => (comp.listPrice != null || comp.soldPrice != null) && matchesPropertyType(subject, comp) && !comp.distressed),
+        (comp) => comp.id || comp.address
+      )
+        .map((comp) => scoreComparable(subject, comp, values, stage, isSoldComp(comp) ? "sold" : "active"))
+        .sort((a, b) =>
+          Number(isSoldComp(b)) - Number(isSoldComp(a)) ||
+          b.similarityScore - a.similarityScore ||
+          (a.distanceMiles ?? 99) - (b.distanceMiles ?? 99) ||
+          (b.soldPrice ?? b.listPrice ?? 0) - (a.soldPrice ?? a.listPrice ?? 0)
+        );
+    }
+
     function selectSoldComparables(subject, comps, values) {
       const soldPool = uniqueBy(comps.filter(isSoldComp), (comp) => comp.id || comp.address);
       const fallbackPool = uniqueBy(
@@ -865,37 +879,49 @@
       const stages = buildSoldSearchStages(values);
       const selected = [];
       let stageUsed = soldPool.length ? "full sold fallback pool" : "live listing fallback pool";
+      let usedLiveFallbackPool = !soldPool.length;
 
-      for (const stage of stages) {
-        const matches = candidatePool
-          .filter((comp) => passesSoldStage(subject, comp, values, stage))
-          .map((comp) => scoreComparable(subject, comp, values, stage, "sold"))
-          .sort((a, b) => b.similarityScore - a.similarityScore || (b.soldPrice ?? b.listPrice ?? 0) - (a.soldPrice ?? a.listPrice ?? 0));
-        matches.forEach((candidate) => {
-          if (selected.length < 3 && !selected.some((item) => item.id === candidate.id)) selected.push(candidate);
-        });
-        if (selected.length >= 3) {
-          stageUsed = stage.label;
-          break;
+      if (soldPool.length) {
+        for (const stage of stages) {
+          const matches = candidatePool
+            .filter((comp) => passesSoldStage(subject, comp, values, stage))
+            .map((comp) => scoreComparable(subject, comp, values, stage, "sold"))
+            .sort((a, b) => b.similarityScore - a.similarityScore || (b.soldPrice ?? b.listPrice ?? 0) - (a.soldPrice ?? a.listPrice ?? 0));
+          matches.forEach((candidate) => {
+            if (selected.length < 3 && !selected.some((item) => item.id === candidate.id)) selected.push(candidate);
+          });
+          if (selected.length >= 3) {
+            stageUsed = stage.label;
+            break;
+          }
         }
       }
 
       if (selected.length < 3) {
         const fallbackStage = stages[stages.length - 1];
-        candidatePool
-          .filter((comp) => passesSoldStage(subject, comp, values, fallbackStage))
-          .map((comp) => scoreComparable(subject, comp, values, fallbackStage, "sold"))
-          .sort((a, b) => b.similarityScore - a.similarityScore)
+        const startingCount = selected.length;
+        rankFallbackComparables(subject, fallbackPool, values, fallbackStage)
           .forEach((candidate) => {
-            if (selected.length < 3 && !selected.some((item) => item.id === candidate.id)) selected.push(candidate);
+            if (selected.length >= 3 || selected.some((item) => item.id === candidate.id)) return;
+            const fallbackNote = isSoldComp(candidate)
+              ? "Selected from the broader live fallback pool."
+              : "No qualified sold comps were returned, so this live listing was promoted as a backup pricing reference.";
+            selected.push({
+              ...candidate,
+              notes: candidate.notes ? `${fallbackNote} ${candidate.notes}` : fallbackNote
+            });
           });
+        if (selected.length > startingCount) {
+          usedLiveFallbackPool = true;
+          stageUsed = soldPool.length ? `${stageUsed} with broader live fallback` : "live listing fallback pool";
+        }
       }
 
       return {
         soldComps: selected.slice(0, 3),
         soldCandidateCount: candidatePool.length,
         soldStageUsed: stageUsed,
-        usedLiveFallbackPool: !soldPool.length
+        usedLiveFallbackPool
       };
     }
 
@@ -1278,7 +1304,7 @@
     function resetReport() {
       reportSection.dataset.ready = "false";
       reportEmptyState.style.display = "";
-      reportEmptyState.textContent = "Enter a subject property address and generate the CMA to populate the report with live RentCast data.";
+      reportEmptyState.textContent = "Enter a subject property address and generate the CMA to populate the report. Live RentCast data will load first, and the page will fall back gracefully if the result set is thin.";
       reportTimestamp.textContent = "Generate a report to load live comps and build the pricing summary.";
       subjectPropertyAddress.textContent = "Not generated yet.";
       specialDetailsOutput.textContent = "No special details entered yet.";
@@ -1296,11 +1322,9 @@
     }
 
     function showLiveDataError(values, error) {
-      resetReport();
-      const parsed = parseSubjectAddress(values.subjectAddress);
-      const areaLabel = [parsed.city, parsed.state].filter(Boolean).join(", ") || values.subjectAddress;
-      reportTimestamp.textContent = `Live CMA data could not be generated for ${areaLabel}.`;
-      reportEmptyState.textContent = `${error?.message || "Live data is currently unavailable."} Check the address format and make sure it includes city and state, for example "123 Main St, Springfield, IL 62704".`;
+      const fallbackReport = buildMockReport(values);
+      fallbackReport.dataSourceNote = `${error?.message || "Live data is currently unavailable."} Sample comps are shown below so the CMA stays usable while live data recovers.`;
+      renderReport(values, fallbackReport);
     }
 
     form.addEventListener("submit", async (event) => {

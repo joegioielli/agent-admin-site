@@ -1,4 +1,5 @@
 const MODEL = process.env.OPENAI_CONTRACT_EXTRACT_MODEL || "gpt-4o";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY_CTC || process.env.OPENAI_API_KEY;
 
 const FIELD_LABELS = {
   property_address: "Property Address",
@@ -313,16 +314,15 @@ function buildPrompt(documents) {
 }
 
 async function callOpenAIContractExtraction(documents) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing OPENAI_API_KEY for server-side contract extraction.");
+  if (!OPENAI_API_KEY) {
+    throw new Error("Missing OPENAI_API_KEY_CTC or OPENAI_API_KEY for server-side contract extraction.");
   }
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
+      Authorization: `Bearer ${OPENAI_API_KEY}`
     },
     body: JSON.stringify({
       model: MODEL,

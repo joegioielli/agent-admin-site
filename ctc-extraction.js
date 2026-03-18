@@ -1,5 +1,6 @@
 (function () {
-  // Replace this layer later with real PDF parsing, OCR, or API extraction.
+  const PDFJS_WORKER_SRC = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.js";
+
   const DOCUMENT_PRIORITIES = {
     purchase_contract: 100,
     counteroffer: 220,
@@ -7,53 +8,6 @@
     addendum: 180,
     disclosure: 80,
     unknown: 10
-  };
-
-  const BASE_SAMPLE_DATA = {
-    property_address: {
-      value: "742 Evergreen Terrace, Springfield, IL 62704",
-      confidence: 0.94
-    },
-    buyer_names: {
-      value: ["Avery Carter", "Jordan Carter"],
-      confidence: 0.96
-    },
-    seller_names: {
-      value: ["Morgan Hill", "Taylor Hill"],
-      confidence: 0.93
-    },
-    purchase_price: {
-      value: 412500,
-      confidence: 0.91
-    },
-    earnest_money_amount: {
-      value: 6000,
-      confidence: 0.88
-    },
-    financing_type: {
-      value: "Conventional",
-      confidence: 0.89
-    },
-    binding_date: {
-      value: "2026-03-15",
-      time: "6:00 PM",
-      confidence: 0.93
-    },
-    closing_date: {
-      value: "2026-04-28",
-      time: null,
-      confidence: 0.95
-    },
-    inspection_deadline: {
-      value: "2026-03-22",
-      time: "5:00 PM",
-      confidence: 0.87
-    },
-    possession_date: {
-      value: "2026-04-29",
-      time: "9:00 AM",
-      confidence: 0.84
-    }
   };
 
   const DOC_TYPE_PATTERNS = [
@@ -87,6 +41,37 @@
   const CURRENCY_FIELDS = new Set(["purchase_price", "earnest_money_amount"]);
   const ARRAY_FIELDS = new Set(["buyer_names", "seller_names"]);
 
+  const DATE_REGEX = /\b(?:\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}|(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2},?\s+\d{2,4})\b/i;
+  const TIME_REGEX = /\b\d{1,2}(?::\d{2})?\s?(?:a\.?m\.?|p\.?m\.?)\b/i;
+  const ADDRESS_REGEX = /\b\d{1,6}\s+[A-Za-z0-9.'#-]+(?:\s+[A-Za-z0-9.'#-]+){0,7}\s+(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Court|Ct|Circle|Cir|Way|Boulevard|Blvd|Place|Pl|Terrace|Ter|Trail|Trl|Parkway|Pkwy)\b(?:[^\n,]*)(?:,\s*[A-Za-z .'-]+,\s*[A-Z]{2}\s*\d{5}(?:-\d{4})?)?/i;
+
+  const MONTH_INDEX = {
+    jan: 0,
+    january: 0,
+    feb: 1,
+    february: 1,
+    mar: 2,
+    march: 2,
+    apr: 3,
+    april: 3,
+    may: 4,
+    jun: 5,
+    june: 5,
+    jul: 6,
+    july: 6,
+    aug: 7,
+    august: 7,
+    sep: 8,
+    sept: 8,
+    september: 8,
+    oct: 9,
+    october: 9,
+    nov: 10,
+    november: 10,
+    dec: 11,
+    december: 11
+  };
+
   function slugify(input) {
     return String(input || "")
       .toLowerCase()
@@ -94,170 +79,153 @@
       .replace(/^-+|-+$/g, "");
   }
 
+  function cleanText(input) {
+    return String(input || "")
+      .replace(/\u0000/g, " ")
+      .replace(/\u00a0/g, " ")
+      .trim();
+  }
+
   function stripExtension(fileName) {
     return String(fileName || "").replace(/\.[^.]+$/, "");
   }
 
-  function titleCase(input) {
-    return String(input || "")
-      .split(/[\s_-]+/)
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-      .join(" ");
+  function normalizePdfText(rawText) {
+    return cleanText(rawText)
+      .replace(/\r/g, "\n")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .trim();
   }
 
-  function detectDocumentType(fileName) {
-    const match = DOC_TYPE_PATTERNS.find((entry) => entry.pattern.test(fileName));
+  function splitLines(text) {
+    return text
+      .split(/\n+/)
+      .map((line) => cleanText(line))
+      .filter(Boolean);
+  }
+
+  function ensurePdfJsReady() {
+    if (!window.pdfjsLib) {
+      throw new Error("PDF.js did not load. Refresh the page and try again.");
+    }
+
+    if (!window.pdfjsLib.GlobalWorkerOptions.workerSrc) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
+    }
+  }
+
+  async function readPdfText(file) {
+    ensurePdfJsReady();
+    const data = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data }).promise;
+    const pageText = [];
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const rows = [];
+
+      content.items.forEach((item) => {
+        const value = cleanText(item.str);
+        if (!value) return;
+
+        const y = Math.round(item.transform?.[5] || 0);
+        const currentRow = rows[rows.length - 1];
+
+        if (currentRow && Math.abs(currentRow.y - y) <= 2) {
+          currentRow.parts.push(value);
+          if (item.hasEOL) currentRow.forceBreak = true;
+          return;
+        }
+
+        rows.push({
+          y,
+          parts: [value],
+          forceBreak: Boolean(item.hasEOL)
+        });
+      });
+
+      const text = rows
+        .map((row) => cleanText(row.parts.join(" ")))
+        .filter(Boolean)
+        .join("\n");
+
+      if (text) pageText.push(text);
+    }
+
+    return normalizePdfText(pageText.join("\n"));
+  }
+
+  function detectDocumentType(fileName, text) {
+    const haystack = `${fileName || ""}\n${text || ""}`;
+    const match = DOC_TYPE_PATTERNS.find((entry) => entry.pattern.test(haystack));
     if (!match) {
-      return { type: "unknown", label: "Unknown Document", confidence: 0.42 };
+      return { type: "unknown", label: "Unknown Document", confidence: 0.4 };
     }
     return {
       type: match.type,
       label: match.label,
-      confidence: match.type === "purchase_contract" ? 0.88 : 0.84
+      confidence: match.type === "purchase_contract" ? 0.9 : 0.84
     };
   }
 
-  function normalizeNameFromToken(token) {
-    return token
-      .split(/[_-]+/)
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-      .join(" ");
+  function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
-  function inferPartyNames(fileName, fallback) {
-    const cleanName = stripExtension(fileName);
-    const buyerMatch = cleanName.match(/buyer[s]?[-_]?([a-z]+(?:[_-][a-z]+)?)/i);
-    if (buyerMatch) {
-      return [normalizeNameFromToken(buyerMatch[1])];
-    }
-    return fallback;
-  }
-
-  function deriveDocumentOverrides(file, documentType) {
-    const lowerName = String(file.name || "").toLowerCase();
-    const baseName = stripExtension(file.name || "");
-    const documentLabel = documentType.label;
-    const docId = slugify(`${baseName}-${file.lastModified || Date.now()}`);
-    const overrides = {};
-
-    if (documentType.type === "purchase_contract") {
-      overrides.property_address = {
-        value: BASE_SAMPLE_DATA.property_address.value,
-        confidence: 0.94
-      };
-      overrides.buyer_names = {
-        value: inferPartyNames(file.name, BASE_SAMPLE_DATA.buyer_names.value),
-        confidence: 0.92
-      };
-      overrides.seller_names = {
-        value: BASE_SAMPLE_DATA.seller_names.value,
-        confidence: 0.9
-      };
-      overrides.purchase_price = {
-        value: BASE_SAMPLE_DATA.purchase_price.value,
-        confidence: 0.91
-      };
-      overrides.earnest_money_amount = {
-        value: BASE_SAMPLE_DATA.earnest_money_amount.value,
-        confidence: 0.88
-      };
-      overrides.financing_type = {
-        value: /cash/i.test(lowerName) ? "Cash" : BASE_SAMPLE_DATA.financing_type.value,
-        confidence: /cash/i.test(lowerName) ? 0.9 : 0.89
-      };
-      overrides.binding_date = {
-        value: BASE_SAMPLE_DATA.binding_date.value,
-        time: BASE_SAMPLE_DATA.binding_date.time,
-        confidence: 0.93
-      };
-      overrides.closing_date = {
-        value: BASE_SAMPLE_DATA.closing_date.value,
-        time: BASE_SAMPLE_DATA.closing_date.time,
-        confidence: 0.95
-      };
-      overrides.inspection_deadline = {
-        value: BASE_SAMPLE_DATA.inspection_deadline.value,
-        time: BASE_SAMPLE_DATA.inspection_deadline.time,
-        confidence: 0.87
-      };
-      overrides.possession_date = {
-        value: BASE_SAMPLE_DATA.possession_date.value,
-        time: BASE_SAMPLE_DATA.possession_date.time,
-        confidence: 0.84
-      };
-    }
-
-    if (documentType.type === "counteroffer") {
-      overrides.purchase_price = {
-        value: 418000,
-        confidence: 0.86
-      };
-      overrides.earnest_money_amount = {
-        value: 7500,
-        confidence: 0.8
-      };
-      overrides.binding_date = {
-        value: "2026-03-16",
-        time: "8:30 PM",
-        confidence: 0.84
-      };
-      overrides.closing_date = {
-        value: "2026-05-02",
-        time: "2:00 PM",
-        confidence: 0.88
-      };
-    }
-
-    if (documentType.type === "amendment") {
-      overrides.inspection_deadline = {
-        value: "2026-03-25",
-        time: "11:59 PM",
-        confidence: 0.78
-      };
-      overrides.possession_date = {
-        value: "2026-05-03",
-        time: null,
-        confidence: 0.8
-      };
-    }
-
-    if (documentType.type === "addendum" && /financ/i.test(lowerName)) {
-      overrides.financing_type = {
-        value: "FHA",
-        confidence: 0.73
-      };
-    }
-
-    if (documentType.type === "unknown") {
-      overrides.notes = {
-        value: `No field mapping exists yet for ${titleCase(baseName)}.`,
-        confidence: 0.4
-      };
-    }
-
+  function buildField(value, confidence, extra) {
+    if (value == null || value === "") return null;
     return {
-      id: docId,
-      name: file.name,
-      type: documentType.type,
-      label: documentLabel,
-      size: file.size || 0,
-      lastModified: file.lastModified || Date.now(),
-      detectionConfidence: documentType.confidence,
-      priority: DOCUMENT_PRIORITIES[documentType.type] || DOCUMENT_PRIORITIES.unknown,
-      extractedFields: overrides
+      value,
+      confidence,
+      ...extra
     };
   }
 
-  function buildDocumentRecord(file, index) {
-    const typeInfo = detectDocumentType(file.name || "");
-    const baseRecord = deriveDocumentOverrides(file, typeInfo);
-    return {
-      ...baseRecord,
-      uploadOrder: index,
-      status: "processed"
-    };
+  function parseCurrency(rawValue) {
+    if (!rawValue) return null;
+    const cleaned = String(rawValue).replace(/[^0-9.]/g, "");
+    if (!cleaned) return null;
+    const parsed = Number.parseFloat(cleaned);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function normalizeDate(rawValue) {
+    if (!rawValue) return null;
+    const value = cleanText(rawValue).replace(/,/g, "");
+
+    if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}$/.test(value)) {
+      const [monthRaw, dayRaw, yearRaw] = value.split(/[\/-]/);
+      const month = Number.parseInt(monthRaw, 10) - 1;
+      const day = Number.parseInt(dayRaw, 10);
+      const year = yearRaw.length === 2 ? Number.parseInt(`20${yearRaw}`, 10) : Number.parseInt(yearRaw, 10);
+      const parsed = new Date(year, month, day);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return parsed.toISOString().slice(0, 10);
+    }
+
+    const monthMatch = value.match(/^([A-Za-z]+)\.?\s+(\d{1,2})\s+(\d{2,4})$/);
+    if (monthMatch) {
+      const month = MONTH_INDEX[monthMatch[1].toLowerCase()];
+      const day = Number.parseInt(monthMatch[2], 10);
+      const yearRaw = monthMatch[3];
+      const year = yearRaw.length === 2 ? Number.parseInt(`20${yearRaw}`, 10) : Number.parseInt(yearRaw, 10);
+      const parsed = new Date(year, month, day);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return parsed.toISOString().slice(0, 10);
+    }
+
+    return null;
+  }
+
+  function normalizeTime(rawValue) {
+    if (!rawValue) return null;
+    return cleanText(rawValue)
+      .replace(/\./g, "")
+      .replace(/\s+/g, " ")
+      .toUpperCase();
   }
 
   function formatCurrency(value) {
@@ -326,8 +294,149 @@
     };
   }
 
+  function cleanupCandidate(value) {
+    return cleanText(value)
+      .replace(/\s{2,}/g, " ")
+      .replace(/[|]+/g, " ")
+      .replace(/\b(?:page|buyer|seller|purchase price|sales price|earnest money|binding date|closing date|inspection deadline|possession date)\b[\s\S]*$/i, "")
+      .trim();
+  }
+
+  function getLineValueAfterLabel(lines, labelPatterns) {
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      for (const pattern of labelPatterns) {
+        const match = line.match(pattern);
+        if (!match) continue;
+
+        const sameLineValue = cleanupCandidate(match[1] || "");
+        if (sameLineValue && sameLineValue.length > 2) return sameLineValue;
+
+        const nextLine = cleanupCandidate(lines[index + 1] || "");
+        if (nextLine) return nextLine;
+      }
+    }
+    return null;
+  }
+
+  function splitPartyNames(value) {
+    const cleaned = cleanupCandidate(value)
+      .replace(/\bas (?:joint tenants|tenants in common|husband and wife)[\s\S]*$/i, "")
+      .replace(/\bmarital status[\s\S]*$/i, "")
+      .trim();
+
+    if (!cleaned) return [];
+
+    const rawParts = cleaned
+      .split(/\s*;\s*|\s+\band\b\s+|\s*&\s*|\s*\/\s*/i)
+      .map((part) => cleanupCandidate(part))
+      .filter(Boolean);
+
+    const names = rawParts.filter((part) => /[A-Za-z]/.test(part) && !/\d/.test(part));
+    return [...new Set(names)];
+  }
+
+  function extractAddress(lines, text) {
+    const directValue = getLineValueAfterLabel(lines, [
+      /(?:property address|property located at|subject property|property to be conveyed)\s*[:\-]?\s*(.*)$/i,
+      /(?:street address)\s*[:\-]?\s*(.*)$/i
+    ]);
+
+    if (directValue && ADDRESS_REGEX.test(directValue)) {
+      return buildField(directValue, 0.89);
+    }
+
+    const inlineMatch = text.match(ADDRESS_REGEX);
+    if (inlineMatch) {
+      return buildField(cleanupCandidate(inlineMatch[0]), 0.76);
+    }
+
+    return null;
+  }
+
+  function extractPartyField(lines, role) {
+    const labelPatterns = role === "buyer"
+      ? [
+          /(?:buyer(?:\(s\))?|buyer\(s\)|purchaser(?:\(s\))?)\s*[:\-]?\s*(.*)$/i
+        ]
+      : [
+          /(?:seller(?:\(s\))?|seller\(s\)|owner(?:\(s\))?)\s*[:\-]?\s*(.*)$/i
+        ];
+
+    const candidate = getLineValueAfterLabel(lines, labelPatterns);
+    const names = splitPartyNames(candidate);
+    return names.length ? buildField(names, 0.74) : null;
+  }
+
+  function extractMoneyField(text, labels, confidence) {
+    for (const label of labels) {
+      const regex = new RegExp(`${escapeRegExp(label)}[^\\n$]{0,80}(\\$?\\s*[\\d,]+(?:\\.\\d{2})?)`, "i");
+      const match = text.match(regex);
+      if (!match) continue;
+      const amount = parseCurrency(match[1]);
+      if (amount != null) return buildField(amount, confidence);
+    }
+    return null;
+  }
+
+  function extractFinancingType(text, lines) {
+    const labeledValue = getLineValueAfterLabel(lines, [
+      /(?:financing type|type of financing|loan type)\s*[:\-]?\s*(.*)$/i
+    ]);
+
+    const financingKeywords = ["Conventional", "Cash", "FHA", "VA", "USDA", "Owner Financing", "Seller Financing", "Assumption"];
+
+    if (labeledValue) {
+      const match = financingKeywords.find((keyword) => new RegExp(`\\b${escapeRegExp(keyword)}\\b`, "i").test(labeledValue));
+      if (match) return buildField(match, 0.86);
+    }
+
+    const regex = /\b(conventional|cash|fha|va|usda|owner financing|seller financing|assumption)\b/i;
+    const match = text.match(regex);
+    if (match) {
+      return buildField(match[1].replace(/\b\w/g, (char) => char.toUpperCase()), 0.62);
+    }
+
+    return null;
+  }
+
+  function extractDateField(text, labels, confidence) {
+    for (const label of labels) {
+      const regex = new RegExp(`${escapeRegExp(label)}[\\s\\S]{0,140}`, "i");
+      const snippetMatch = text.match(regex);
+      if (!snippetMatch) continue;
+
+      const snippet = snippetMatch[0];
+      const dateMatch = snippet.match(DATE_REGEX);
+      if (!dateMatch) continue;
+
+      const normalizedDate = normalizeDate(dateMatch[0]);
+      if (!normalizedDate) continue;
+
+      const timeMatch = snippet.match(TIME_REGEX);
+      return buildField(normalizedDate, confidence, {
+        time: normalizeTime(timeMatch?.[0] || null)
+      });
+    }
+    return null;
+  }
+
+  function extractFieldsFromText(text, lines) {
+    return {
+      property_address: extractAddress(lines, text),
+      buyer_names: extractPartyField(lines, "buyer"),
+      seller_names: extractPartyField(lines, "seller"),
+      purchase_price: extractMoneyField(text, ["purchase price", "sales price", "contract price"], 0.91),
+      earnest_money_amount: extractMoneyField(text, ["earnest money", "earnest money amount", "deposit"], 0.86),
+      financing_type: extractFinancingType(text, lines),
+      binding_date: extractDateField(text, ["binding date", "binding agreement date", "effective date", "acceptance date"], 0.82),
+      closing_date: extractDateField(text, ["closing date", "date of closing", "closing shall occur", "close of escrow"], 0.88),
+      inspection_deadline: extractDateField(text, ["inspection deadline", "inspection period", "option period", "due diligence"], 0.78),
+      possession_date: extractDateField(text, ["possession date", "date of possession", "possession", "occupancy date"], 0.8)
+    };
+  }
+
   function resolveFieldMap(documents) {
-    // The merge order is intentionally isolated so later precedence rules can evolve here.
     const resolved = {};
     Object.keys(FIELD_LABELS).forEach((fieldName) => {
       resolved[fieldName] = createEmptyField(fieldName);
@@ -368,9 +477,15 @@
       likelyDocumentType: documentRecord.label,
       classificationConfidence: documentRecord.detectionConfidence,
       status: documentRecord.status,
+      note: documentRecord.note,
       size: documentRecord.size,
       lastModified: documentRecord.lastModified,
-      extractedFieldCount: Object.keys(documentRecord.extractedFields || {}).length
+      textLength: documentRecord.textLength,
+      extractedFieldCount: Object.keys(documentRecord.extractedFields || {}).filter((fieldName) => {
+        const field = documentRecord.extractedFields[fieldName];
+        return field?.value != null && field?.value !== "";
+      }).length,
+      textPreview: documentRecord.textPreview
     }));
   }
 
@@ -378,6 +493,7 @@
     const fieldMap = resolveFieldMap(documents);
     return {
       schema_version: "ctc.contract.extraction.v1",
+      provider: "pdfjs-text-extraction",
       extracted_at: new Date().toISOString(),
       documents: buildDocumentsSummary(documents),
       fields: fieldMap,
@@ -385,10 +501,48 @@
     };
   }
 
-  function extractFromFiles(files) {
-    const documentRecords = Array.from(files || [])
-      .filter((file) => /\.pdf$/i.test(file.name || ""))
-      .map((file, index) => buildDocumentRecord(file, index));
+  async function buildDocumentRecord(file, index) {
+    const text = await readPdfText(file).catch(() => "");
+    const lines = splitLines(text);
+    const typeInfo = detectDocumentType(file.name || "", text);
+    const extractedFields = text ? extractFieldsFromText(text, lines) : {};
+    const populatedFieldCount = Object.values(extractedFields).filter((field) => field?.value != null && field?.value !== "").length;
+    const status = !text
+      ? "no text found"
+      : populatedFieldCount
+        ? "processed"
+        : "text found, no confident matches";
+    const note = !text
+      ? "This PDF may be scanned or image-only. OCR would be needed for reliable extraction."
+      : populatedFieldCount
+        ? "Values were extracted from PDF text content."
+        : "Text was read, but the field labels in this form did not match the current heuristics well enough.";
+
+    return {
+      id: slugify(`${stripExtension(file.name || "")}-${file.lastModified || Date.now()}`),
+      name: file.name,
+      type: typeInfo.type,
+      label: typeInfo.label,
+      size: file.size || 0,
+      lastModified: file.lastModified || Date.now(),
+      detectionConfidence: typeInfo.confidence,
+      priority: DOCUMENT_PRIORITIES[typeInfo.type] || DOCUMENT_PRIORITIES.unknown,
+      uploadOrder: index,
+      extractedFields,
+      status,
+      note,
+      textLength: text.length,
+      textPreview: text.slice(0, 220)
+    };
+  }
+
+  async function extractFromFiles(files) {
+    const pdfFiles = Array.from(files || []).filter((file) => /\.pdf$/i.test(file.name || ""));
+    const documentRecords = [];
+
+    for (let index = 0; index < pdfFiles.length; index += 1) {
+      documentRecords.push(await buildDocumentRecord(pdfFiles[index], index));
+    }
 
     return buildNormalizedPayload(documentRecords);
   }

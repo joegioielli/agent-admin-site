@@ -75,11 +75,7 @@
 
     emptyDocumentsState.hidden = true;
     documents.forEach((documentRecord) => {
-      const methodLabel = documentRecord.extractionMethod === "ocr"
-        ? "ocr"
-        : documentRecord.extractionMethod === "hybrid"
-          ? "text + ocr"
-          : "text parser";
+      const methodLabel = documentRecord.extractionMethod || "text parser";
 
       const item = document.createElement("article");
       item.className = "document-item";
@@ -94,6 +90,7 @@
         <div class="document-item__meta">
           <span>${formatBytes(documentRecord.size)}</span>
           <span>${documentRecord.extractedFieldCount} mapped fields</span>
+          <span>${documentRecord.formFieldCount || 0} form fields</span>
           <span>${methodLabel}</span>
           <span>${documentRecord.status}</span>
         </div>

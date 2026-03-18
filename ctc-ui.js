@@ -88,6 +88,7 @@
         <div class="document-item__meta">
           <span>${formatBytes(documentRecord.size)}</span>
           <span>${documentRecord.extractedFieldCount} mapped fields</span>
+          <span>${documentRecord.extractionMethod === "ocr" ? "ocr" : "text parser"}</span>
           <span>${documentRecord.status}</span>
         </div>
         <p class="document-item__note">${documentRecord.note || ""}</p>
@@ -178,7 +179,12 @@
 
     setProcessingState(true);
     try {
-      const payload = await window.CTCExtraction.extractFromFiles(validation.files);
+      uploadSummary.textContent = "Starting extraction...";
+      const payload = await window.CTCExtraction.extractFromFiles(validation.files, {
+        onProgress(detail) {
+          uploadSummary.textContent = detail?.message || "Processing...";
+        }
+      });
       renderPayload(payload);
     } catch (error) {
       uploadSummary.textContent = error?.message || "Extraction failed.";

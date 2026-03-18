@@ -132,7 +132,10 @@
 
   function renderPayload(payload) {
     resultsShell.dataset.ready = "true";
-    uploadSummary.textContent = `${payload.documents.length} PDF${payload.documents.length === 1 ? "" : "s"} processed`;
+    const summary = `${payload.documents.length} PDF${payload.documents.length === 1 ? "" : "s"} processed`;
+    uploadSummary.textContent = payload.warnings?.length
+      ? `${summary} - fallback or extraction notes available in Raw JSON Debug`
+      : summary;
     lastRunLabel.textContent = formatDateTime(payload.extracted_at);
     renderUploadedDocuments(payload.documents);
     renderImportantDates(payload.fields);

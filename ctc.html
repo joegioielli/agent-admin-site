@@ -582,7 +582,7 @@
         <section class="card">
           <div class="section-label">Upload Area</div>
           <h2 class="card-title">Load contract PDFs</h2>
-          <p class="section-copy">Upload the purchase contract first if you have it, then add any counteroffers or amendments. The files are sent to a backend extractor that returns normalized contract data with source-document details.</p>
+          <p class="section-copy">Upload the purchase contract first if you have it, then add any counteroffers or amendments. This version extracts embedded PDF text and form fields in the browser first, then sends compact extraction context to the backend normalizer.</p>
 
           <form id="ctcUploadForm" class="upload-form">
             <div class="dropzone">
@@ -729,7 +729,7 @@
     </main>
   </div>
 
-  <script src="ctc-extraction.js?v=20260318-server4"></script>
-  <script src="ctc-ui.js?v=20260318-server4"></script>
+  <script src="ctc-extraction.js?v=20260318-server5"></script>
+  <script src="ctc-ui.js?v=20260318-server5"></script>
 </body>
 </html>

@@ -316,6 +316,107 @@ const DATE_REGEX = /\b(?:\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}|(?:jan|january|feb|febr
 const TIME_REGEX = /\b\d{1,2}(?::\d{2})?\s?(?:a\.?m\.?|p\.?m\.?)\b/i;
 const ADDRESS_REGEX = /\b\d{1,6}\s+[A-Za-z0-9.'#-]+(?:\s+[A-Za-z0-9.'#-]+){0,7}\s+(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Court|Ct|Circle|Cir|Way|Boulevard|Blvd|Place|Pl|Terrace|Ter|Trail|Trl|Parkway|Pkwy)\b(?:[^\n,]*)(?:,\s*[A-Za-z .'-]+,\s*[A-Z]{2}\s*\d{5}(?:-\d{4})?)?/i;
 const NAME_STOPWORDS = /\b(closing|costs|prepaid|items|temporary|permanent|rate|buy|down|mortgage|loan|seller|buyer|pay|paid|credit|commission|broker|agent|inspection|possession|date|earnest|money|price|financing)\b/i;
+const RELEVANT_TEXT_PATTERNS = [
+  /\[\[page/i,
+  /\bproperty address\b/i,
+  /\bstreet address\b/i,
+  /\bsubject property\b/i,
+  /\bbuyer\b/i,
+  /\bpurchaser\b/i,
+  /\bseller\b/i,
+  /\bowner\b/i,
+  /\bpurchase price\b/i,
+  /\bsales price\b/i,
+  /\bcontract price\b/i,
+  /\bearnest money\b/i,
+  /\bdeposit\b/i,
+  /\bfinancing\b/i,
+  /\bloan type\b/i,
+  /\bbinding date\b/i,
+  /\beffective date\b/i,
+  /\bacceptance date\b/i,
+  /\bclosing date\b/i,
+  /\binspection\b/i,
+  /\bdue diligence\b/i,
+  /\boption period\b/i,
+  /\bpossession\b/i,
+  /\boccupancy\b/i
+];
+const DOCUMENT_PRIORITIES = {
+  purchase_contract: 100,
+  counteroffer: 220,
+  amendment: 240,
+  addendum: 180,
+  disclosure: 80,
+  unknown: 10
+};
+const DOC_TYPE_PATTERNS = [
+  { type: "purchase_contract", label: "Purchase Contract", pattern: /(purchase and sale agreement|purchase contract|sale contract|contract to buy|contract to purchase|rf\s*401|residential purchase)/i, score: 140 },
+  { type: "counteroffer", label: "Counteroffer", pattern: /(counter[\s-]?offer|counterproposal)/i, score: 120 },
+  { type: "amendment", label: "Amendment", pattern: /\bamend(?:ment)?\b/i, score: 110 },
+  { type: "addendum", label: "Addendum", pattern: /\baddend(?:um|a)\b/i, score: 90 },
+  { type: "disclosure", label: "Disclosure", pattern: /(disclosure|lead[- ]based paint|seller property disclosure|hoa disclosure)/i, score: 80 }
+];
+
+function hasFieldValue(field) {
+  return field?.value != null && field?.value !== "" && (!Array.isArray(field.value) || field.value.length);
+}
+
+function buildRelevantTextExcerpt(text, maxLength) {
+  const lines = splitLines(text);
+  if (!lines.length) return { text: "", truncated: false };
+
+  const relevantIndexes = new Set();
+  for (let index = 0; index < Math.min(lines.length, 18); index += 1) {
+    relevantIndexes.add(index);
+  }
+
+  lines.forEach((line, index) => {
+    if (!RELEVANT_TEXT_PATTERNS.some((pattern) => pattern.test(line))) return;
+
+    for (let offset = -1; offset <= 1; offset += 1) {
+      const targetIndex = index + offset;
+      if (targetIndex >= 0 && targetIndex < lines.length) {
+        relevantIndexes.add(targetIndex);
+      }
+    }
+  });
+
+  const excerpt = [...relevantIndexes]
+    .sort((left, right) => left - right)
+    .map((index) => lines[index])
+    .join("\n");
+
+  return truncateText(excerpt || text, maxLength);
+}
+
+function detectDocumentType(name, text) {
+  const haystack = `${name || ""}\n${text || ""}`;
+  const matches = DOC_TYPE_PATTERNS
+    .map((entry) => {
+      let score = 0;
+      if (entry.pattern.test(name || "")) score += entry.score + 30;
+      if (entry.pattern.test(text || "")) score += entry.score;
+      return score ? { ...entry, score } : null;
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.score - left.score);
+
+  const match = matches[0];
+  if (!match) {
+    return {
+      type: "unknown",
+      label: "Unknown",
+      confidence: 0.4
+    };
+  }
+
+  return {
+    type: match.type,
+    label: typeof match.label === "string" ? match.label : "Unknown",
+    confidence: Math.min(0.97, 0.55 + match.score / 250)
+  };
+}
 
 function splitLines(text) {
   return normalizePdfText(text)
@@ -362,7 +463,7 @@ function splitPartyNames(value) {
 
   return [...new Set(
     cleaned
-      .split(/\s*;\s*|\s+\band\b\s+|\s*&\s*|\s*\/\s*/i)
+      .split(/\s*;\s*|\s+\band\b\s+|\s*&\s*|\s*\/\s*|,\s*(?=[A-Z])/i)
       .map((part) => cleanupCandidate(part))
       .filter((part) => looksLikePersonName(part))
   )];
@@ -597,7 +698,7 @@ function buildDocumentContext(document) {
   }
 
   if (document.textTruncated) {
-    sections.push(`Note: extracted text was truncated to the first ${MAX_TEXT_CHARS_PER_DOCUMENT} characters for model input.`);
+    sections.push(`Note: the relevant text excerpt was shortened to fit within the model-input budget of ${MAX_TEXT_CHARS_PER_DOCUMENT} characters.`);
   }
 
   const candidateEntries = Object.entries(document.candidateHints || {});
@@ -691,6 +792,105 @@ async function callOpenAIContractExtraction(documents) {
   }
 }
 
+function getHintConfidence(source) {
+  const sourceText = cleanText(source).toLowerCase();
+  if (sourceText.startsWith("form field")) return 0.78;
+  if (sourceText === "text label") return 0.7;
+  if (sourceText === "text pattern") return 0.58;
+  return 0.55;
+}
+
+function buildHeuristicField(fieldName, hint, document) {
+  const evidence = hint?.source ? `${hint.source}: ${hint.value}` : hint?.value || "";
+  const confidence = getHintConfidence(hint?.source);
+  const baseField = {
+    key: fieldName,
+    label: FIELD_LABELS[fieldName],
+    confidence,
+    sourceDocumentId: document.id,
+    sourceDocumentName: document.name,
+    sourceDocumentType: document.localDocType?.label || "Unknown",
+    sourceDocumentIndex: document.sourceIndex,
+    evidence
+  };
+
+  if (ARRAY_FIELDS.has(fieldName)) {
+    const names = splitPartyNames(hint?.value);
+    return {
+      ...baseField,
+      value: names,
+      time: null,
+      displayValue: formatFieldValue(fieldName, names, null)
+    };
+  }
+
+  if (CURRENCY_FIELDS.has(fieldName)) {
+    const amount = parseCurrency(hint?.value);
+    return {
+      ...baseField,
+      value: amount,
+      time: null,
+      displayValue: formatFieldValue(fieldName, amount, null)
+    };
+  }
+
+  if (DATE_FIELDS.has(fieldName)) {
+    const value = cleanText(hint?.value);
+    const dateMatch = value.match(/\d{4}-\d{2}-\d{2}/);
+    const timeMatch = value.match(TIME_REGEX);
+    const normalizedDateValue = normalizeDate(dateMatch?.[0] || value);
+    const normalizedTimeValue = normalizeTime(timeMatch?.[0] || "");
+    return {
+      ...baseField,
+      value: normalizedDateValue,
+      time: normalizedTimeValue,
+      displayValue: formatFieldValue(fieldName, normalizedDateValue, normalizedTimeValue)
+    };
+  }
+
+  const scalarValue = cleanText(hint?.value) || null;
+  return {
+    ...baseField,
+    value: scalarValue,
+    time: null,
+    displayValue: formatFieldValue(fieldName, scalarValue, null)
+  };
+}
+
+function buildHeuristicFieldMap(documents) {
+  const fieldMap = {};
+  Object.keys(FIELD_LABELS).forEach((fieldName) => {
+    fieldMap[fieldName] = buildEmptyField(fieldName);
+  });
+
+  const prioritizedDocuments = [...documents].sort((left, right) => {
+    const leftPriority = DOCUMENT_PRIORITIES[left.localDocType?.type] || DOCUMENT_PRIORITIES.unknown;
+    const rightPriority = DOCUMENT_PRIORITIES[right.localDocType?.type] || DOCUMENT_PRIORITIES.unknown;
+    if (rightPriority !== leftPriority) return rightPriority - leftPriority;
+    return right.sourceIndex - left.sourceIndex;
+  });
+
+  prioritizedDocuments.forEach((document) => {
+    Object.entries(document.candidateHints || {}).forEach(([fieldName, hint]) => {
+      if (!FIELD_LABELS[fieldName] || hasFieldValue(fieldMap[fieldName])) return;
+      const heuristicField = buildHeuristicField(fieldName, hint, document);
+      if (hasFieldValue(heuristicField)) {
+        fieldMap[fieldName] = heuristicField;
+      }
+    });
+  });
+
+  return fieldMap;
+}
+
+function mergeFieldMaps(primaryFields, fallbackFields) {
+  const merged = {};
+  Object.keys(FIELD_LABELS).forEach((fieldName) => {
+    merged[fieldName] = hasFieldValue(primaryFields?.[fieldName]) ? primaryFields[fieldName] : fallbackFields[fieldName];
+  });
+  return merged;
+}
+
 function normalizeModelField(fieldName, rawField, documentLookup) {
   const sourceDocumentName = cleanText(rawField?.source_document_name);
   const fallbackDocument = documentLookup.get(sourceDocumentName) || null;
@@ -747,11 +947,7 @@ function buildEmptyField(fieldName) {
 }
 
 function buildFallbackPayload(documents, warnings) {
-  const fields = {};
-
-  Object.keys(FIELD_LABELS).forEach((fieldName) => {
-    fields[fieldName] = buildEmptyField(fieldName);
-  });
+  const fields = buildHeuristicFieldMap(documents);
 
   return {
     schema_version: "ctc.contract.extraction.v2",
@@ -763,12 +959,12 @@ function buildFallbackPayload(documents, warnings) {
       sourceIndex: document.sourceIndex,
       name: document.name,
       size: document.size || 0,
-      likelyDocumentType: "Unknown",
-      classificationConfidence: null,
+      likelyDocumentType: document.localDocType?.label || "Unknown",
+      classificationConfidence: document.localDocType?.confidence ?? null,
       status: document.status || "needs ocr",
       note: document.note || "No usable embedded text or form fields were found.",
       extractionMethod: document.extractionMethod || "client pdf parse",
-      extractedFieldCount: 0
+      extractedFieldCount: countDocumentMappedFields(document.name, fields)
     })),
     fields,
     source_details: buildSourceDetails(fields),
@@ -792,12 +988,13 @@ function buildFallbackPayload(documents, warnings) {
 }
 
 function normalizePayload(modelParsed, documents) {
+  const heuristicFields = buildHeuristicFieldMap(documents);
   const documentLookupInput = documents.map((document) => ({
     id: slugify(`${document.name}-${document.sourceIndex}`),
     sourceIndex: document.sourceIndex,
     name: document.name,
     size: document.size || 0,
-    likelyDocumentType: "Unknown"
+    likelyDocumentType: document.localDocType?.label || "Unknown"
   }));
 
   const normalizedDocuments = documentLookupInput.map((document) => {
@@ -805,8 +1002,8 @@ function normalizePayload(modelParsed, documents) {
     const inputDocument = documents.find((entry) => entry.name === document.name) || {};
     return {
       ...document,
-      likelyDocumentType: cleanText(modelDocument.likely_document_type) || "Unknown",
-      classificationConfidence: clampConfidence(modelDocument.classification_confidence) ?? null,
+      likelyDocumentType: cleanText(modelDocument.likely_document_type) || inputDocument.localDocType?.label || "Unknown",
+      classificationConfidence: clampConfidence(modelDocument.classification_confidence) ?? inputDocument.localDocType?.confidence ?? null,
       status: inputDocument.status || "processed",
       note: cleanText(modelDocument.note) || inputDocument.note || "Server-side AI extraction completed.",
       extractionMethod: inputDocument.extractionMethod || "client pdf parse + server ai"
@@ -814,14 +1011,16 @@ function normalizePayload(modelParsed, documents) {
   });
 
   const documentLookup = new Map(normalizedDocuments.map((document) => [document.name, document]));
-  const fields = {};
+  const modelFields = {};
 
   Object.keys(FIELD_LABELS).forEach((fieldName) => {
     const rawField = modelParsed?.fields?.[fieldName];
-    fields[fieldName] = rawField
+    modelFields[fieldName] = rawField
       ? normalizeModelField(fieldName, rawField, documentLookup)
       : buildEmptyField(fieldName);
   });
+
+  const fields = mergeFieldMaps(modelFields, heuristicFields);
 
   const documentsWithCounts = normalizedDocuments.map((document) => ({
     ...document,
@@ -857,13 +1056,14 @@ function normalizePayload(modelParsed, documents) {
 }
 
 function normalizeInputDocument(document, index) {
-  const textInfo = truncateText(document?.text, MAX_TEXT_CHARS_PER_DOCUMENT);
-  const formFields = normalizeFormFields(document?.formFields);
   const normalizedText = normalizePdfText(document?.text);
+  const textInfo = buildRelevantTextExcerpt(normalizedText, MAX_TEXT_CHARS_PER_DOCUMENT);
+  const formFields = normalizeFormFields(document?.formFields);
   const candidateHints = buildCandidateHints({
     text: normalizedText,
     formFields
   });
+  const localDocType = detectDocumentType(document?.name, normalizedText);
 
   return {
     id: slugify(`${document?.name || "document"}-${index}`),
@@ -876,6 +1076,7 @@ function normalizeInputDocument(document, index) {
     textTruncated: textInfo.truncated,
     formFields,
     candidateHints,
+    localDocType,
     status: cleanText(document?.status) || ((textInfo.text || formFields.length) ? "processed" : "needs ocr"),
     note: cleanText(document?.note) || "",
     extractionMethod: cleanText(document?.extractionMethod) || "client pdf parse"
@@ -918,8 +1119,14 @@ export async function handler(event) {
       ]));
     }
 
-    const result = await callOpenAIContractExtraction(normalizedDocuments);
-    return json(200, normalizePayload(result.parsed, normalizedDocuments));
+    try {
+      const result = await callOpenAIContractExtraction(normalizedDocuments);
+      return json(200, normalizePayload(result.parsed, normalizedDocuments));
+    } catch (error) {
+      return json(200, buildFallbackPayload(normalizedDocuments, [
+        `AI normalization was skipped and heuristic fallback was used instead: ${error?.message || "Unknown AI error."}`
+      ]));
+    }
   } catch (error) {
     return json(500, {
       error: error?.message || "Contract extraction failed."

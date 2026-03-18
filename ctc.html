@@ -574,7 +574,7 @@
       <section class="hero">
         <div class="hero-eyebrow">Contract To Close</div>
         <h1 class="hero-title">A clean extraction dashboard for purchase contracts, counteroffers, and amendments.</h1>
-        <p class="hero-copy">This page now sends uploaded PDFs to a server-side extraction pipeline designed to work across different contract formats. The browser handles upload and review, while the backend handles document understanding and normalization.</p>
+        <p class="hero-copy">This page extracts embedded PDF text and form fields in the browser, then sends that compact document context to a server-side AI normalizer designed to work across different contract formats. That keeps the upload flow lighter while leaving room for more extraction providers later.</p>
       </section>
 
       <!-- Upload controls and extraction results -->
@@ -589,7 +589,7 @@
               <input id="pdfFiles" name="pdfFiles" type="file" accept=".pdf,application/pdf" multiple />
               <div class="upload-helper">
                 <span>Accepted now: one or more PDF files.</span>
-                <span>This version is built for a scalable server-side workflow instead of browser-only parsing.</span>
+                <span>This version parses embedded text locally first, then sends compact extraction context to the server.</span>
               </div>
             </div>
 
@@ -601,7 +601,7 @@
 
           <div class="info-strip">
             <span id="uploadSummary">No PDFs loaded yet</span>
-            <span>Extraction logic: Local PDF parse + Server AI extraction</span>
+            <span>Extraction logic: Client PDF parse + Server AI extraction</span>
           </div>
         </section>
 
@@ -723,13 +723,13 @@
       <section class="card">
         <div class="section-label">Notes</div>
         <h2 class="card-title">Why the code is structured this way</h2>
-        <p class="section-copy">`ctc-extraction.js` uploads PDFs to the backend, `functions/ctc-extract.js` extracts embedded text and form fields locally before sending compact document context to AI, and `ctc-ui.js` handles upload state, rendering, validation, and debug output. That keeps the UI stable while we improve extraction providers over time.</p>
+        <p class="section-copy">`ctc-extraction.js` now extracts embedded PDF text and form fields in the browser before sending compact document context to `functions/ctc-extract.js`, where AI normalization happens. `ctc-ui.js` still handles upload state, rendering, validation, and debug output, so we can keep improving extraction providers without rewriting the UI.</p>
         <p class="muted-text">Last extraction run: <strong id="lastRunLabel">Not run yet</strong></p>
       </section>
     </main>
   </div>
 
-  <script src="ctc-extraction.js?v=20260318-server2"></script>
-  <script src="ctc-ui.js?v=20260318-server2"></script>
+  <script src="ctc-extraction.js?v=20260318-server3"></script>
+  <script src="ctc-ui.js?v=20260318-server3"></script>
 </body>
 </html>

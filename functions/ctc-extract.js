@@ -1,6 +1,3 @@
-import { PDFParse } from "pdf-parse";
-import { PDFDocument } from "pdf-lib";
-
 const MODEL = process.env.OPENAI_CONTRACT_EXTRACT_MODEL || "gpt-4o";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY_CTC || process.env.OPENAI_API_KEY;
 
@@ -315,41 +312,6 @@ const EXTRACTION_SCHEMA = {
   required: ["documents", "fields", "warnings"]
 };
 
-function normalizeFieldName(input) {
-  return cleanText(input)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-function normalizeFormValue(value) {
-  if (value == null) return "";
-  if (Array.isArray(value)) return value.map((item) => cleanText(item)).filter(Boolean).join(", ");
-  return cleanText(String(value));
-}
-
-function safeGetFieldValue(field) {
-  try {
-    switch (field?.constructor?.name) {
-      case "PDFTextField":
-        return field.getText?.() || "";
-      case "PDFDropdown":
-      case "PDFOptionList": {
-        const selected = field.getSelected?.();
-        return Array.isArray(selected) ? selected : selected || "";
-      }
-      case "PDFRadioGroup":
-        return field.getSelected?.() || "";
-      case "PDFCheckBox":
-        return field.isChecked?.() ? "Checked" : "";
-      default:
-        return field.getText?.() || "";
-    }
-  } catch {
-    return "";
-  }
-}
-
 function truncateText(value, maxLength) {
   const text = normalizePdfText(value);
   if (!text) return { text: "", truncated: false };
@@ -360,58 +322,17 @@ function truncateText(value, maxLength) {
   };
 }
 
-async function extractPdfText(buffer) {
-  const parser = new PDFParse({ data: buffer });
+function normalizeFormFields(formFields) {
+  if (!Array.isArray(formFields)) return [];
 
-  try {
-    const result = await parser.getText();
-    return {
-      text: normalizePdfText(result?.text || ""),
-      pageCount: Number(result?.total) || null
-    };
-  } finally {
-    await parser.destroy().catch(() => {});
-  }
-}
-
-async function extractPdfFormFields(buffer) {
-  try {
-    const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true, updateMetadata: false });
-    const form = pdfDoc.getForm();
-    const fields = form.getFields();
-
-    return fields
-      .map((field) => {
-        const name = cleanText(field.getName?.() || "");
-        const value = normalizeFormValue(safeGetFieldValue(field));
-        return {
-          name,
-          normalizedName: normalizeFieldName(name),
-          value
-        };
-      })
-      .filter((field) => field.name && field.value)
-      .slice(0, MAX_FORM_FIELDS_PER_DOCUMENT);
-  } catch {
-    return [];
-  }
-}
-
-function buildDocumentNote(document) {
-  if (!document.text && !document.formFields.length) {
-    return "No embedded text or fillable form fields were found. OCR would be needed for reliable extraction.";
-  }
-  if (!document.text && document.formFields.length) {
-    return "No embedded text layer was found, but fillable form fields were detected and sent to the extractor.";
-  }
-  if (document.text && !document.formFields.length) {
-    return "Embedded PDF text was extracted locally and sent to the server-side AI extractor.";
-  }
-  return "Embedded PDF text and form fields were extracted locally before server-side AI extraction.";
-}
-
-function buildDocumentStatus(document) {
-  return document.text || document.formFields.length ? "processed" : "needs ocr";
+  return formFields
+    .map((field) => ({
+      name: cleanText(field?.name),
+      normalizedName: cleanText(field?.normalizedName),
+      value: cleanText(field?.value)
+    }))
+    .filter((field) => field.name && field.value)
+    .slice(0, MAX_FORM_FIELDS_PER_DOCUMENT);
 }
 
 function buildDocumentContext(document) {
@@ -419,7 +340,7 @@ function buildDocumentContext(document) {
     `Document ${document.sourceIndex}`,
     `Uploaded name: ${document.name}`,
     `Page count: ${document.pageCount || "unknown"}`,
-    `Local extraction status: ${document.status}`
+    `Client extraction status: ${document.status || "processed"}`
   ];
 
   if (document.formFields.length) {
@@ -431,7 +352,7 @@ function buildDocumentContext(document) {
     sections.push("Form fields: none detected.");
   }
 
-  if (document.text) {
+  if (document.modelText) {
     sections.push("Extracted text:");
     sections.push(document.modelText);
   } else {
@@ -575,42 +496,41 @@ function buildEmptyField(fieldName) {
   };
 }
 
-function buildFallbackPayload(parsedDocuments, warnings) {
+function buildFallbackPayload(documents, warnings) {
   const fields = {};
 
   Object.keys(FIELD_LABELS).forEach((fieldName) => {
     fields[fieldName] = buildEmptyField(fieldName);
   });
 
-  const documents = parsedDocuments.map((document, index) => ({
-    id: slugify(`${document.name}-${index}`),
-    sourceIndex: index,
-    name: document.name,
-    size: document.size || 0,
-    likelyDocumentType: "Unknown",
-    classificationConfidence: null,
-    status: document.status,
-    note: document.note,
-    extractionMethod: document.extractionMethod,
-    extractedFieldCount: 0
-  }));
-
   return {
     schema_version: "ctc.contract.extraction.v2",
-    provider: "local_pdf_text_form_extraction",
+    provider: "client_pdf_text_form_extraction",
     model: null,
     extracted_at: new Date().toISOString(),
-    documents,
+    documents: documents.map((document, index) => ({
+      id: slugify(`${document.name}-${index}`),
+      sourceIndex: document.sourceIndex,
+      name: document.name,
+      size: document.size || 0,
+      likelyDocumentType: "Unknown",
+      classificationConfidence: null,
+      status: document.status || "needs ocr",
+      note: document.note || "No usable embedded text or form fields were found.",
+      extractionMethod: document.extractionMethod || "client pdf parse",
+      extractedFieldCount: 0
+    })),
     fields,
     source_details: buildSourceDetails(fields),
     warnings,
     debug: {
-      provider: "local_pdf_text_form_extraction",
-      raw_document_names: parsedDocuments.map((document) => document.name),
-      parsed_documents: parsedDocuments.map((document) => ({
+      provider: "client_pdf_text_form_extraction",
+      raw_document_names: documents.map((document) => document.name),
+      parsed_documents: documents.map((document) => ({
         name: document.name,
         pageCount: document.pageCount,
-        textLength: document.text.length,
+        textLength: (document.text || "").length,
+        textTruncated: document.textTruncated,
         formFieldCount: document.formFields.length,
         status: document.status
       }))
@@ -618,24 +538,29 @@ function buildFallbackPayload(parsedDocuments, warnings) {
   };
 }
 
-function normalizePayload(modelParsed, inputDocuments, parsedDocuments) {
-  const documents = inputDocuments.map((document, index) => {
+function normalizePayload(modelParsed, documents) {
+  const documentLookupInput = documents.map((document) => ({
+    id: slugify(`${document.name}-${document.sourceIndex}`),
+    sourceIndex: document.sourceIndex,
+    name: document.name,
+    size: document.size || 0,
+    likelyDocumentType: "Unknown"
+  }));
+
+  const normalizedDocuments = documentLookupInput.map((document) => {
     const modelDocument = (modelParsed.documents || []).find((entry) => cleanText(entry.name) === document.name) || {};
-    const parsedDocument = parsedDocuments[index] || {};
+    const inputDocument = documents.find((entry) => entry.name === document.name) || {};
     return {
-      id: slugify(`${document.name}-${index}`),
-      sourceIndex: index,
-      name: document.name,
-      size: document.size || 0,
+      ...document,
       likelyDocumentType: cleanText(modelDocument.likely_document_type) || "Unknown",
       classificationConfidence: clampConfidence(modelDocument.classification_confidence) ?? null,
-      status: parsedDocument.status || "processed",
-      note: cleanText(modelDocument.note) || parsedDocument.note || "Server-side AI extraction completed.",
-      extractionMethod: parsedDocument.extractionMethod || "server ai"
+      status: inputDocument.status || "processed",
+      note: cleanText(modelDocument.note) || inputDocument.note || "Server-side AI extraction completed.",
+      extractionMethod: inputDocument.extractionMethod || "client pdf parse + server ai"
     };
   });
 
-  const documentLookup = new Map(documents.map((document) => [document.name, document]));
+  const documentLookup = new Map(normalizedDocuments.map((document) => [document.name, document]));
   const fields = {};
 
   Object.keys(FIELD_LABELS).forEach((fieldName) => {
@@ -645,7 +570,7 @@ function normalizePayload(modelParsed, inputDocuments, parsedDocuments) {
       : buildEmptyField(fieldName);
   });
 
-  const documentsWithCounts = documents.map((document) => ({
+  const documentsWithCounts = normalizedDocuments.map((document) => ({
     ...document,
     extractedFieldCount: countDocumentMappedFields(document.name, fields)
   }));
@@ -662,11 +587,11 @@ function normalizePayload(modelParsed, inputDocuments, parsedDocuments) {
     debug: {
       provider: "openai_server_text_extraction",
       model: MODEL,
-      raw_document_names: inputDocuments.map((document) => document.name),
-      parsed_documents: parsedDocuments.map((document) => ({
+      raw_document_names: documents.map((document) => document.name),
+      parsed_documents: documents.map((document) => ({
         name: document.name,
         pageCount: document.pageCount,
-        textLength: document.text.length,
+        textLength: (document.text || "").length,
         textTruncated: document.textTruncated,
         formFieldCount: document.formFields.length,
         status: document.status
@@ -675,30 +600,24 @@ function normalizePayload(modelParsed, inputDocuments, parsedDocuments) {
   };
 }
 
-async function parseDocument(document, index) {
-  const buffer = Buffer.from(document.data, "base64");
-  const [{ text, pageCount }, formFields] = await Promise.all([
-    extractPdfText(buffer).catch(() => ({ text: "", pageCount: null })),
-    extractPdfFormFields(buffer)
-  ]);
+function normalizeInputDocument(document, index) {
+  const textInfo = truncateText(document?.text, MAX_TEXT_CHARS_PER_DOCUMENT);
+  const formFields = normalizeFormFields(document?.formFields);
 
-  const truncatedText = truncateText(text, MAX_TEXT_CHARS_PER_DOCUMENT);
-  const parsedDocument = {
-    name: document.name,
-    size: document.size || 0,
-    sourceIndex: index,
-    pageCount,
-    text,
-    modelText: truncatedText.text,
-    textTruncated: truncatedText.truncated,
+  return {
+    id: slugify(`${document?.name || "document"}-${index}`),
+    sourceIndex: Number.isInteger(document?.sourceIndex) ? document.sourceIndex : index,
+    name: cleanText(document?.name),
+    size: Number(document?.size) || 0,
+    pageCount: Number(document?.pageCount) || null,
+    text: normalizePdfText(document?.text),
+    modelText: textInfo.text,
+    textTruncated: textInfo.truncated,
     formFields,
-    extractionMethod: "local pdf text + form fields"
+    status: cleanText(document?.status) || ((textInfo.text || formFields.length) ? "processed" : "needs ocr"),
+    note: cleanText(document?.note) || "",
+    extractionMethod: cleanText(document?.extractionMethod) || "client pdf parse"
   };
-
-  parsedDocument.status = buildDocumentStatus(parsedDocument);
-  parsedDocument.note = buildDocumentNote(parsedDocument);
-
-  return parsedDocument;
 }
 
 export async function handler(event) {
@@ -722,32 +641,23 @@ export async function handler(event) {
       return json(400, { error: "No documents were provided." });
     }
 
-    const normalizedInput = documents
-      .map((document) => ({
-        name: cleanText(document?.name),
-        data: cleanText(document?.data),
-        size: Number(document?.size) || 0
-      }))
-      .filter((document) => document.name && document.data);
+    const normalizedDocuments = documents
+      .map((document, index) => normalizeInputDocument(document, index))
+      .filter((document) => document.name);
 
-    if (!normalizedInput.length) {
+    if (!normalizedDocuments.length) {
       return json(400, { error: "Uploaded documents were empty or invalid." });
     }
 
-    const parsedDocuments = await Promise.all(
-      normalizedInput.map((document, index) => parseDocument(document, index))
-    );
-
-    const docsWithSignals = parsedDocuments.filter((document) => document.text || document.formFields.length);
+    const docsWithSignals = normalizedDocuments.filter((document) => document.modelText || document.formFields.length);
     if (!docsWithSignals.length) {
-      return json(200, buildFallbackPayload(parsedDocuments, [
+      return json(200, buildFallbackPayload(normalizedDocuments, [
         "No embedded text or fillable form fields were found in the uploaded PDFs. OCR is not configured yet for this extraction path."
       ]));
     }
 
-    const result = await callOpenAIContractExtraction(parsedDocuments);
-    const payload = normalizePayload(result.parsed, normalizedInput, parsedDocuments);
-    return json(200, payload);
+    const result = await callOpenAIContractExtraction(normalizedDocuments);
+    return json(200, normalizePayload(result.parsed, normalizedDocuments));
   } catch (error) {
     return json(500, {
       error: error?.message || "Contract extraction failed."

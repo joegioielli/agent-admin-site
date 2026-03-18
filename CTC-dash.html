@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>CTC Dashboard</title>
+  <style>
+    :root {
+      --bg-page: #f3f4f6;
+      --bg-card: #ffffff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --primary-soft: linear-gradient(135deg, #2563eb, #4f46e5);
+      --success: #0f766e;
+      --warning: #b45309;
+      --danger: #dc2626;
+      --radius: 14px;
+      --pill: 999px;
+      --shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+      --shadow-lg: 0 14px 30px rgba(15, 23, 42, 0.12);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #e5edff 0, #f3f4f6 40%, #e5e7eb 100%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    .app-shell {
+      display: flex;
+      width: 100%;
+      max-width: 1400px;
+      margin: 24px auto;
+      padding: 0 16px;
+      gap: 20px;
+    }
+
+    .sidebar {
+      width: 240px;
+      background: radial-gradient(circle at top, #1f2937 0, #020617 55%);
+      border-radius: var(--radius);
+      padding: 16px 14px;
+      color: #e5e7eb;
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 8px 2px;
+    }
+
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 12px;
+      background: var(--primary-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #f9fafb;
+      font-weight: 800;
+      font-size: 17px;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.7);
+    }
+
+    .brand-text-title {
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .brand-text-sub {
+      font-size: 11px;
+      color: #9ca3af;
+    }
+
+    .sidebar-section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: #6b7280;
+      padding: 4px 8px;
+      margin-top: 4px;
+    }
+
+    .nav-list {
+      list-style: none;
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 9px;
+      border-radius: 10px;
+      color: #e5e7eb;
+      text-decoration: none;
+      font-size: 13px;
+      transition: background 0.2s ease, transform 0.12s ease, box-shadow 0.2s ease;
+    }
+
+    .nav-item:hover {
+      background: rgba(148, 163, 184, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .nav-item.active {
+      background: linear-gradient(135deg, #2563eb, #4f46e5);
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.6);
+    }
+
+    .nav-item-label { flex: 1; }
+
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .main-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 16px;
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .main-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .main-subtitle {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    .header-pill {
+      min-height: 30px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 12px;
+      border-radius: var(--pill);
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .hero,
+    .card {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      border: 1px solid var(--border);
+    }
+
+    .hero-eyebrow,
+    .section-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .hero-title {
+      font-size: clamp(1.7rem, 4vw, 2.4rem);
+      line-height: 1.05;
+      margin-top: 6px;
+      max-width: 900px;
+    }
+
+    .hero-copy,
+    .section-copy,
+    .muted-text {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+      margin-top: 8px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+
+    .stats-grid,
+    .actions-grid,
+    .pipeline-grid,
+    .roadmap-grid {
+      display: grid;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .stats-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .actions-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .pipeline-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .roadmap-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .stat-card,
+    .action-card,
+    .pipeline-card,
+    .roadmap-card,
+    .document-card {
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #ffffff;
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .stat-label,
+    .meta-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .stat-value {
+      display: block;
+      margin-top: 8px;
+      font-size: 28px;
+      font-weight: 800;
+    }
+
+    .stat-note {
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .action-title,
+    .pipeline-title,
+    .roadmap-title,
+    .document-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .action-desc,
+    .pipeline-copy,
+    .roadmap-copy {
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .btn {
+      min-height: 42px;
+      border: none;
+      border-radius: var(--pill);
+      padding: 0 14px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .btn-primary {
+      background: var(--primary-soft);
+      color: #ffffff;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24);
+    }
+
+    .btn-secondary {
+      background: #eef2ff;
+      color: #4338ca;
+    }
+
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .pill {
+      min-height: 28px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 10px;
+      border-radius: var(--pill);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .pill-success {
+      background: #ecfdf5;
+      color: var(--success);
+    }
+
+    .pill-warning {
+      background: #fff7ed;
+      color: var(--warning);
+    }
+
+    .pill-danger {
+      background: #fef2f2;
+      color: var(--danger);
+    }
+
+    .two-up {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 14px;
+    }
+
+    .document-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    @media (max-width: 1080px) {
+      .stats-grid,
+      .pipeline-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .two-up {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 960px) {
+      .app-shell {
+        flex-direction: column;
+      }
+
+      .sidebar {
+        width: 100%;
+        flex-direction: row;
+        align-items: center;
+        overflow-x: auto;
+      }
+
+      .sidebar-section-title { display: none; }
+
+      .nav-list {
+        flex-direction: row;
+        flex-wrap: wrap;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .app-shell {
+        margin: 12px auto;
+        padding: 0 10px;
+      }
+
+      .stats-grid,
+      .actions-grid,
+      .pipeline-grid,
+      .roadmap-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .btn-row {
+        flex-direction: column;
+      }
+
+      .btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">AA</div>
+        <div>
+          <div class="brand-text-title">Agent Admin</div>
+          <div class="brand-text-sub">CTC Dashboard</div>
+        </div>
+      </div>
+      <div class="sidebar-section-title">Sections</div>
+      <ul class="nav-list">
+        <li><a class="nav-item" href="home.html"><span class="nav-item-label">Home</span></a></li>
+        <li><a class="nav-item active" href="CTC-dash.html"><span class="nav-item-label">CTC Dashboard</span></a></li>
+        <li><a class="nav-item" href="ctc.html"><span class="nav-item-label">CTC</span></a></li>
+        <li><a class="nav-item" href="smart-signs-dash.html"><span class="nav-item-label">Smart Signs</span></a></li>
+        <li><a class="nav-item" href="qr-redirects.html"><span class="nav-item-label">QR Redirects</span></a></li>
+        <li><a class="nav-item" href="custom-forms-dash.html"><span class="nav-item-label">Custom Forms</span></a></li>
+        <li><a class="nav-item" href="cma.html"><span class="nav-item-label">CMA</span></a></li>
+      </ul>
+    </aside>
+
+    <main class="main">
+      <header class="main-header">
+        <div>
+          <div class="main-title">CTC Dashboard</div>
+          <div class="main-subtitle">A transaction coordination workspace for contract review, date awareness, and expansion into closing workflows.</div>
+        </div>
+        <div class="header-pill">POC Ready</div>
+      </header>
+
+      <section class="hero">
+        <div class="hero-eyebrow">Contract To Close</div>
+        <h1 class="hero-title">Start on the dashboard, then jump into CTC extraction to turn PDFs into structured transaction data.</h1>
+        <p class="hero-copy">This dashboard is designed to anchor the workflow. Today it centers on document extraction and display. Later we can extend the same structure into amendment precedence, calendar syncing, reminders, and milestone management.</p>
+        <div class="btn-row">
+          <a class="btn btn-primary" href="ctc.html">Open CTC Extraction</a>
+          <a class="btn btn-secondary" href="home.html">Back To Home</a>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-label">Dashboard Snapshot</div>
+        <h2 class="section-title">What this workspace is tracking</h2>
+        <div class="stats-grid">
+          <article class="stat-card">
+            <span class="stat-label">Core Fields</span>
+            <strong class="stat-value">10</strong>
+            <p class="stat-note">Property, party, financial, and date fields normalized into a consistent schema.</p>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Document Inputs</span>
+            <strong class="stat-value">Multi-PDF</strong>
+            <p class="stat-note">Purchase contracts, counteroffers, amendments, addenda, and future document types.</p>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Date Focus</span>
+            <strong class="stat-value">4</strong>
+            <p class="stat-note">Binding, closing, inspection, and possession deadlines get top visual priority.</p>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Debug View</span>
+            <strong class="stat-value">JSON</strong>
+            <p class="stat-note">A collapsible raw payload section keeps testing and future API wiring straightforward.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-label">Quick Actions</div>
+        <h2 class="section-title">Move into the live proof of concept</h2>
+        <div class="actions-grid">
+          <article class="action-card">
+            <div class="action-title">Run Contract Extraction</div>
+            <p class="action-desc">Upload one or more PDFs, classify the documents, normalize extracted fields, and review source-level confidence.</p>
+            <div class="btn-row">
+              <a class="btn btn-primary" href="ctc.html">Launch CTC</a>
+            </div>
+          </article>
+          <article class="action-card">
+            <div class="action-title">Future Closing Workflow</div>
+            <p class="action-desc">This tile is reserved for follow-up features like date reminders, task lists, and calendar integration once extraction is locked in.</p>
+            <div class="btn-row">
+              <a class="btn btn-secondary" href="ctc.html">Review Current POC</a>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="two-up">
+        <section class="card">
+          <div class="section-label">Workflow</div>
+          <h2 class="section-title">Current proof-of-concept pipeline</h2>
+          <div class="pipeline-grid">
+            <article class="pipeline-card">
+              <div class="pipeline-title">1. Upload</div>
+              <p class="pipeline-copy">Accept one or more contract PDFs and keep the input flow simple for agents.</p>
+              <div class="meta-row">
+                <span class="pill pill-success">Ready</span>
+              </div>
+            </article>
+            <article class="pipeline-card">
+              <div class="pipeline-title">2. Extract</div>
+              <p class="pipeline-copy">Mock extraction logic returns a normalized payload that mirrors a future OCR/API response.</p>
+              <div class="meta-row">
+                <span class="pill pill-warning">Mocked</span>
+              </div>
+            </article>
+            <article class="pipeline-card">
+              <div class="pipeline-title">3. Review</div>
+              <p class="pipeline-copy">Display deadlines, parties, financials, source documents, and raw JSON in one dashboard.</p>
+              <div class="meta-row">
+                <span class="pill pill-success">Ready</span>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="section-label">Recent Focus</div>
+          <h2 class="section-title">What this CTC version emphasizes</h2>
+          <div class="document-list">
+            <article class="document-card">
+              <div class="document-title">Important Dates &amp; Times</div>
+              <p class="muted-text">Dates are visually prioritized first so binding, closing, inspection, and possession are hard to miss.</p>
+            </article>
+            <article class="document-card">
+              <div class="document-title">Source Transparency</div>
+              <p class="muted-text">Every extracted field can point back to a source document with a confidence score when available.</p>
+            </article>
+            <article class="document-card">
+              <div class="document-title">Expandable Architecture</div>
+              <p class="muted-text">UI rendering and extraction logic are intentionally separated for easier provider swaps later.</p>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <section class="card">
+        <div class="section-label">Next Phases</div>
+        <h2 class="section-title">Natural extensions after extraction</h2>
+        <div class="roadmap-grid">
+          <article class="roadmap-card">
+            <div class="roadmap-title">Counteroffer Precedence Rules</div>
+            <p class="roadmap-copy">Teach the system which later document wins for price, dates, possession, and financing revisions.</p>
+          </article>
+          <article class="roadmap-card">
+            <div class="roadmap-title">Calendar Integration</div>
+            <p class="roadmap-copy">Push binding, inspection, closing, and possession dates into shared calendars with reminders.</p>
+          </article>
+          <article class="roadmap-card">
+            <div class="roadmap-title">More Extracted Fields</div>
+            <p class="roadmap-copy">Expand to contingencies, option fees, title company details, lender data, and occupancy terms.</p>
+          </article>
+          <article class="roadmap-card">
+            <div class="roadmap-title">Alternate Providers</div>
+            <p class="roadmap-copy">Support OCR, LLM extraction, and market-specific form logic without redesigning the front end.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

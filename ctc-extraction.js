@@ -11,6 +11,10 @@
     "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js",
     "https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"
   ];
+  const PDF_LIB_SCRIPT_SOURCES = [
+    "https://cdn.jsdelivr.net/npm/pdf-lib/dist/pdf-lib.min.js",
+    "https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"
+  ];
 
   const scriptLoadPromises = new Map();
   let ocrWorkerPromise = null;
@@ -181,6 +185,10 @@
     await ensureGlobalLibrary("Tesseract", OCR_SCRIPT_SOURCES);
   }
 
+  async function ensurePdfLibReady() {
+    await ensureGlobalLibrary("PDFLib", PDF_LIB_SCRIPT_SOURCES);
+  }
+
   async function getOcrWorker() {
     await ensureOcrReady();
     if (!ocrWorkerPromise) {
@@ -192,6 +200,11 @@
   async function loadPdfDocument(file) {
     await ensurePdfJsReady();
     const data = await file.arrayBuffer();
+    return window.pdfjsLib.getDocument({ data }).promise;
+  }
+
+  async function loadPdfDocumentFromData(data) {
+    await ensurePdfJsReady();
     return window.pdfjsLib.getDocument({ data }).promise;
   }
 
@@ -378,6 +391,188 @@
       merged[fieldName] = pickPreferredField(primaryFields?.[fieldName], secondaryFields?.[fieldName]);
     });
     return merged;
+  }
+
+  function normalizeFieldName(input) {
+    return String(input || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  }
+
+  function normalizeFormValue(value) {
+    if (value == null) return "";
+    if (Array.isArray(value)) return value.join(", ");
+    return cleanText(String(value));
+  }
+
+  function safeGetFieldValue(field) {
+    try {
+      switch (field?.constructor?.name) {
+        case "PDFTextField":
+          return field.getText?.() || "";
+        case "PDFDropdown":
+        case "PDFOptionList": {
+          const selected = field.getSelected?.();
+          return Array.isArray(selected) ? selected.join(", ") : selected || "";
+        }
+        case "PDFRadioGroup":
+          return field.getSelected?.() || "";
+        case "PDFCheckBox":
+          return field.isChecked?.() ? "Checked" : "";
+        default:
+          return field.getText?.() || "";
+      }
+    } catch {
+      return "";
+    }
+  }
+
+  async function readPdfFormFields(data) {
+    await ensurePdfLibReady();
+
+    try {
+      const pdfDoc = await window.PDFLib.PDFDocument.load(data, { ignoreEncryption: true });
+      const form = pdfDoc.getForm();
+      const fields = form.getFields();
+
+      return fields
+        .map((field) => ({
+          name: field.getName?.() || "",
+          normalizedName: normalizeFieldName(field.getName?.() || ""),
+          type: field?.constructor?.name || "UnknownField",
+          value: normalizeFormValue(safeGetFieldValue(field))
+        }))
+        .filter((field) => field.name && field.value);
+    } catch {
+      return [];
+    }
+  }
+
+  function findBestFormField(formFields, namePatterns, validator) {
+    for (const field of formFields) {
+      const matches = namePatterns.some((pattern) => pattern.test(field.normalizedName));
+      if (!matches) continue;
+      if (typeof validator === "function" && !validator(field.value, field)) continue;
+      return field;
+    }
+    return null;
+  }
+
+  function findAllFormFields(formFields, namePatterns, validator) {
+    return formFields.filter((field) => {
+      const matches = namePatterns.some((pattern) => pattern.test(field.normalizedName));
+      if (!matches) return false;
+      if (typeof validator === "function" && !validator(field.value, field)) return false;
+      return true;
+    });
+  }
+
+  function buildFormFieldExtraction(formFields) {
+    if (!formFields.length) {
+      return {
+        extractedFields: {},
+        fieldCount: 0
+      };
+    }
+
+    const extractedFields = {};
+
+    const addressField = findBestFormField(
+      formFields,
+      [/\b(property|street|subject)\b.*\b(address)\b/, /\baddress\b/],
+      (value) => ADDRESS_REGEX.test(value)
+    );
+    if (addressField) extractedFields.property_address = buildField(addressField.value, 0.97);
+
+    const buyerFields = findAllFormFields(
+      formFields,
+      [/\bbuyer\b/, /\bpurchaser\b/],
+      (value, field) => looksLikePersonName(value) && !/\bcommission|broker|agent|license\b/.test(field.normalizedName)
+    );
+    if (buyerFields.length) {
+      extractedFields.buyer_names = buildField([...new Set(buyerFields.map((field) => field.value))], 0.96);
+    }
+
+    const sellerFields = findAllFormFields(
+      formFields,
+      [/\bseller\b/, /\bowner\b/],
+      (value, field) => looksLikePersonName(value) && !/\bcommission|broker|agent|license\b/.test(field.normalizedName)
+    );
+    if (sellerFields.length) {
+      extractedFields.seller_names = buildField([...new Set(sellerFields.map((field) => field.value))], 0.96);
+    }
+
+    const purchasePriceField = findBestFormField(
+      formFields,
+      [/\bpurchase\b.*\bprice\b/, /\bsales?\b.*\bprice\b/, /\bcontract\b.*\bprice\b/],
+      (value) => parseCurrency(value) != null
+    );
+    if (purchasePriceField) {
+      extractedFields.purchase_price = buildField(parseCurrency(purchasePriceField.value), 0.97);
+    }
+
+    const earnestField = findBestFormField(
+      formFields,
+      [/\bearnest\b.*\bmoney\b/, /\bdeposit\b/],
+      (value, field) => parseCurrency(value) != null && !/\bsecurity deposit\b/.test(field.normalizedName)
+    );
+    if (earnestField) {
+      extractedFields.earnest_money_amount = buildField(parseCurrency(earnestField.value), 0.95);
+    }
+
+    const financingField = findBestFormField(
+      formFields,
+      [/\bfinancing\b/, /\bloan\b.*\btype\b/, /\btype\b.*\bfinancing\b/],
+      (value) => /\b(conventional|cash|fha|va|usda|assumption|owner financing|seller financing)\b/i.test(value)
+    );
+    if (financingField) {
+      const financingMatch = financingField.value.match(/\b(conventional|cash|fha|va|usda|assumption|owner financing|seller financing)\b/i);
+      if (financingMatch) {
+        extractedFields.financing_type = buildField(financingMatch[1].replace(/\b\w/g, (char) => char.toUpperCase()), 0.94);
+      }
+    }
+
+    const bindingField = findBestFormField(
+      formFields,
+      [/\bbinding\b.*\bdate\b/, /\beffective\b.*\bdate\b/, /\bacceptance\b.*\bdate\b/],
+      (value) => normalizeDate(value) != null
+    );
+    if (bindingField) {
+      extractedFields.binding_date = buildField(normalizeDate(bindingField.value), 0.95);
+    }
+
+    const closingField = findBestFormField(
+      formFields,
+      [/\bclosing\b.*\bdate\b/, /\bdate\b.*\bclosing\b/],
+      (value) => normalizeDate(value) != null
+    );
+    if (closingField) {
+      extractedFields.closing_date = buildField(normalizeDate(closingField.value), 0.95);
+    }
+
+    const inspectionField = findBestFormField(
+      formFields,
+      [/\binspection\b.*\bdate\b/, /\binspection\b.*\bdeadline\b/, /\bdue diligence\b/, /\boption\b.*\bperiod\b/],
+      (value) => normalizeDate(value) != null
+    );
+    if (inspectionField) {
+      extractedFields.inspection_deadline = buildField(normalizeDate(inspectionField.value), 0.92);
+    }
+
+    const possessionField = findBestFormField(
+      formFields,
+      [/\bpossession\b.*\bdate\b/, /\boccupancy\b.*\bdate\b/, /\bdate\b.*\bpossession\b/],
+      (value) => normalizeDate(value) != null
+    );
+    if (possessionField) {
+      extractedFields.possession_date = buildField(normalizeDate(possessionField.value), 0.92);
+    }
+
+    return {
+      extractedFields,
+      fieldCount: countMappedFields(extractedFields)
+    };
   }
 
   function parseCurrency(rawValue) {
@@ -721,11 +916,13 @@
       status: documentRecord.status,
       note: documentRecord.note,
       extractionMethod: documentRecord.extractionMethod,
+      formFieldCount: documentRecord.formFieldCount,
       size: documentRecord.size,
       lastModified: documentRecord.lastModified,
       textLength: documentRecord.textLength,
       extractedFieldCount: countMappedFields(documentRecord.extractedFields),
-      textPreview: documentRecord.textPreview
+      textPreview: documentRecord.textPreview,
+      formFieldPreview: documentRecord.formFieldPreview
     }));
   }
 
@@ -748,15 +945,18 @@
       message: `Reading ${file.name}...`
     });
 
-    const pdf = await loadPdfDocument(file);
+    const data = await file.arrayBuffer();
+    const pdf = await loadPdfDocumentFromData(data);
+    const formFields = await readPdfFormFields(data);
+    const formExtraction = buildFormFieldExtraction(formFields);
     const textLayer = await readPdfText(pdf).catch(() => "");
     const textTypeInfo = detectDocumentType(file.name || "", textLayer);
     const textLines = splitLines(textLayer);
     const textFields = textLayer ? extractFieldsFromText(textLayer, textLines) : {};
 
     let finalText = textLayer;
-    let finalFields = textFields;
-    let extractionMethod = "pdf_text";
+    let finalFields = mergeExtractedFields(textFields, formExtraction.extractedFields);
+    let extractionMethod = formExtraction.fieldCount ? "form + text" : "pdf_text";
 
     if (shouldRunOcrFallback(textLayer, textFields, textTypeInfo)) {
       reportProgress(onProgress, {
@@ -771,17 +971,17 @@
 
       const textScore = scoreFieldMap(textFields);
       const ocrScore = scoreFieldMap(ocrFields);
-      const mergedFields = mergeExtractedFields(textFields, ocrFields);
+      const mergedFields = mergeExtractedFields(mergeExtractedFields(textFields, ocrFields), formExtraction.extractedFields);
       const mergedScore = scoreFieldMap(mergedFields);
 
-      if (mergedScore > Math.max(textScore, ocrScore)) {
+      if (mergedScore > Math.max(textScore, ocrScore, scoreFieldMap(finalFields))) {
         finalText = [textLayer, ocrText].filter(Boolean).join("\n\n");
         finalFields = mergedFields;
-        extractionMethod = "hybrid";
+        extractionMethod = formExtraction.fieldCount ? "form + text + ocr" : "hybrid";
       } else if (ocrScore > textScore) {
         finalText = ocrText;
-        finalFields = ocrFields;
-        extractionMethod = "ocr";
+        finalFields = mergeExtractedFields(ocrFields, formExtraction.extractedFields);
+        extractionMethod = formExtraction.fieldCount ? "form + ocr" : "ocr";
       }
     }
 
@@ -794,8 +994,10 @@
         : "text found, no confident matches";
     const note = !finalText
       ? "No usable text could be extracted from this PDF, even after OCR."
-      : extractionMethod === "hybrid" && populatedFieldCount
+      : /hybrid|form \+ text \+ ocr/i.test(extractionMethod) && populatedFieldCount
         ? "Embedded PDF text was too weak on its own, so OCR was blended in for the final result."
+        : /form/i.test(extractionMethod) && formExtraction.fieldCount
+          ? "Values were sourced from PDF form fields and then supplemented by text or OCR when helpful."
         : extractionMethod === "ocr" && populatedFieldCount
         ? "Values were extracted using OCR from a scanned or image-based PDF."
         : extractionMethod === "ocr"
@@ -818,6 +1020,8 @@
       status,
       note,
       extractionMethod,
+      formFieldCount: formFields.length,
+      formFieldPreview: formFields.slice(0, 40),
       textLength: finalText.length,
       textPreview: finalText.slice(0, 220)
     };

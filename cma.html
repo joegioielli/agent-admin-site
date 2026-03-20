@@ -614,6 +614,17 @@
       return Number.isFinite(numeric) ? numeric : null;
     }
 
+    function normalizeGarageParking(value) {
+      const text = cleanText(value);
+      if (!text) return "";
+      const numeric = coerceNumber(text);
+      if (Number.isFinite(numeric)) {
+        if (numeric <= 0) return "";
+        return `${numeric}-car garage`;
+      }
+      return text;
+    }
+
     function summarizeStoryCount(value) {
       return Number.isFinite(value) ? `${value}-story` : "Pending";
     }
@@ -751,14 +762,14 @@
         lotSize: normalizeLotSize(pickFirst(item, ["lotSize", "lotSizeAcres", "lotSizeSquareFeet", "acreage"])),
         daysOnMarket: coerceNumber(pickFirst(item, ["daysOnMarket", "dom", "daysListed"])),
         distanceMiles: coerceNumber(pickFirst(item, ["distance", "distanceMiles", "distanceFromSubject"])),
-        subdivision: cleanText(pickFirst(item, ["subdivision", "subdivisionName", "neighborhood", "community"], "")) || inferSubdivisionFromRemarks(remarks),
+        subdivision: cleanText(pickFirst(item, ["subdivision", "subdivisionName", "subdname", "neighborhood", "community", "legalSubdivision"], "")) || inferSubdivisionFromRemarks(remarks),
         schoolZone: cleanText(pickFirst(item, ["schoolDistrict", "schoolZone"], "")),
         propertyType: normalizePropertyType(pickFirst(item, ["propertyType", "type", "propertySubType", "homeType"], "")),
-        storyCount: normalizeStoryCount(pickFirst(item, ["stories", "storyCount", "levels", "style"], "")),
+        storyCount: normalizeStoryCount(pickFirst(item, ["stories", "storyCount", "storiesTotal", "storyDescription", "storyDesc", "levels", "style"], "")),
         styleText: normalizeText(pickFirst(item, ["architecturalStyle", "style", "designStyle", "propertyStyle"], "")),
         streetNameKey: streetNameKeyFromAddress(address),
         streetNumber: streetNumberFromAddress(address),
-        garageParking: cleanText(pickFirst(item, ["garageSpaces", "garage", "parking"], "")),
+        garageParking: normalizeGarageParking(pickFirst(item, ["garage", "parking", "garageParking", "garageType", "parkingType", "garageSpaces", "parkingSpaces"], "")),
         soldDate: parseDateValue(pickFirst(item, ["soldDate", "saleDate", "closeDate", "lastSaleDate", "offMarketDate"])),
         listDate: parseDateValue(pickFirst(item, ["listDate", "listedDate", "onMarketDate", "createdDate"])),
         pricePerSqft,
@@ -952,13 +963,22 @@
       if (subject.subdivision) return subject.subdivision;
       const candidates = comps
         .filter((comp) => comp.subdivision)
-        .filter((comp) => isSameStreet(subject, comp) || (subject.zipCode && comp.zipCode === subject.zipCode && comp.distanceMiles != null && comp.distanceMiles <= 0.5))
-        .sort((a, b) => (a.distanceMiles ?? 99) - (b.distanceMiles ?? 99));
+        .filter((comp) =>
+          isSameStreet(subject, comp) ||
+          isNearbyMicroMarket(subject, comp) ||
+          (subject.zipCode && comp.zipCode === subject.zipCode && (comp.distanceMiles == null || comp.distanceMiles <= 1.25))
+        )
+        .sort((a, b) =>
+          (b.similarityScore ?? 0) - (a.similarityScore ?? 0) ||
+          (a.distanceMiles ?? 99) - (b.distanceMiles ?? 99)
+        );
       if (!candidates.length) return "";
       const counts = new Map();
       candidates.forEach((comp) => {
         const key = comp.subdivision;
-        counts.set(key, (counts.get(key) || 0) + (isSameStreet(subject, comp) ? 3 : 1));
+        let weight = isSameStreet(subject, comp) ? 5 : isNearbyMicroMarket(subject, comp) ? 3 : 1;
+        if (Number.isFinite(comp.similarityScore)) weight += comp.similarityScore >= 80 ? 2 : comp.similarityScore >= 70 ? 1 : 0;
+        counts.set(key, (counts.get(key) || 0) + weight);
       });
       return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
     }
@@ -968,12 +988,21 @@
       const weightedCounts = new Map();
       comps
         .filter((comp) => Number.isFinite(comp.storyCount))
-        .filter((comp) => isSameSubdivision(subject, comp) || isSameStreet(subject, comp) || isNearbyMicroMarket(subject, comp))
-        .sort((a, b) => (a.distanceMiles ?? 99) - (b.distanceMiles ?? 99))
-        .slice(0, 8)
+        .filter((comp) =>
+          isSameSubdivision(subject, comp) ||
+          isSameStreet(subject, comp) ||
+          isNearbyMicroMarket(subject, comp) ||
+          (subject.zipCode && comp.zipCode === subject.zipCode && (comp.distanceMiles == null || comp.distanceMiles <= 1.25))
+        )
+        .sort((a, b) =>
+          (b.similarityScore ?? 0) - (a.similarityScore ?? 0) ||
+          (a.distanceMiles ?? 99) - (b.distanceMiles ?? 99)
+        )
+        .slice(0, 12)
         .forEach((comp) => {
           const key = Number(comp.storyCount);
-          const weight = isSameSubdivision(subject, comp) ? 4 : isSameStreet(subject, comp) ? 3 : 2;
+          let weight = isSameSubdivision(subject, comp) ? 5 : isSameStreet(subject, comp) ? 4 : isNearbyMicroMarket(subject, comp) ? 3 : 1;
+          if (Number.isFinite(comp.similarityScore)) weight += comp.similarityScore >= 80 ? 2 : comp.similarityScore >= 70 ? 1 : 0;
           weightedCounts.set(key, (weightedCounts.get(key) || 0) + weight);
         });
       return [...weightedCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
@@ -984,18 +1013,36 @@
       const weightedCounts = new Map();
       comps
         .filter((comp) => cleanText(comp.garageParking))
-        .filter((comp) => isSameSubdivision(subject, comp) || isSameStreet(subject, comp) || isNearbyMicroMarket(subject, comp))
-        .sort((a, b) => (a.distanceMiles ?? 99) - (b.distanceMiles ?? 99))
-        .slice(0, 8)
+        .filter((comp) =>
+          isSameSubdivision(subject, comp) ||
+          isSameStreet(subject, comp) ||
+          isNearbyMicroMarket(subject, comp) ||
+          (subject.zipCode && comp.zipCode === subject.zipCode && (comp.distanceMiles == null || comp.distanceMiles <= 1.25))
+        )
+        .sort((a, b) =>
+          (b.similarityScore ?? 0) - (a.similarityScore ?? 0) ||
+          (a.distanceMiles ?? 99) - (b.distanceMiles ?? 99)
+        )
+        .slice(0, 12)
         .forEach((comp) => {
-          const label = cleanText(comp.garageParking);
+          const label = normalizeGarageParking(comp.garageParking);
+          if (!label) return;
           const key = normalizeText(label);
-          const weight = isSameSubdivision(subject, comp) ? 4 : isSameStreet(subject, comp) ? 3 : 2;
+          let weight = isSameSubdivision(subject, comp) ? 5 : isSameStreet(subject, comp) ? 4 : isNearbyMicroMarket(subject, comp) ? 3 : 1;
+          if (Number.isFinite(comp.similarityScore)) weight += comp.similarityScore >= 80 ? 2 : comp.similarityScore >= 70 ? 1 : 0;
           const current = weightedCounts.get(key) || { label, weight: 0 };
           current.weight += weight;
           weightedCounts.set(key, current);
         });
       return [...weightedCounts.values()].sort((a, b) => b.weight - a.weight)[0]?.label || "";
+    }
+
+    function enrichSubjectProfile(subject, comps) {
+      const enriched = { ...(subject || {}) };
+      if (!enriched.subdivision) enriched.subdivision = inferSubjectSubdivision(enriched, comps);
+      if (!Number.isFinite(enriched.storyCount)) enriched.storyCount = inferSubjectStoryCount(enriched, comps);
+      if (!cleanText(enriched.garageParking)) enriched.garageParking = inferSubjectGarageParking(enriched, comps);
+      return enriched;
     }
 
     function matchesPropertyType(subject, comp) {
@@ -1778,7 +1825,7 @@
     }
 
     function buildMockReport(values) {
-      const subject = buildSubjectProfile(values, []);
+      let subject = buildSubjectProfile(values, []);
       const soldComps = [
         normalizeComp({ id: "sample-1", formattedAddress: "118 Willow Creek Dr, Springfield, IL 62704", status: "Sold", soldPrice: 401500, listPrice: 392000, squareFootage: 2245, bedrooms: 4, bathrooms: 3, yearBuilt: 2015, lotSizeAcres: 0.21, daysOnMarket: 14, soldDate: "2026-01-28", subdivision: "Willow Creek", propertyType: subject.propertyType || "Single Family", stories: "2" }),
         normalizeComp({ id: "sample-2", formattedAddress: "142 Willow Creek Dr, Springfield, IL 62704", status: "Sold", soldPrice: 409000, listPrice: 405000, squareFootage: 2310, bedrooms: 4, bathrooms: 2.5, yearBuilt: 2013, lotSizeAcres: 0.24, daysOnMarket: 9, soldDate: "2026-02-10", subdivision: "Willow Creek", propertyType: subject.propertyType || "Single Family", stories: "2" }),
@@ -1791,6 +1838,7 @@
       pendingSelection.pendingComps.forEach((comp) => usedIds.add(compIdentityKey(comp)));
       const activeSelection = selectActiveComparable(subject, manualCurrentMarketComps, values, usedIds);
       const marketComp = pendingSelection.pendingComps[0] || activeSelection.activeComp || sampleActiveComp;
+      subject = enrichSubjectProfile(subject, [...soldComps, ...pendingSelection.pendingComps, marketComp, ...manualCurrentMarketComps].filter(Boolean));
       return buildReport(
         values,
         subject,
@@ -1841,14 +1889,14 @@
       const filteredCompPool = filterExcludedComparables(compPool, values.excludedComparableKeys);
       const manualCurrentMarketComps = filterExcludedComparables(values.manualCurrentMarketComps || [], values.excludedComparableKeys);
       const mergedCompPool = mergeManualCurrentMarketComps(filteredCompPool, manualCurrentMarketComps);
-      const subject = buildSubjectProfile(values, mergedCompPool, subjectMatch);
-      if (!subject.subdivision) subject.subdivision = inferSubjectSubdivision(subject, mergedCompPool);
+      let subject = buildSubjectProfile(values, mergedCompPool, subjectMatch);
       const soldSelection = selectSoldComparables(subject, mergedCompPool, values);
       const usedIds = new Set(soldSelection.soldComps.map((comp) => compIdentityKey(comp)));
       const pendingSelection = selectPendingComparables(subject, mergedCompPool, values, usedIds);
       pendingSelection.pendingComps.forEach((comp) => usedIds.add(compIdentityKey(comp)));
       const activeSelection = selectActiveComparable(subject, mergedCompPool, values, usedIds);
       const marketComp = pendingSelection.pendingComps[0] || activeSelection.activeComp || null;
+      subject = enrichSubjectProfile(subject, [...soldSelection.soldComps, ...pendingSelection.pendingComps, activeSelection.activeComp, ...mergedCompPool].filter(Boolean));
       const sourceLabel = describeLiveSource(payload?.source);
       const diagnosticsNote = summarizeProviderDiagnostics(payload);
       const sourceNote = soldSelection.usedLiveFallbackPool

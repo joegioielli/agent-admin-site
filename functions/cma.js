@@ -152,7 +152,7 @@ function fetchRentcast(url, apiKey) {
 function fetchAttom(url, apiKey) {
   return fetchJson(url, {
     Accept: "application/json",
-    APIKey: apiKey,
+    apikey: apiKey,
   });
 }
 
@@ -194,6 +194,13 @@ function normalizeAttomAddress2(city, state, zipCode) {
   const postal = clean(zipCode);
   if (!locality && !region && !postal) return "";
   return [locality, [region, postal].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+}
+
+function normalizeAttomAddress2CityState(city, state) {
+  const locality = clean(city);
+  const region = normalizeState(state);
+  if (!locality && !region) return "";
+  return [locality, region].filter(Boolean).join(", ");
 }
 
 function buildFullAddress(address, city, state, zipCode) {
@@ -553,10 +560,11 @@ async function fetchRentcastBundle({
   };
 }
 
-function buildAttomSubjectAttempts({ fullAddress, address, address2 }) {
+function buildAttomSubjectAttempts({ fullAddress, address, address2, address2CityState }) {
   return buildAttemptList([
-    { label: "full-address", params: { address: fullAddress } },
     { label: "address1+address2", params: { address1: address, address2 } },
+    { label: "address1+address2-city-state", params: { address1: address, address2: address2CityState } },
+    { label: "full-address", params: { address: fullAddress } },
   ]);
 }
 
@@ -564,6 +572,7 @@ function buildAttomSaleAttempts({
   fullAddress,
   address,
   address2,
+  address2CityState,
   zipCode,
   radius,
   pageSize,
@@ -573,12 +582,16 @@ function buildAttomSaleAttempts({
 }) {
   return buildAttemptList([
     {
-      label: "full-address+radius+indicator",
-      params: { address: fullAddress, radius, pageSize, propertyIndicator, startSaleTransDate, endSaleTransDate },
-    },
-    {
       label: "address1+address2+radius+indicator",
       params: { address1: address, address2, radius, pageSize, propertyIndicator, startSaleTransDate, endSaleTransDate },
+    },
+    {
+      label: "address1+address2-city-state+radius+indicator",
+      params: { address1: address, address2: address2CityState, radius, pageSize, propertyIndicator, startSaleTransDate, endSaleTransDate },
+    },
+    {
+      label: "full-address+radius+indicator",
+      params: { address: fullAddress, radius, pageSize, propertyIndicator, startSaleTransDate, endSaleTransDate },
     },
     {
       label: "full-address+radius",
@@ -587,6 +600,10 @@ function buildAttomSaleAttempts({
     {
       label: "address1+address2+radius",
       params: { address1: address, address2, radius, pageSize, startSaleTransDate, endSaleTransDate },
+    },
+    {
+      label: "address1+address2-city-state+radius",
+      params: { address1: address, address2: address2CityState, radius, pageSize, startSaleTransDate, endSaleTransDate },
     },
     {
       label: "zip+indicator",
@@ -625,6 +642,7 @@ async function fetchAttomBundle({
   const diagnostics = [];
   const fullAddress = buildFullAddress(address, city, state, zipCode);
   const address2 = normalizeAttomAddress2(city, state, zipCode);
+  const address2CityState = normalizeAttomAddress2CityState(city, state);
   const propertyIndicator = mapPropertyIndicator(propertyType);
   const saleHistoryMonths = clamp(Math.max(toFiniteNumber(lookbackMonths, 6) * 2, 24), 24, 36);
   const radius = clamp(searchRadius || 3, 0.25, ATTOM_MAX_RADIUS);
@@ -635,7 +653,7 @@ async function fetchAttomBundle({
   let subjectProperty = null;
   let lastError = null;
 
-  for (const attempt of buildAttomSubjectAttempts({ fullAddress, address, address2 })) {
+  for (const attempt of buildAttomSubjectAttempts({ fullAddress, address, address2, address2CityState })) {
     const url = new URL(ATTOM_PROPERTY_DETAIL_URL);
     Object.entries(attempt.params).forEach(([key, value]) => url.searchParams.set(key, value));
 
@@ -671,6 +689,7 @@ async function fetchAttomBundle({
     fullAddress,
     address,
     address2,
+    address2CityState,
     zipCode,
     radius,
     pageSize,

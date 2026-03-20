@@ -692,11 +692,16 @@ export async function handler(event) {
 
   const rentcastApiKey = clean(process.env.RENTCAST_API_KEY);
   const attomApiKey = clean(process.env.ATTOM_API_KEY);
+  const providers = {
+    rentcastConfigured: Boolean(rentcastApiKey),
+    attomConfigured: Boolean(attomApiKey),
+  };
 
   if (!rentcastApiKey && !attomApiKey) {
     return json(500, {
       error: "Missing CMA provider credentials",
       details: "Add RENTCAST_API_KEY, ATTOM_API_KEY, or both to the Netlify environment before using the CMA function.",
+      providers,
     });
   }
 
@@ -780,6 +785,7 @@ export async function handler(event) {
       return json(lastError?.statusCode || 404, {
         error: "No comparable data found",
         details: fallbackError,
+        providers,
         request: {
           address,
           city,
@@ -797,6 +803,7 @@ export async function handler(event) {
 
     return json(200, {
       source: sourceParts.filter(Boolean).join("+") || (attomApiKey ? "attom-sale" : "rentcast-listings"),
+      providers,
       request: {
         address,
         city,

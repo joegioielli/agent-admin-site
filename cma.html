@@ -493,6 +493,35 @@
       return "live comparable-property data";
     }
 
+    function summarizeProviderDiagnostics(payload) {
+      const providers = payload?.providers || payload?.error?.payload?.providers || {};
+      const attempts = Array.isArray(payload?.attempts)
+        ? payload.attempts
+        : Array.isArray(payload?.error?.payload?.attempts)
+          ? payload.error.payload.attempts
+          : [];
+      const attemptedSources = new Set(attempts.map((attempt) => cleanText(attempt?.source)).filter(Boolean));
+      const summary = [];
+
+      if (providers.attomConfigured === true) {
+        summary.push(attemptedSources.has("attom-property") || attemptedSources.has("attom-sale")
+          ? "ATTOM was attempted."
+          : "ATTOM is configured but was not attempted in this response.");
+      } else if (providers.attomConfigured === false) {
+        summary.push("ATTOM is not configured in the function runtime.");
+      }
+
+      if (providers.rentcastConfigured === true) {
+        summary.push(attemptedSources.has("rentcast-avm") || attemptedSources.has("rentcast-listings")
+          ? "RentCast was attempted."
+          : "RentCast is configured but was not attempted in this response.");
+      } else if (providers.rentcastConfigured === false) {
+        summary.push("RentCast is not configured in the function runtime.");
+      }
+
+      return summary.join(" ");
+    }
+
     function setGenerateState(isLoading) {
       generateBtn.disabled = isLoading;
       generateBtn.textContent = isLoading ? "Loading..." : "Generate CMA";
@@ -1760,7 +1789,7 @@
       const comps = arrayify(payload?.data?.comparables || payload?.data)
         .map((item) => normalizeComp(item))
         .filter((comp) => comp.address && (comp.listPrice != null || comp.soldPrice != null));
-      if (!comps.length) throw new Error("RentCast returned no comparable listings for this search.");
+      if (!comps.length) throw new Error("The live CMA providers returned no comparable listings for this search.");
       const subjectMatch = subjectRecord || findSubjectComparable(values, comps);
       const compPool = subjectMatch ? comps.filter((comp) => comp.id !== subjectMatch.id && !addressesLikelyMatch(values, comp)) : comps;
       const filteredCompPool = filterExcludedComparables(compPool, values.excludedComparableKeys);
@@ -1775,9 +1804,10 @@
       const activeSelection = selectActiveComparable(subject, mergedCompPool, values, usedIds);
       const marketComp = pendingSelection.pendingComps[0] || activeSelection.activeComp || null;
       const sourceLabel = describeLiveSource(payload?.source);
+      const diagnosticsNote = summarizeProviderDiagnostics(payload);
       const sourceNote = soldSelection.usedLiveFallbackPool
-        ? `Generated ${formatDateTime(new Date())} using ${sourceLabel}. The sold comp set was thin, so the report ranked the closest available live comparables in the returned pool.`
-        : `Generated ${formatDateTime(new Date())} using ${sourceLabel}.`;
+        ? `Generated ${formatDateTime(new Date())} using ${sourceLabel}. The sold comp set was thin, so the report ranked the closest available live comparables in the returned pool.${diagnosticsNote ? ` ${diagnosticsNote}` : ""}`
+        : `Generated ${formatDateTime(new Date())} using ${sourceLabel}.${diagnosticsNote ? ` ${diagnosticsNote}` : ""}`;
       return buildReport(
         values,
         subject,
@@ -1943,7 +1973,7 @@
     function resetReport() {
       reportSection.dataset.ready = "false";
       reportEmptyState.style.display = "";
-      reportEmptyState.textContent = "Enter a subject property address and generate the CMA to populate the report. Live RentCast data will load first, and the page will fall back gracefully if the result set is thin.";
+      reportEmptyState.textContent = "Enter a subject property address and generate the CMA to populate the report. Live provider data will load first, and the page will fall back gracefully if the result set is thin.";
       reportTimestamp.textContent = "Generate a report to load live comps and build the pricing summary.";
       subjectPropertyAddress.textContent = "Not generated yet.";
       specialDetailsOutput.textContent = "No special details entered yet.";
@@ -1962,7 +1992,8 @@
 
     function showLiveDataError(values, error) {
       const fallbackReport = buildMockReport(values);
-      fallbackReport.dataSourceNote = `${error?.message || "Live data is currently unavailable."} Sample comps are shown below so the CMA stays usable while live data recovers.`;
+      const diagnosticsNote = summarizeProviderDiagnostics({ error });
+      fallbackReport.dataSourceNote = `${error?.message || "Live data is currently unavailable."}${diagnosticsNote ? ` ${diagnosticsNote}` : ""} Sample comps are shown below so the CMA stays usable while live data recovers.`;
       renderReport(values, fallbackReport);
     }
 

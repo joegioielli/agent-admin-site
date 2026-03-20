@@ -306,6 +306,77 @@ function summarizeAttomPayload(response, data) {
   };
 }
 
+function isDebugEnabled(value) {
+  return /^(1|true|yes|on)$/i.test(clean(value));
+}
+
+function collectScalarPaths(value, prefix = "", paths = [], depth = 0, maxDepth = 4, maxItems = 120) {
+  if (paths.length >= maxItems || value == null) return paths;
+
+  if (Array.isArray(value)) {
+    if (!value.length) {
+      if (prefix) paths.push(`${prefix}[]`);
+      return paths;
+    }
+
+    if (depth >= maxDepth) {
+      if (prefix) paths.push(`${prefix}[]`);
+      return paths;
+    }
+
+    collectScalarPaths(value[0], `${prefix}[0]`, paths, depth + 1, maxDepth, maxItems);
+    return paths;
+  }
+
+  if (typeof value === "object") {
+    if (depth >= maxDepth) {
+      if (prefix) paths.push(prefix);
+      return paths;
+    }
+
+    for (const [key, child] of Object.entries(value)) {
+      if (paths.length >= maxItems) break;
+      const nextPrefix = prefix ? `${prefix}.${key}` : key;
+      collectScalarPaths(child, nextPrefix, paths, depth + 1, maxDepth, maxItems);
+    }
+    return paths;
+  }
+
+  if (prefix) paths.push(prefix);
+  return paths;
+}
+
+function buildAttomRecordPreview(record, options = {}) {
+  const propertyRecord = unwrapAttomPropertyRecord(record);
+  if (!propertyRecord || typeof propertyRecord !== "object") return null;
+
+  return {
+    topLevelKeys: Object.keys(propertyRecord),
+    availableScalarPaths: collectScalarPaths(propertyRecord),
+    mappedPreview: mapAttomRecord(propertyRecord, options),
+    rawPreview: {
+      identifier: propertyRecord.identifier || null,
+      address: propertyRecord.address || null,
+      summary: propertyRecord.summary || null,
+      building: propertyRecord.building || null,
+      lot: propertyRecord.lot || null,
+      area: propertyRecord.area || null,
+      location: propertyRecord.location || null,
+      sale: propertyRecord.sale || null,
+    },
+  };
+}
+
+function buildAttomPayloadPreview(data, options = {}) {
+  const records = extractAttomRecords(data);
+  return {
+    topLevelKeys: data && typeof data === "object" ? Object.keys(data) : [],
+    status: data?.status || null,
+    recordCount: records.length,
+    firstRecordPreview: records.length ? buildAttomRecordPreview(records[0], options) : null,
+  };
+}
+
 function coerceBathrooms(value) {
   const numeric = toFiniteNumber(value, null);
   return numeric != null ? numeric : clean(value);
@@ -638,8 +709,10 @@ async function fetchAttomBundle({
   limit,
   lookbackMonths,
   apiKey,
+  debug = false,
 }) {
   const diagnostics = [];
+  const debugAttempts = [];
   const fullAddress = buildFullAddress(address, city, state, zipCode);
   const address2 = normalizeAttomAddress2(city, state, zipCode);
   const address2CityState = normalizeAttomAddress2CityState(city, state);
@@ -659,8 +732,7 @@ async function fetchAttomBundle({
 
     const result = await fetchAttom(url, apiKey);
     const summary = summarizeAttomPayload(result.response, result.data);
-
-    diagnostics.push({
+    const attemptDiagnostics = {
       source: "attom-property",
       label: attempt.label,
       request: attempt.params,
@@ -668,7 +740,19 @@ async function fetchAttomBundle({
       attomStatusCode: summary.code,
       attomMessage: summary.message,
       resultCount: summary.resultCount,
-    });
+    };
+
+    diagnostics.push(attemptDiagnostics);
+    if (debug) {
+      debugAttempts.push({
+        ...attemptDiagnostics,
+        url: url.toString(),
+        payloadPreview: buildAttomPayloadPreview(result.data, {
+          fallbackStatus: "Subject",
+          source: "attom-property",
+        }),
+      });
+    }
 
     if (summary.hasResults) {
       subjectProperty = mapAttomRecord(extractAttomRecords(result.data)[0], {
@@ -705,8 +789,7 @@ async function fetchAttomBundle({
     const result = await fetchAttom(url, apiKey);
     const summary = summarizeAttomPayload(result.response, result.data);
     const records = summary.hasResults ? extractAttomRecords(result.data) : [];
-
-    diagnostics.push({
+    const attemptDiagnostics = {
       source: "attom-sale",
       label: attempt.label,
       request: attempt.params,
@@ -714,7 +797,19 @@ async function fetchAttomBundle({
       attomStatusCode: summary.code,
       attomMessage: summary.message,
       resultCount: summary.resultCount,
-    });
+    };
+
+    diagnostics.push(attemptDiagnostics);
+    if (debug) {
+      debugAttempts.push({
+        ...attemptDiagnostics,
+        url: url.toString(),
+        payloadPreview: buildAttomPayloadPreview(result.data, {
+          fallbackStatus: "Sold",
+          source: "attom-sale",
+        }),
+      });
+    }
 
     if (!summary.hasResults) {
       if (!summary.noResults || !result.response.ok) {
@@ -742,6 +837,14 @@ async function fetchAttomBundle({
     subjectProperty,
     comparables: dedupedComparables,
     lastError,
+    debug: debug ? {
+      enabled: true,
+      source: sourceParts.join("+"),
+      subjectPropertyMapped: subjectProperty,
+      comparableCount: dedupedComparables.length,
+      comparableSample: dedupedComparables.slice(0, 3),
+      attempts: debugAttempts,
+    } : null,
   };
 }
 
@@ -779,6 +882,7 @@ export async function handler(event) {
   const searchRadius = toFiniteNumber(params.searchRadius, 3);
   const compCount = Math.max(4, Math.min(toFiniteNumber(params.compCount, 20), 50));
   const lookbackMonths = clamp(toFiniteNumber(params.lookbackMonths, 6), 1, 24);
+  const debugAttom = isDebugEnabled(params.debugAttom || params.debug);
 
   if (!address && !(city && state) && !zipCode) {
     return json(400, {
@@ -794,6 +898,13 @@ export async function handler(event) {
     let avm = null;
     let lastError = null;
     const sourceParts = [];
+    let attomDebug = debugAttom ? {
+      enabled: true,
+      note: attomApiKey
+        ? "ATTOM debug mode is enabled for this response."
+        : "ATTOM debug mode was requested, but ATTOM_API_KEY is not configured.",
+      attempts: [],
+    } : null;
 
     if (rentcastApiKey) {
       const rentcastBundle = await fetchRentcastBundle({
@@ -828,6 +939,7 @@ export async function handler(event) {
         limit,
         lookbackMonths,
         apiKey: attomApiKey,
+        debug: debugAttom,
       });
 
       diagnostics.push(...attomBundle.diagnostics);
@@ -839,6 +951,7 @@ export async function handler(event) {
       }
       if (attomBundle.comparables.length) comparables = mergeComparablePools(comparables, attomBundle.comparables);
       if (attomBundle.lastError) lastError = attomBundle.lastError;
+      if (debugAttom) attomDebug = attomBundle.debug;
     }
 
     const listingData = dedupeListings(comparables).slice(0, Number(limit || 60));
@@ -862,6 +975,7 @@ export async function handler(event) {
           lookbackMonths,
         },
         attempts: diagnostics,
+        debug: debugAttom ? { attom: attomDebug } : undefined,
       });
     }
 
@@ -889,6 +1003,7 @@ export async function handler(event) {
           soldComparableSignals: soldCount,
         },
       },
+      debug: debugAttom ? { attom: attomDebug } : undefined,
     });
   } catch (error) {
     return json(500, {

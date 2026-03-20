@@ -870,7 +870,7 @@
       const parsed = parseSubjectAddress(values.subjectAddress);
       const fallbackComp = subjectMatch || null;
       const subjectStreetKey = streetNameKeyFromAddress(values.subjectAddress);
-      return {
+      const subject = {
         address: values.subjectAddress,
         city: parsed.city || fallbackComp?.city || "",
         state: parsed.state || fallbackComp?.state || "",
@@ -892,6 +892,10 @@
         conditionNotes: values.conditionNotes,
         estimatedValue: null
       };
+      if (!subject.subdivision) subject.subdivision = inferSubjectSubdivision(subject, comps);
+      if (!Number.isFinite(subject.storyCount)) subject.storyCount = inferSubjectStoryCount(subject, comps);
+      if (!subject.garageParking) subject.garageParking = inferSubjectGarageParking(subject, comps);
+      return subject;
     }
     function buildSoldSearchStages(values) {
       const maxRadius = clamp(values.searchRadius, 1, 5);
@@ -957,6 +961,41 @@
         counts.set(key, (counts.get(key) || 0) + (isSameStreet(subject, comp) ? 3 : 1));
       });
       return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+    }
+
+    function inferSubjectStoryCount(subject, comps) {
+      if (Number.isFinite(subject.storyCount)) return subject.storyCount;
+      const weightedCounts = new Map();
+      comps
+        .filter((comp) => Number.isFinite(comp.storyCount))
+        .filter((comp) => isSameSubdivision(subject, comp) || isSameStreet(subject, comp) || isNearbyMicroMarket(subject, comp))
+        .sort((a, b) => (a.distanceMiles ?? 99) - (b.distanceMiles ?? 99))
+        .slice(0, 8)
+        .forEach((comp) => {
+          const key = Number(comp.storyCount);
+          const weight = isSameSubdivision(subject, comp) ? 4 : isSameStreet(subject, comp) ? 3 : 2;
+          weightedCounts.set(key, (weightedCounts.get(key) || 0) + weight);
+        });
+      return [...weightedCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    }
+
+    function inferSubjectGarageParking(subject, comps) {
+      if (cleanText(subject.garageParking)) return subject.garageParking;
+      const weightedCounts = new Map();
+      comps
+        .filter((comp) => cleanText(comp.garageParking))
+        .filter((comp) => isSameSubdivision(subject, comp) || isSameStreet(subject, comp) || isNearbyMicroMarket(subject, comp))
+        .sort((a, b) => (a.distanceMiles ?? 99) - (b.distanceMiles ?? 99))
+        .slice(0, 8)
+        .forEach((comp) => {
+          const label = cleanText(comp.garageParking);
+          const key = normalizeText(label);
+          const weight = isSameSubdivision(subject, comp) ? 4 : isSameStreet(subject, comp) ? 3 : 2;
+          const current = weightedCounts.get(key) || { label, weight: 0 };
+          current.weight += weight;
+          weightedCounts.set(key, current);
+        });
+      return [...weightedCounts.values()].sort((a, b) => b.weight - a.weight)[0]?.label || "";
     }
 
     function matchesPropertyType(subject, comp) {
@@ -1896,6 +1935,16 @@
       field.value = formatter(value);
     }
 
+    function mergeSubjectFormDetails(baseSubject, incomingSubject = null) {
+      const merged = { ...(baseSubject || {}) };
+      Object.entries(incomingSubject || {}).forEach(([key, value]) => {
+        if (value == null) return;
+        if (typeof value === "string" && !cleanText(value)) return;
+        merged[key] = value;
+      });
+      return merged;
+    }
+
     function updateSubjectFactMissingState() {
       SUBJECT_FACT_FIELD_NAMES.forEach((fieldName) => {
         const field = form.elements?.[fieldName];
@@ -2019,8 +2068,8 @@
       try {
         const payload = await fetchLiveCma(values);
         const report = buildLiveReport(values, payload);
-        const subjectRecord = payload?.data?.subjectProperty ? normalizeComp(payload.data.subjectProperty) : report.subject;
-        populateSubjectFormFields(subjectRecord, true);
+        const subjectRecord = payload?.data?.subjectProperty ? normalizeComp(payload.data.subjectProperty) : null;
+        populateSubjectFormFields(mergeSubjectFormDetails(report.subject, subjectRecord), false);
         renderReport(values, report);
       } catch (error) {
         showLiveDataError(values, error);

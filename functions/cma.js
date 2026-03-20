@@ -37,6 +37,8 @@ function normalizeState(value) {
 }
 
 function toFiniteNumber(value, fallback = null) {
+  if (value == null) return fallback;
+  if (typeof value === "string" && clean(value) === "") return fallback;
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -489,6 +491,7 @@ function mapAttomRecord(record, { fallbackStatus = "Sold", source = "attom-sale"
       "building.summary.storydescription",
     ], ""),
     architecturalStyle: clean(pickFirstValue(propertyRecord, [
+      "building.summary.archStyle",
       "building.parking.archStyle",
       "building.summary.bldgType",
       "building.summary.imprType",
@@ -954,7 +957,9 @@ export async function handler(event) {
       if (debugAttom) attomDebug = attomBundle.debug;
     }
 
-    const listingData = dedupeListings(comparables).slice(0, Number(limit || 60));
+    const requestedLimit = Math.max(20, toFiniteNumber(limit, 60));
+    const mergedComparableLimit = clamp(Math.max(requestedLimit * 3, 120), requestedLimit, 240);
+    const listingData = dedupeListings(comparables).slice(0, mergedComparableLimit);
     const soldCount = estimateSoldComparableCount(listingData);
 
     if (!listingData.length) {

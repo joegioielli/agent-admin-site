@@ -501,19 +501,26 @@
           ? payload.error.payload.attempts
           : [];
       const attemptedSources = new Set(attempts.map((attempt) => cleanText(attempt?.source)).filter(Boolean));
+      const sourceText = normalizeText(payload?.source || payload?.error?.payload?.source || "");
+      const attomContributed = sourceText.includes("attom");
+      const rentcastContributed = sourceText.includes("rentcast");
       const summary = [];
 
       if (providers.attomConfigured === true) {
-        summary.push(attemptedSources.has("attom-property") || attemptedSources.has("attom-sale")
-          ? "ATTOM was attempted."
+        summary.push((attemptedSources.has("attom-property") || attemptedSources.has("attom-sale"))
+          ? attomContributed
+            ? "ATTOM contributed data."
+            : "ATTOM was attempted but did not contribute usable data."
           : "ATTOM is configured but was not attempted in this response.");
       } else if (providers.attomConfigured === false) {
         summary.push("ATTOM is not configured in the function runtime.");
       }
 
       if (providers.rentcastConfigured === true) {
-        summary.push(attemptedSources.has("rentcast-avm") || attemptedSources.has("rentcast-listings")
-          ? "RentCast was attempted."
+        summary.push((attemptedSources.has("rentcast-avm") || attemptedSources.has("rentcast-listings"))
+          ? rentcastContributed
+            ? "RentCast contributed data."
+            : "RentCast was attempted but did not contribute usable data."
           : "RentCast is configured but was not attempted in this response.");
       } else if (providers.rentcastConfigured === false) {
         summary.push("RentCast is not configured in the function runtime.");

@@ -225,15 +225,59 @@ function monthsAgo(date, months) {
   return copy;
 }
 
+function looksLikeAttomPropertyRecord(value) {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    (
+      value.identifier ||
+      value.address ||
+      value.summary ||
+      value.building ||
+      value.sale ||
+      value.location ||
+      value.area
+    )
+  );
+}
+
+function unwrapAttomPropertyRecord(record) {
+  if (looksLikeAttomPropertyRecord(record)) return record;
+  if (looksLikeAttomPropertyRecord(record?.property)) return record.property;
+  if (looksLikeAttomPropertyRecord(record?.data?.property)) return record.data.property;
+  return record;
+}
+
+function normalizeAttomRecordList(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((record) => unwrapAttomPropertyRecord(record))
+      .filter((record) => looksLikeAttomPropertyRecord(record));
+  }
+
+  if (looksLikeAttomPropertyRecord(value)) return [unwrapAttomPropertyRecord(value)];
+  if (looksLikeAttomPropertyRecord(value?.property)) return [unwrapAttomPropertyRecord(value.property)];
+  return [];
+}
+
 function extractAttomRecords(payload) {
-  if (Array.isArray(payload?.property)) return payload.property;
-  if (Array.isArray(payload?.properties)) return payload.properties;
-  if (Array.isArray(payload?.data?.property)) return payload.data.property;
-  if (Array.isArray(payload?.data?.properties)) return payload.data.properties;
-  if (Array.isArray(payload?.response?.property)) return payload.response.property;
-  if (Array.isArray(payload?.response?.properties)) return payload.response.properties;
-  if (payload?.property && typeof payload.property === "object") return [payload.property];
-  if (payload?.data?.property && typeof payload.data.property === "object") return [payload.data.property];
+  const candidatePaths = [
+    payload?.property,
+    payload?.properties,
+    payload?.data?.property,
+    payload?.data?.properties,
+    payload?.response?.property,
+    payload?.response?.properties,
+    payload?.result?.property,
+    payload?.result?.properties,
+  ];
+
+  for (const candidate of candidatePaths) {
+    const records = normalizeAttomRecordList(candidate);
+    if (records.length) return records;
+  }
+
+  if (looksLikeAttomPropertyRecord(payload)) return [unwrapAttomPropertyRecord(payload)];
   return [];
 }
 
@@ -275,39 +319,40 @@ function buildGarageSummary(record) {
 }
 
 function mapAttomRecord(record, { fallbackStatus = "Sold", source = "attom-sale" } = {}) {
-  const line1 = clean(pickFirstValue(record, [
+  const propertyRecord = unwrapAttomPropertyRecord(record);
+  const line1 = clean(pickFirstValue(propertyRecord, [
     "address.line1",
     "address.lineOne",
   ]));
-  const city = clean(pickFirstValue(record, [
+  const city = clean(pickFirstValue(propertyRecord, [
     "address.locality",
     "address.city",
   ]));
-  const state = normalizeState(pickFirstValue(record, [
+  const state = normalizeState(pickFirstValue(propertyRecord, [
     "address.countrySubd",
     "address.state",
   ]));
-  const zipCode = clean(pickFirstValue(record, [
+  const zipCode = clean(pickFirstValue(propertyRecord, [
     "address.postal1",
     "address.zip",
     "address.zipCode",
   ]));
-  const formattedAddress = clean(pickFirstValue(record, [
+  const formattedAddress = clean(pickFirstValue(propertyRecord, [
     "address.oneLine",
     "address.fullAddress",
   ], [line1, [city, state, zipCode].filter(Boolean).join(" ")].filter(Boolean).join(", ")));
-  const garageSummary = buildGarageSummary(record);
-  const lotSizeAcres = toFiniteNumber(pickFirstValue(record, ["lot.lotsize1", "lot.lotSize1"]), null);
-  const lotSizeSquareFeet = toFiniteNumber(pickFirstValue(record, ["lot.lotsize2", "lot.lotSize2"]), null);
+  const garageSummary = buildGarageSummary(propertyRecord);
+  const lotSizeAcres = toFiniteNumber(pickFirstValue(propertyRecord, ["lot.lotsize1", "lot.lotSize1"]), null);
+  const lotSizeSquareFeet = toFiniteNumber(pickFirstValue(propertyRecord, ["lot.lotsize2", "lot.lotSize2"]), null);
 
   return {
-    id: clean(pickFirstValue(record, [
+    id: clean(pickFirstValue(propertyRecord, [
       "identifier.attomId",
       "identifier.Id",
       "identifier.id",
       "identifier.obPropId",
     ], formattedAddress)),
-    propertyId: clean(pickFirstValue(record, [
+    propertyId: clean(pickFirstValue(propertyRecord, [
       "identifier.attomId",
       "identifier.obPropId",
     ])),
@@ -316,81 +361,81 @@ function mapAttomRecord(record, { fallbackStatus = "Sold", source = "attom-sale"
     city,
     state,
     zipCode,
-    status: clean(pickFirstValue(record, ["status"], fallbackStatus)) || fallbackStatus,
-    soldPrice: toFiniteNumber(pickFirstValue(record, [
+    status: clean(pickFirstValue(propertyRecord, ["status"], fallbackStatus)) || fallbackStatus,
+    soldPrice: toFiniteNumber(pickFirstValue(propertyRecord, [
       "sale.amount.saleamt",
       "sale.saleAmount",
       "sale.amount.amount",
     ]), null),
-    squareFootage: toFiniteNumber(pickFirstValue(record, [
+    squareFootage: toFiniteNumber(pickFirstValue(propertyRecord, [
       "building.size.universalsize",
       "building.size.livingsize",
       "building.size.grosssizeadjusted",
       "building.size.grosssize",
       "building.size.sizeLiving",
     ]), null),
-    bedrooms: toFiniteNumber(pickFirstValue(record, [
+    bedrooms: toFiniteNumber(pickFirstValue(propertyRecord, [
       "building.rooms.beds",
       "building.rooms.bedrooms",
     ]), null),
-    bathrooms: coerceBathrooms(pickFirstValue(record, [
+    bathrooms: coerceBathrooms(pickFirstValue(propertyRecord, [
       "building.rooms.bathsTotal",
       "building.rooms.bathstotal",
       "building.rooms.bathsfull",
     ], null)),
-    yearBuilt: toFiniteNumber(pickFirstValue(record, [
+    yearBuilt: toFiniteNumber(pickFirstValue(propertyRecord, [
       "summary.yearbuilt",
       "building.summary.yearbuilt",
       "building.summary.yearBuilt",
     ]), null),
     lotSizeAcres,
     lotSizeSquareFeet,
-    distance: toFiniteNumber(pickFirstValue(record, [
+    distance: toFiniteNumber(pickFirstValue(propertyRecord, [
       "location.distance",
       "location.dist",
     ]), null),
-    subdivision: clean(pickFirstValue(record, [
+    subdivision: clean(pickFirstValue(propertyRecord, [
       "area.subdname",
       "area.neighborhood",
       "area.munName",
     ])),
-    propertyType: clean(pickFirstValue(record, [
+    propertyType: clean(pickFirstValue(propertyRecord, [
       "summary.proptype",
       "summary.propsubtype",
       "summary.propertyType",
       "summary.propclass",
     ])),
-    stories: pickFirstValue(record, [
+    stories: pickFirstValue(propertyRecord, [
       "building.summary.levels",
       "building.summary.storyDesc",
       "building.summary.storydescription",
     ], ""),
-    architecturalStyle: clean(pickFirstValue(record, [
+    architecturalStyle: clean(pickFirstValue(propertyRecord, [
       "building.parking.archStyle",
       "building.summary.bldgType",
       "building.summary.imprType",
     ])),
-    garageSpaces: toFiniteNumber(pickFirstValue(record, [
+    garageSpaces: toFiniteNumber(pickFirstValue(propertyRecord, [
       "building.parking.prkgSpaces",
       "building.parking.spaces",
     ]), null),
     garage: garageSummary,
     parking: garageSummary,
-    soldDate: clean(pickFirstValue(record, [
+    soldDate: clean(pickFirstValue(propertyRecord, [
       "sale.saleTransDate",
       "sale.amount.salerecdate",
       "sale.recordingDate",
     ])),
-    latitude: toFiniteNumber(pickFirstValue(record, [
+    latitude: toFiniteNumber(pickFirstValue(propertyRecord, [
       "location.latitude",
       "location.lat",
     ]), null),
-    longitude: toFiniteNumber(pickFirstValue(record, [
+    longitude: toFiniteNumber(pickFirstValue(propertyRecord, [
       "location.longitude",
       "location.lon",
       "location.lng",
     ]), null),
-    remarks: clean(pickFirstValue(record, [
+    remarks: clean(pickFirstValue(propertyRecord, [
       "summary.absenteeInd",
       "sale.salesearchdate",
     ])),

@@ -1003,6 +1003,8 @@
       const negativeSignals = new Set(comp.conditionSignal?.negativeMatches || []);
       if (Number.isFinite(subject.storyCount) && Number.isFinite(comp.storyCount) && subject.storyCount !== comp.storyCount) { penalty += 8; penaltyReasons.push("story-count mismatch"); }
       if (!storyStyleCompatible(subject, comp, values)) { penalty += values.prioritizeStyle ? 12 : 5; penaltyReasons.push("major style mismatch"); }
+      if (subject.subdivision && comp.subdivision && !isSameSubdivision(subject, comp)) { penalty += values.prioritizeSubdivision ? 7 : 4; penaltyReasons.push("outside subdivision"); }
+      else if (subject.subdivision && !comp.subdivision && !isNearbyMicroMarket(subject, comp)) { penalty += values.prioritizeSubdivision ? 4 : 2; penaltyReasons.push("missing subdivision match"); }
       if (subject.streetNameKey && comp.streetNameKey && subject.streetNameKey !== comp.streetNameKey && comp.distanceMiles != null && comp.distanceMiles > 0.75) { penalty += 5; penaltyReasons.push("weaker micro-location match"); }
       if (comp.distanceMiles != null && comp.distanceMiles > Math.max(0.9, radius * 0.85) && !isNearbyMicroMarket(subject, comp)) { penalty += 5; penaltyReasons.push("excessive distance"); }
       if (subject.city && comp.city && normalizeText(subject.city) !== normalizeText(comp.city)) { penalty += 4; penaltyReasons.push("outside core market pocket"); }
@@ -1275,28 +1277,34 @@
         };
       }
 
-      const bestSimilarity = ranked[0]?.similarityScore || 0;
-      const similarityFloor = Math.max(bestSimilarity - 10, 68);
-      const anchorComps = ranked
-        .filter((comp, index) => index < 3 && ((comp.similarityScore || 0) >= similarityFloor || index < 2))
-        .slice(0, 3);
+      const localizedRanked = ranked.filter((comp) => isSameSubdivision(subject, comp) || isNearbyMicroMarket(subject, comp));
+      const supplementalRanked = ranked.filter((comp) => !(isSameSubdivision(subject, comp) || isNearbyMicroMarket(subject, comp)));
+      const anchorComps = localizedRanked.slice(0, 3);
+      if (anchorComps.length < 3) supplementalRanked.slice(0, 3 - anchorComps.length).forEach((comp) => anchorComps.push(comp));
+      const anchorWeight = (comp) => {
+        let weight = soldCompWeight(comp);
+        if (isSameSubdivision(subject, comp)) weight *= 1.22;
+        else if (isNearbyMicroMarket(subject, comp)) weight *= 1.12;
+        else if (localizedRanked.length) weight *= 0.58;
+        return clamp(weight, 0.2, 6);
+      };
       const anchorPrices = anchorComps.map((comp) => comp.soldPrice ?? comp.listPrice).filter((value) => Number.isFinite(value));
       const subjectSqft = Number.isFinite(subject.sqft) ? subject.sqft : median(anchorComps.map((comp) => comp.sqft));
-      const weightedMedianPrice = weightedPercentile(anchorComps, (comp) => comp.soldPrice ?? comp.listPrice, soldCompWeight, 0.5) ?? median(anchorPrices);
-      const trimmedMeanPrice = weightedTrimmedMean(anchorComps, (comp) => comp.soldPrice ?? comp.listPrice, soldCompWeight, 0.08)
-        ?? weightedAverage(anchorComps, (comp) => comp.soldPrice ?? comp.listPrice, soldCompWeight)
+      const weightedMedianPrice = weightedPercentile(anchorComps, (comp) => comp.soldPrice ?? comp.listPrice, anchorWeight, 0.5) ?? median(anchorPrices);
+      const trimmedMeanPrice = weightedTrimmedMean(anchorComps, (comp) => comp.soldPrice ?? comp.listPrice, anchorWeight, 0.08)
+        ?? weightedAverage(anchorComps, (comp) => comp.soldPrice ?? comp.listPrice, anchorWeight)
         ?? average(anchorPrices);
-      const anchorPpsfMedian = weightedPercentile(anchorComps, "pricePerSqft", soldCompWeight, 0.5) ?? median(anchorComps.map((comp) => comp.pricePerSqft));
+      const anchorPpsfMedian = weightedPercentile(anchorComps, "pricePerSqft", anchorWeight, 0.5) ?? median(anchorComps.map((comp) => comp.pricePerSqft));
       const ppsfCoreValue = Number.isFinite(anchorPpsfMedian) && Number.isFinite(subjectSqft) ? anchorPpsfMedian * subjectSqft : null;
       const strongestAnchorPrice = anchorComps.length ? (anchorComps[0].soldPrice ?? anchorComps[0].listPrice) : null;
       const coreValueEstimate = weightedAverage([
-        Number.isFinite(weightedMedianPrice) ? { value: weightedMedianPrice, weight: 1.9 } : null,
-        Number.isFinite(trimmedMeanPrice) ? { value: trimmedMeanPrice, weight: 1.5 } : null,
-        Number.isFinite(ppsfCoreValue) ? { value: ppsfCoreValue, weight: 1.05 } : null,
-        Number.isFinite(strongestAnchorPrice) ? { value: strongestAnchorPrice, weight: 0.55 } : null
+        Number.isFinite(weightedMedianPrice) ? { value: weightedMedianPrice, weight: 2.05 } : null,
+        Number.isFinite(trimmedMeanPrice) ? { value: trimmedMeanPrice, weight: 1.55 } : null,
+        Number.isFinite(ppsfCoreValue) ? { value: ppsfCoreValue, weight: localizedRanked.length >= 2 ? 0.65 : 0.45 } : null,
+        Number.isFinite(strongestAnchorPrice) ? { value: strongestAnchorPrice, weight: localizedRanked.length >= 2 ? 0.25 : 0.15 } : null
       ].filter(Boolean), "value", "weight");
-      const anchorQ1 = weightedPercentile(anchorComps, (comp) => comp.soldPrice ?? comp.listPrice, soldCompWeight, 0.25) ?? percentile(anchorPrices, 0.25);
-      const anchorQ3 = weightedPercentile(anchorComps, (comp) => comp.soldPrice ?? comp.listPrice, soldCompWeight, 0.75) ?? percentile(anchorPrices, 0.75);
+      const anchorQ1 = weightedPercentile(anchorComps, (comp) => comp.soldPrice ?? comp.listPrice, anchorWeight, 0.25) ?? percentile(anchorPrices, 0.25);
+      const anchorQ3 = weightedPercentile(anchorComps, (comp) => comp.soldPrice ?? comp.listPrice, anchorWeight, 0.75) ?? percentile(anchorPrices, 0.75);
       const anchorMedian = weightedMedianPrice ?? median(anchorPrices);
       const anchorSpreadPct = Number.isFinite(anchorMedian) && Number.isFinite(anchorQ1) && Number.isFinite(anchorQ3) && anchorMedian > 0
         ? clamp((anchorQ3 - anchorQ1) / (anchorMedian * 2), 0.015, 0.08)
@@ -1312,6 +1320,7 @@
         anchorQ1,
         anchorQ3,
         anchorSpreadPct,
+        localizedAnchorCount: localizedRanked.length,
         averageSimilarity: average(anchorComps.map((comp) => comp.similarityScore)),
         sameMarketShare: anchorComps.length
           ? anchorComps.filter((comp) => isSameSubdivision(subject, comp) || isNearbyMicroMarket(subject, comp)).length / anchorComps.length
@@ -1369,8 +1378,10 @@
         const compPrice = comp.soldPrice ?? comp.listPrice;
         let weight = clamp(similarity / 18, 1, 5.5);
 
-        if (isSameSubdivision(subject, comp)) weight *= 1.18;
-        else if (isNearbyMicroMarket(subject, comp)) weight *= 1.08;
+        if (isSameSubdivision(subject, comp)) weight *= 1.28;
+        else if (isNearbyMicroMarket(subject, comp)) weight *= 1.1;
+        else if (subject.subdivision && comp.subdivision) weight *= 0.72;
+        else if (comp.distanceMiles != null && comp.distanceMiles > 0.75) weight *= 0.84;
 
         let lowOutlierSignals = 0;
         if (Number.isFinite(soldMedianPrice) && Number.isFinite(compPrice) && compPrice < soldMedianPrice * 0.94) lowOutlierSignals += 1;
@@ -1423,6 +1434,19 @@
         Number.isFinite(pendingPpsfMedianWeighted) && Number.isFinite(subjectSqft) ? { value: pendingPpsfMedianWeighted * subjectSqft, weight: 0.65 } : null,
         Number.isFinite(activeComp?.listPrice) && (activeComp?.similarityScore || 0) >= 70 ? { value: activeComp.listPrice, weight: 0.8 } : null
       ].filter(Boolean), "value", "weight");
+      const sameSubdivisionSoldComps = soldComps.filter((comp) => isSameSubdivision(subject, comp));
+      const sameMarketSoldComps = soldComps.filter((comp) => isSameSubdivision(subject, comp) || isNearbyMicroMarket(subject, comp));
+      const localizedSoldPool = sameSubdivisionSoldComps.length ? sameSubdivisionSoldComps : sameMarketSoldComps;
+      const localizedMarketAnchor = localizedSoldPool.length
+        ? weightedAverage([
+          Number.isFinite(weightedAverage(localizedSoldPool, (comp) => comp.soldPrice ?? comp.listPrice, soldCompWeight))
+            ? { value: weightedAverage(localizedSoldPool, (comp) => comp.soldPrice ?? comp.listPrice, soldCompWeight), weight: 1.2 }
+            : null,
+          Number.isFinite(subjectSqft) && Number.isFinite(weightedAverage(localizedSoldPool, "pricePerSqft", soldCompWeight))
+            ? { value: weightedAverage(localizedSoldPool, "pricePerSqft", soldCompWeight) * subjectSqft, weight: 0.85 }
+            : null
+        ].filter(Boolean), "value", "weight")
+        : null;
       const coreValueModel = buildCoreValueEstimate(subject, soldComps, soldCompWeight);
       const subjectCompleteness = computeSubjectDataCompleteness(subject);
       const weightedSalePrice = weightedAverage(soldComps, (comp) => comp.soldPrice ?? comp.listPrice, soldCompWeight);
@@ -1431,6 +1455,31 @@
         weightedSalePrice,
         Number.isFinite(weightedPpsf) && Number.isFinite(subjectSqft) ? weightedPpsf * subjectSqft : null
       ].filter((value) => Number.isFinite(value))) ?? average(compPrices);
+      if (Number.isFinite(coreValueEstimate) && Number.isFinite(localizedMarketAnchor)) {
+        const localizedGapPct = Math.abs(localizedMarketAnchor - coreValueEstimate) / coreValueEstimate;
+        if ((coreValueModel.sameMarketShare ?? 0) < 0.67 || coreValueModel.anchorComps.length < 3 || localizedGapPct > 0.035) {
+          coreValueEstimate = weightedAverage([
+            { value: coreValueEstimate, weight: 1.15 },
+            { value: localizedMarketAnchor, weight: sameSubdivisionSoldComps.length ? 1.45 : 1.2 }
+          ], "value", "weight");
+        }
+      }
+      const thinAnchorSet = coreValueModel.anchorComps.length < 3 || (coreValueModel.sameMarketShare ?? 0) < 0.67;
+      const strongCurrentSupport = (average(pendingComps.map((comp) => comp.similarityScore)) ?? 0) >= 76 || (activeComp?.similarityScore || 0) >= 78;
+      if (thinAnchorSet && Number.isFinite(coreValueEstimate)) {
+        const conservativeThinAnchor = weightedAverage([
+          Number.isFinite(coreValueModel.weightedMedianPrice) ? { value: coreValueModel.weightedMedianPrice, weight: 1.7 } : null,
+          Number.isFinite(coreValueModel.trimmedMeanPrice) ? { value: coreValueModel.trimmedMeanPrice, weight: 1.15 } : null,
+          Number.isFinite(localizedMarketAnchor) ? { value: localizedMarketAnchor, weight: sameSubdivisionSoldComps.length ? 1.35 : 1.1 } : null,
+          Number.isFinite(coreValueModel.anchorQ1) ? { value: coreValueModel.anchorQ1, weight: 0.8 } : null
+        ].filter(Boolean), "value", "weight");
+        if (Number.isFinite(conservativeThinAnchor)) {
+          coreValueEstimate = weightedAverage([
+            { value: coreValueEstimate, weight: 0.95 },
+            { value: conservativeThinAnchor, weight: 1.45 }
+          ], "value", "weight");
+        }
+      }
       if (Number.isFinite(coreValueEstimate)) coreValueEstimate *= 1 + (conditionPct * 0.7);
 
       let historicalGapPct = Number.isFinite(coreValueEstimate) && Number.isFinite(historicalAnchor) && coreValueEstimate > 0
@@ -1489,7 +1538,12 @@
           high = Math.max(high, recentAppraisalValue * 1.005);
         }
       }
-      if (Number.isFinite(currentMarketSupport) && Number.isFinite(coreValueEstimate) && currentMarketSupport > coreValueEstimate * 1.015) {
+      if (
+        Number.isFinite(currentMarketSupport) &&
+        Number.isFinite(coreValueEstimate) &&
+        currentMarketSupport > coreValueEstimate * (thinAnchorSet ? 1.03 : 1.015) &&
+        (!thinAnchorSet || strongCurrentSupport)
+      ) {
         high = Math.max(high, currentMarketSupport * 0.995);
       }
       const widthAnchor = coreValueEstimate || historicalAnchor || average(compPrices) || 250000;
@@ -1507,7 +1561,7 @@
         ? (currentMarketSupport - coreValueEstimate) / coreValueEstimate
         : 0;
       let listAdjustmentPct = marketTrend.pricingLean === "aggressive" ? 0.006 : marketTrend.pricingLean === "conservative" ? -0.006 : 0;
-      listAdjustmentPct += clamp(currentMarketGapPct * 0.45, -0.012, 0.014);
+      listAdjustmentPct += clamp(currentMarketGapPct * (thinAnchorSet ? 0.22 : 0.45), -0.012, thinAnchorSet ? 0.008 : 0.014);
       if (Number.isFinite(marketTrend.avgDom)) {
         if (marketTrend.avgDom <= 18) listAdjustmentPct += 0.003;
         else if (marketTrend.avgDom >= 45) listAdjustmentPct -= 0.005;
@@ -1521,6 +1575,9 @@
       }
 
       let suggestedBase = Number.isFinite(coreValueEstimate) ? coreValueEstimate * (1 + listAdjustmentPct) : average(compPrices);
+      if (thinAnchorSet && Number.isFinite(coreValueEstimate)) {
+        suggestedBase = Math.min(suggestedBase, coreValueEstimate * (strongCurrentSupport ? 1.01 : 1.005));
+      }
       if (Number.isFinite(suggestedBase) && rangeHigh > rangeLow) {
         const floor = low + ((high - low) * 0.18);
         const ceiling = high - ((high - low) * 0.06);

@@ -1335,6 +1335,14 @@
       const strongActiveFloorAnchor = Number.isFinite(activeComp?.listPrice) && (activeComp?.similarityScore || 0) >= 72
         ? activeComp.listPrice
         : null;
+      const upperHalfSupportCandidates = [
+        Number.isFinite(strongestCompAnchor) ? { value: strongestCompAnchor, weight: 1.45 } : null,
+        Number.isFinite(strongestPendingAnchor) ? { value: strongestPendingAnchor, weight: 1.35 } : null,
+        Number.isFinite(strongActiveFloorAnchor) ? { value: strongActiveFloorAnchor, weight: 1.25 } : null,
+        historicalReference.recentAppraisal?.value ? { value: historicalReference.recentAppraisal.value, weight: 1.8 } : null
+      ].filter(Boolean);
+      const upperHalfSupportAnchor = weightedAverage(upperHalfSupportCandidates, "value", "weight");
+      const upperSupportSignalCount = upperHalfSupportCandidates.length;
       const priceDispersionPct = Number.isFinite(priceMedian) && Number.isFinite(priceQ1) && Number.isFinite(priceQ3) && priceMedian > 0
         ? clamp((priceQ3 - priceQ1) / (priceMedian * 2), 0.02, 0.08)
         : null;
@@ -1395,6 +1403,10 @@
       } else if (Number.isFinite(strongActiveFloorAnchor)) {
         low = Math.max(low, strongActiveFloorAnchor * 0.94);
       }
+      if (Number.isFinite(upperHalfSupportAnchor) && upperSupportSignalCount >= 2) {
+        low = Math.max(low, upperHalfSupportAnchor * (historicalReference.recentAppraisal ? 0.96 : 0.93));
+        high = Math.max(high, upperHalfSupportAnchor * 1.0025);
+      }
       if (activeComp?.listPrice && marketTrend.trend === "softening") high = Math.min(high, activeComp.listPrice + 5000);
       if (activeComp?.listPrice && marketTrend.trend === "strengthening") low = Math.max(low, activeComp.listPrice - 10000);
       if (Number.isFinite(strongestCompAnchor)) {
@@ -1414,22 +1426,44 @@
       const pricingConfidence = buildPricingConfidence(soldComps, subjectCompleteness, rangePaddingPct, historicalGapPct);
       let bias = marketTrend.pricingLean === "aggressive" ? 0.74 : marketTrend.pricingLean === "conservative" ? 0.45 : 0.58;
       bias = clamp(bias + clamp(subjectCondition.netScore * 0.03, -0.09, 0.09), 0.2, 0.8);
+      if (Number.isFinite(upperHalfSupportAnchor) && rangeHigh > rangeLow) {
+        const midpoint = average([rangeLow, rangeHigh]);
+        if (upperHalfSupportAnchor >= midpoint) {
+          const supportBias = clamp((upperHalfSupportAnchor - rangeLow) / (rangeHigh - rangeLow), 0.58, 0.9);
+          bias = clamp((bias * 0.45) + (supportBias * 0.55), 0.46, 0.88);
+        }
+      }
       if (Number.isFinite(pricingAnchor) && rangeHigh > rangeLow) {
         const anchorBias = clamp((pricingAnchor - rangeLow) / (rangeHigh - rangeLow), 0.3, 0.82);
         bias = clamp((bias * 0.4) + (anchorBias * 0.6), 0.32, 0.82);
       }
-      const strategyAnchor = average([
-        Number.isFinite(pricingAnchor) ? pricingAnchor : null,
-        Number.isFinite(strongestCompAnchor) ? strongestCompAnchor : null,
-        historicalReference.recentAppraisal?.value ?? null
-      ].filter((value) => Number.isFinite(value)));
-      let suggested = psychPrice(average([
+      const strategyAnchor = weightedAverage([
+        Number.isFinite(pricingAnchor) ? { value: pricingAnchor, weight: 1.05 } : null,
+        Number.isFinite(strongestCompAnchor) ? { value: strongestCompAnchor, weight: 1.45 } : null,
+        Number.isFinite(strongestPendingAnchor) ? { value: strongestPendingAnchor, weight: 1.3 } : null,
+        Number.isFinite(strongActiveFloorAnchor) ? { value: strongActiveFloorAnchor, weight: 1.15 } : null,
+        historicalReference.recentAppraisal?.value ? { value: historicalReference.recentAppraisal.value, weight: 1.8 } : null,
+        !historicalReference.recentAppraisal && Number.isFinite(historicalAnchor) ? { value: historicalAnchor, weight: 0.85 } : null
+      ].filter(Boolean), "value", "weight");
+      let suggestedBase = average([
         rangeLow + (rangeHigh - rangeLow) * bias,
         Number.isFinite(strategyAnchor) ? strategyAnchor : null
-      ].filter((value) => Number.isFinite(value))), "nearest");
+      ].filter((value) => Number.isFinite(value)));
+      if (Number.isFinite(upperHalfSupportAnchor) && upperSupportSignalCount >= 2) {
+        const midpoint = average([rangeLow, rangeHigh]);
+        if (upperHalfSupportAnchor >= midpoint) {
+          suggestedBase = Math.max(
+            suggestedBase,
+            upperHalfSupportAnchor * (historicalReference.recentAppraisal ? 0.995 : 0.98)
+          );
+        }
+      }
+      let suggested = psychPrice(suggestedBase, "nearest");
       suggested = clamp(suggested, rangeLow, rangeHigh);
 
-      const strategyBase = marketTrend.pricingLean === "aggressive"
+      const strategyBase = Number.isFinite(upperHalfSupportAnchor) && upperSupportSignalCount >= 2
+        ? "The strongest sold and current-market support justify leaning to the upper half of the range instead of anchoring too close to the midpoint."
+        : marketTrend.pricingLean === "aggressive"
         ? "The selected comps support leaning to the upper half of the range, especially if the home shows well and launches cleanly."
         : marketTrend.pricingLean === "conservative"
           ? "The selected comps support a slightly tighter opening position so the listing stays competitive with current buyer behavior."

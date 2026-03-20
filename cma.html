@@ -244,7 +244,7 @@
               <div class="report-badges">
                 <span class="badge">3 sold comps</span>
                 <span class="badge">1 active comp</span>
-                <span class="badge badge-accent">RentCast connected</span>
+                <span class="badge badge-accent">Live data connected</span>
               </div>
             </div>
             <div class="report-body">
@@ -467,6 +467,30 @@
       const parsed = parseDateValue(date);
       if (!parsed) return "N/A";
       return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(parsed);
+    }
+
+    function describeLiveSource(source) {
+      const normalized = cleanText(source);
+      if (!normalized) return "live comparable-property data";
+      if (normalized.includes("rentcast") && normalized.includes("attom")) {
+        return "hybrid RentCast listing data with ATTOM property and sale records";
+      }
+      if (normalized.includes("attom-property") && normalized.includes("attom-sale")) {
+        return "live ATTOM property detail and sold-sale data";
+      }
+      if (normalized.includes("attom")) {
+        return "live ATTOM property data";
+      }
+      if (normalized === "rentcast-avm") {
+        return "live RentCast AVM data with comparable-property matching";
+      }
+      if (normalized.includes("rentcast-avm")) {
+        return "live RentCast AVM and sale-listing data";
+      }
+      if (normalized.includes("rentcast")) {
+        return "live RentCast sale-listing data with staged comp filtering and similarity scoring";
+      }
+      return "live comparable-property data";
     }
 
     function setGenerateState(isLoading) {
@@ -1721,6 +1745,7 @@
       params.set("searchRadius", String(values.searchRadius || 3));
       params.set("compCount", "20");
       params.set("limit", "60");
+      params.set("lookbackMonths", String(values.lookbackMonths || 6));
       const response = await fetch(`/.netlify/functions/cma?${params.toString()}`, { headers: { Accept: "application/json" } });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -1749,7 +1774,7 @@
       pendingSelection.pendingComps.forEach((comp) => usedIds.add(compIdentityKey(comp)));
       const activeSelection = selectActiveComparable(subject, mergedCompPool, values, usedIds);
       const marketComp = pendingSelection.pendingComps[0] || activeSelection.activeComp || null;
-      const sourceLabel = payload?.source === "rentcast-avm" ? "live RentCast AVM data with comparable-property matching" : "live RentCast sale-listing data with staged comp filtering and similarity scoring";
+      const sourceLabel = describeLiveSource(payload?.source);
       const sourceNote = soldSelection.usedLiveFallbackPool
         ? `Generated ${formatDateTime(new Date())} using ${sourceLabel}. The sold comp set was thin, so the report ranked the closest available live comparables in the returned pool.`
         : `Generated ${formatDateTime(new Date())} using ${sourceLabel}.`;

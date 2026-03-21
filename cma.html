@@ -501,6 +501,18 @@
       if (normalized.includes("attom-avm") && (normalized.includes("attom-property") || normalized.includes("attom-sale"))) {
         return "live ATTOM AVM, property detail, and sold-sale data";
       }
+      if (normalized.includes("attom-address") && normalized.includes("attom-sale")) {
+        return "live ATTOM address-match and sold-sale data";
+      }
+      if (normalized.includes("attom-basicprofile") && normalized.includes("attom-sale")) {
+        return "live ATTOM basic profile and sold-sale data";
+      }
+      if (normalized.includes("attom-basicprofile")) {
+        return "live ATTOM basic profile data";
+      }
+      if (normalized.includes("attom-address")) {
+        return "live ATTOM address-match data";
+      }
       if (normalized.includes("attom-avm")) {
         return "live ATTOM AVM data";
       }
@@ -542,9 +554,15 @@
       const summary = [];
 
       if (providers.attomConfigured === true) {
+        const attomAttempted = attemptedSources.has("attom-address")
+          || attemptedSources.has("attom-avm")
+          || attemptedSources.has("attom-avm-snapshot")
+          || attemptedSources.has("attom-property")
+          || attemptedSources.has("attom-basicprofile")
+          || attemptedSources.has("attom-sale");
         summary.push(providerMode === "rentcast"
           ? "ATTOM was intentionally skipped in RentCast-only mode."
-          : (attemptedSources.has("attom-avm") || attemptedSources.has("attom-avm-snapshot") || attemptedSources.has("attom-property") || attemptedSources.has("attom-sale"))
+          : attomAttempted
             ? attomContributed
               ? "ATTOM contributed data."
               : "ATTOM was attempted but did not contribute usable data."
@@ -909,14 +927,45 @@
         streetNameKey: streetNameKeyFromAddress(address),
         streetNumber: streetNumberFromAddress(address),
         garageParking: buildGarageParkingSummary(item),
+        latitude: coerceNumber(pickFirstPath(item, ["latitude", "lat", "location.latitude", "location.lat"])),
+        longitude: coerceNumber(pickFirstPath(item, ["longitude", "lon", "lng", "location.longitude", "location.lon", "location.lng"])),
         soldDate: parseDateValue(pickFirstPath(item, ["soldDate", "saleDate", "closeDate", "lastSaleDate", "offMarketDate", "sale.saleTransDate", "sale.amount.salerecdate", "sale.recordingDate"])),
         listDate: parseDateValue(pickFirstPath(item, ["listDate", "listedDate", "onMarketDate", "createdDate"])),
         pricePerSqft,
         distressed: DISTRESS_KEYWORDS.some((keyword) => normalizeText(`${status} ${remarks}`).includes(keyword)),
         conditionSignal: analyzeConditionText(remarks),
+        source: cleanText(pickFirstPath(item, ["source"], "")),
         notes: "",
         similarityScore: null
       };
+    }
+
+    function toRadians(value) {
+      return (Number(value) * Math.PI) / 180;
+    }
+
+    function calculateDistanceMiles(lat1, lon1, lat2, lon2) {
+      if (![lat1, lon1, lat2, lon2].every((value) => Number.isFinite(value))) return null;
+      const earthRadiusMiles = 3958.7613;
+      const dLat = toRadians(lat2 - lat1);
+      const dLon = toRadians(lon2 - lon1);
+      const a = Math.sin(dLat / 2) ** 2
+        + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
+      return earthRadiusMiles * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+    }
+
+    function applyComputedDistances(subject, comps) {
+      if (!Array.isArray(comps) || !comps.length) return comps;
+      const subjectLat = coerceNumber(subject?.latitude);
+      const subjectLon = coerceNumber(subject?.longitude);
+      if (!Number.isFinite(subjectLat) || !Number.isFinite(subjectLon)) return comps;
+      return comps.map((comp) => {
+        if (Number.isFinite(comp?.distanceMiles)) return comp;
+        const compLat = coerceNumber(comp?.latitude);
+        const compLon = coerceNumber(comp?.longitude);
+        const computed = calculateDistanceMiles(subjectLat, subjectLon, compLat, compLon);
+        return Number.isFinite(computed) ? { ...comp, distanceMiles: computed } : comp;
+      });
     }
 
     const isSoldComp = (comp) => Boolean(comp.soldPrice != null || /\b(sold|closed|settled|off market)\b/i.test(comp.status));
@@ -1038,6 +1087,8 @@
         storyCount: values.subjectStoryCount ?? fallbackComp?.storyCount ?? null,
         styleText: fallbackComp?.styleText || "",
         garageParking: values.subjectGarageParking || fallbackComp?.garageParking || "",
+        latitude: coerceNumber(fallbackComp?.latitude),
+        longitude: coerceNumber(fallbackComp?.longitude),
         specialDetails: values.specialDetails,
         conditionNotes: values.conditionNotes,
         estimatedValue: null
@@ -2178,13 +2229,25 @@
       const manualCurrentMarketComps = filterExcludedComparables(values.manualCurrentMarketComps || [], values.excludedComparableKeys);
       const mergedCompPool = mergeManualCurrentMarketComps(filteredCompPool, manualCurrentMarketComps);
       let subject = buildSubjectProfile(values, mergedCompPool, subjectMatch);
-      const soldSelection = selectSoldComparables(subject, mergedCompPool, values);
+      const subjectSource = normalizeText(subjectRecord?.source || subjectMatch?.source || "");
+      const subjectCompleteness = computeSubjectDataCompleteness(subject);
+      const hasCoreSubjectFacts = Number.isFinite(subject.sqft)
+        || (Number.isFinite(subject.beds) && Number.isFinite(subject.baths))
+        || Number.isFinite(subject.yearBuilt);
+      if (LIVE_PROVIDER_MODE === "attom" && (!subjectSource || subjectSource === "attom-address") && subjectCompleteness < 0.45 && !hasCoreSubjectFacts) {
+        const error = new Error("ATTOM returned sale snapshot comps but not enough subject-property detail to build a reliable CMA. Enter the subject's sqft, beds, baths, and year built manually or switch back to hybrid mode.");
+        error.code = "INSUFFICIENT_ATTOM_SUBJECT_DATA";
+        error.payload = payload;
+        throw error;
+      }
+      const locationAwareCompPool = applyComputedDistances(subject, mergedCompPool);
+      const soldSelection = selectSoldComparables(subject, locationAwareCompPool, values);
       const usedIds = new Set(soldSelection.soldComps.map((comp) => compIdentityKey(comp)));
-      const pendingSelection = selectPendingComparables(subject, mergedCompPool, values, usedIds);
+      const pendingSelection = selectPendingComparables(subject, locationAwareCompPool, values, usedIds);
       pendingSelection.pendingComps.forEach((comp) => usedIds.add(compIdentityKey(comp)));
-      const activeSelection = selectActiveComparable(subject, mergedCompPool, values, usedIds);
+      const activeSelection = selectActiveComparable(subject, locationAwareCompPool, values, usedIds);
       const marketComp = pendingSelection.pendingComps[0] || activeSelection.activeComp || null;
-      subject = enrichSubjectProfile(subject, [...soldSelection.soldComps, ...pendingSelection.pendingComps, activeSelection.activeComp, ...mergedCompPool].filter(Boolean));
+      subject = enrichSubjectProfile(subject, [...soldSelection.soldComps, ...pendingSelection.pendingComps, activeSelection.activeComp, ...locationAwareCompPool].filter(Boolean));
       const sourceLabel = describeLiveSource(payload?.source);
       const diagnosticsNote = summarizeProviderDiagnostics(payload);
       const sourceNote = soldSelection.usedLiveFallbackPool
@@ -2251,6 +2314,7 @@
           <div><span>Year Built</span><strong>${comp.yearBuilt ?? "N/A"}</strong></div>
           <div><span>Lot Size</span><strong>${formatLotSize(comp.lotSize)}</strong></div>
           <div><span>Days on Market</span><strong>${comp.daysOnMarket ?? "N/A"}</strong></div>
+          <div><span>Distance</span><strong>${Number.isFinite(comp.distanceMiles) ? `${comp.distanceMiles.toFixed(comp.distanceMiles >= 10 ? 0 : 1)} mi` : "N/A"}</strong></div>
           <div><span>Close Date</span><strong>${closeDateValue}</strong></div>
           <div><span>Price / Sq Ft</span><strong>${formatPpsf(comp.pricePerSqft)}</strong></div>
         </div>
@@ -2404,9 +2468,15 @@
     }
 
     function showLiveDataError(values, error) {
+      const diagnosticsNote = summarizeProviderDiagnostics({ error });
+      if (error?.code === "INSUFFICIENT_ATTOM_SUBJECT_DATA") {
+        resetReport();
+        reportTimestamp.textContent = "ATTOM-only CMA needs more subject detail.";
+        reportEmptyState.textContent = `${error.message}${diagnosticsNote ? ` ${diagnosticsNote}` : ""}`;
+        return;
+      }
       const fallbackReport = buildMockReport(values);
       if (ATTOM_DEBUG_REQUESTED) console.info("[CMA] ATTOM debug error payload", error?.payload?.debug?.attom || null);
-      const diagnosticsNote = summarizeProviderDiagnostics({ error });
       fallbackReport.dataSourceNote = `${error?.message || "Live data is currently unavailable."}${diagnosticsNote ? ` ${diagnosticsNote}` : ""} Sample comps are shown below so the CMA stays usable while live data recovers.`;
       renderReport(values, fallbackReport);
     }

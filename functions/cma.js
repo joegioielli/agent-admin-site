@@ -449,9 +449,39 @@ function mapAttomAddressMatch(record) {
     address: fullAddress,
     address1: line1,
     address2,
+    city,
+    state,
+    zipCode,
+    latitude: toFiniteNumber(pickFirstValue(propertyRecord, [
+      "location.latitude",
+      "location.lat",
+    ]), null),
+    longitude: toFiniteNumber(pickFirstValue(propertyRecord, [
+      "location.longitude",
+      "location.lon",
+      "location.lng",
+    ]), null),
     matchCode: clean(pickFirstValue(propertyRecord, [
       "address.matchCode",
     ])),
+  };
+}
+
+function buildAttomResolvedSubject(match) {
+  if (!match) return null;
+
+  return {
+    id: clean(match.attomId || match.id || match.address),
+    propertyId: clean(match.attomId || match.id),
+    formattedAddress: clean(match.address),
+    addressLine1: clean(match.address1),
+    city: clean(match.city),
+    state: normalizeState(match.state),
+    zipCode: clean(match.zipCode),
+    status: "Subject",
+    latitude: toFiniteNumber(match.latitude, null),
+    longitude: toFiniteNumber(match.longitude, null),
+    source: "attom-address",
   };
 }
 
@@ -926,6 +956,8 @@ async function fetchAttomBundle({
   let attomAvm = null;
   let resolvedAddressMatch = null;
   let lastError = null;
+  let subjectSource = "";
+  let avmSource = "";
 
   for (const attempt of baseSubjectAttempts) {
     const url = new URL(ATTOM_PROPERTY_ADDRESS_URL);
@@ -1008,6 +1040,7 @@ async function fetchAttomBundle({
         fallbackStatus: "Subject",
         source: "attom-property",
       });
+      subjectSource = "attom-property";
       break;
     }
 
@@ -1050,6 +1083,7 @@ async function fetchAttomBundle({
 
     if (summary.hasResults) {
       attomAvm = avmMapped;
+      avmSource = "attom-avm";
       if (avmRecord) {
         const avmSubjectRecord = mapAttomRecord(avmRecord, {
           fallbackStatus: "Subject",
@@ -1058,6 +1092,7 @@ async function fetchAttomBundle({
         subjectProperty = subjectProperty
           ? mergeDefined(subjectProperty, avmSubjectRecord)
           : avmSubjectRecord;
+        if (!subjectSource) subjectSource = "attom-avm";
       }
       break;
     }
@@ -1102,6 +1137,7 @@ async function fetchAttomBundle({
 
       if (summary.hasResults) {
         attomAvm = avmMapped;
+        avmSource = "attom-avm-snapshot";
         if (avmRecord) {
           const avmSubjectRecord = mapAttomRecord(avmRecord, {
             fallbackStatus: "Subject",
@@ -1110,6 +1146,7 @@ async function fetchAttomBundle({
           subjectProperty = subjectProperty
             ? mergeDefined(subjectProperty, avmSubjectRecord)
             : avmSubjectRecord;
+          if (!subjectSource) subjectSource = "attom-avm-snapshot";
         }
         break;
       }
@@ -1158,6 +1195,7 @@ async function fetchAttomBundle({
         subjectProperty = subjectProperty
           ? mergeDefined(subjectProperty, basicProfileSubject)
           : basicProfileSubject;
+        if (!subjectSource) subjectSource = "attom-basicprofile";
         if (!subjectPropertyNeedsAttomEnrichment(subjectProperty)) break;
       }
 
@@ -1165,6 +1203,11 @@ async function fetchAttomBundle({
         lastError = buildAttomError(result, summary);
       }
     }
+  }
+
+  if (!subjectProperty && resolvedAddressMatch) {
+    subjectProperty = buildAttomResolvedSubject(resolvedAddressMatch);
+    subjectSource = "attom-address";
   }
 
   const comparables = [];
@@ -1228,8 +1271,8 @@ async function fetchAttomBundle({
 
   const dedupedComparables = dedupeListings(comparables).slice(0, Number(limit || 60));
   const sourceParts = [];
-  if (attomAvm) sourceParts.push("attom-avm");
-  if (subjectProperty) sourceParts.push("attom-property");
+  if (attomAvm && avmSource) sourceParts.push(avmSource);
+  if (subjectProperty && subjectSource && !sourceParts.includes(subjectSource)) sourceParts.push(subjectSource);
   if (dedupedComparables.length) sourceParts.push("attom-sale");
 
   return {
@@ -1243,6 +1286,8 @@ async function fetchAttomBundle({
       enabled: true,
       source: sourceParts.join("+"),
       resolvedAddressMatch,
+      subjectSource,
+      avmSource,
       attomAvm,
       subjectPropertyMapped: subjectProperty,
       comparableCount: dedupedComparables.length,

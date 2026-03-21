@@ -950,6 +950,44 @@
       return text.replace(/\s+/g, " ").trim();
     }
 
+    function extractUnitToken(value) {
+      const text = canonicalizeAddress(value);
+      if (!text) return "";
+      const match = text.match(/\b(?:apt|apartment|unit|suite|ste|#|lot|bldg|building|fl|floor)\s+([a-z0-9-]+)\b/);
+      return match?.[1] || "";
+    }
+
+    function normalizeStreetLine(value) {
+      const parsed = parseSubjectAddress(value);
+      let text = canonicalizeAddress(parsed.street || value);
+      if (!text) return "";
+      text = text
+        .replace(/\b(?:apt|apartment|unit|suite|ste|#|lot|bldg|building|fl|floor)\s+[a-z0-9-]+\b/g, "")
+        .replace(/\b(?:north|south|east|west|n|s|e|w)\b/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      return text;
+    }
+
+    function buildAddressSignature(address, fallbackCity = "", fallbackState = "", fallbackZip = "") {
+      const parsed = parseSubjectAddress(address || "");
+      const streetSource = parsed.street || address || "";
+      return {
+        street: normalizeStreetLine(streetSource),
+        streetNumber: streetNumberFromAddress(streetSource),
+        streetKey: streetNameKeyFromAddress(streetSource),
+        unit: extractUnitToken(address || streetSource),
+        city: canonicalizeAddress(parsed.city || fallbackCity),
+        state: canonicalizeAddress(parsed.state || fallbackState),
+        zipCode: cleanText(parsed.zipCode || fallbackZip)
+      };
+    }
+
+    function addressStringsLikelyMatch(a, b) {
+      if (!a || !b) return false;
+      return a === b || a.includes(b) || b.includes(a);
+    }
+
     function streetNameKeyFromAddress(value) {
       const text = canonicalizeAddress(value);
       if (!text) return "";
@@ -996,23 +1034,30 @@
     }
 
     function addressesLikelyMatch(values, comp) {
-      const parsed = parseSubjectAddress(values.subjectAddress);
-      const subjectStreet = canonicalizeAddress(parsed.street || values.subjectAddress);
-      const subjectCity = canonicalizeAddress(parsed.city);
-      const subjectState = canonicalizeAddress(parsed.state);
-      const subjectZip = cleanText(parsed.zipCode);
-      if (!subjectStreet) return false;
+      const subjectSignature = buildAddressSignature(values.subjectAddress);
+      if (!subjectSignature.street) return false;
+      const compSignature = buildAddressSignature(comp?.address, comp?.city, comp?.state, comp?.zipCode);
 
-      const compStreet = canonicalizeAddress(comp.address);
-      const compCity = canonicalizeAddress(comp.city);
-      const compState = canonicalizeAddress(comp.state);
-      const compZip = cleanText(comp.zipCode);
+      const streetMatches = addressStringsLikelyMatch(subjectSignature.street, compSignature.street);
+      const streetNumberAndKeyMatch = Boolean(
+        subjectSignature.streetNumber &&
+        compSignature.streetNumber &&
+        subjectSignature.streetNumber === compSignature.streetNumber &&
+        subjectSignature.streetKey &&
+        compSignature.streetKey &&
+        addressStringsLikelyMatch(subjectSignature.streetKey, compSignature.streetKey)
+      );
 
-      const streetMatches = compStreet.includes(subjectStreet) || subjectStreet.includes(compStreet);
-      if (!streetMatches) return false;
-      if (subjectZip && compZip && subjectZip !== compZip) return false;
-      if (subjectCity && compCity && subjectCity !== compCity) return false;
-      if (subjectState && compState && subjectState !== compState) return false;
+      if (!streetMatches && !streetNumberAndKeyMatch) return false;
+      if (subjectSignature.unit && compSignature.unit && subjectSignature.unit !== compSignature.unit) return false;
+      if (subjectSignature.zipCode && compSignature.zipCode && subjectSignature.zipCode !== compSignature.zipCode) return false;
+      if (subjectSignature.state && compSignature.state && subjectSignature.state !== compSignature.state) return false;
+      if (
+        subjectSignature.city &&
+        compSignature.city &&
+        subjectSignature.city !== compSignature.city &&
+        !(subjectSignature.zipCode && compSignature.zipCode && subjectSignature.zipCode === compSignature.zipCode && streetNumberAndKeyMatch)
+      ) return false;
       return true;
     }
 

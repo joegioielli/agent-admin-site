@@ -1988,15 +1988,21 @@
     }
 
     function buildAvmSummary(providerAvms, coreValueEstimate = null) {
-      const models = [
-        normalizeAvmModel(providerAvms?.rentcast, "RentCast AVM"),
-        normalizeAvmModel(providerAvms?.attom, "ATTOM AVM")
-      ].filter(Boolean);
+      const modelSlots = [
+        { key: "rentcast", provider: "RentCast AVM", model: normalizeAvmModel(providerAvms?.rentcast, "RentCast AVM") },
+        { key: "attom", provider: "ATTOM AVM", model: normalizeAvmModel(providerAvms?.attom, "ATTOM AVM") }
+      ];
+      const models = modelSlots.map((slot) => slot.model).filter(Boolean);
 
       if (!models.length) {
         return {
-          note: "These model values are shown only as a secondary check against the comp-driven CMA. No AVMs were returned for this address.",
-          cards: []
+          note: "These model values are shown only as a secondary check against the comp-driven CMA. Neither RentCast nor ATTOM returned an AVM for this address.",
+          cards: modelSlots.map((slot) => ({
+            label: slot.provider,
+            value: "Unavailable",
+            footnote: `No ${slot.provider} value was returned for this search.`,
+            featured: false
+          }))
         };
       }
 
@@ -2020,7 +2026,16 @@
             : "";
       }
 
-      const cards = models.map((model) => {
+      const cards = modelSlots.map((slot) => {
+        const model = slot.model;
+        if (!model) {
+          return {
+            label: slot.provider,
+            value: "Unavailable",
+            footnote: `No ${slot.provider} value was returned for this search.`,
+            featured: false
+          };
+        }
         const footnote = [];
         if (Number.isFinite(model.low) && Number.isFinite(model.high)) footnote.push(`Range ${formatCurrency(model.low)} to ${formatCurrency(model.high)}.`);
         if (Number.isFinite(model.confidenceScore)) footnote.push(`Confidence ${Math.round(model.confidenceScore)}/100.`);

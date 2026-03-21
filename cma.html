@@ -968,6 +968,18 @@
       });
     }
 
+    function matchesSubjectState(subject, comp) {
+      const subjectState = normalizeText(subject?.state);
+      const compState = normalizeText(comp?.state);
+      if (!subjectState || !compState) return true;
+      return subjectState === compState;
+    }
+
+    function filterComparablePoolToSubjectMarket(subject, comps) {
+      if (!Array.isArray(comps) || !comps.length) return [];
+      return comps.filter((comp) => matchesSubjectState(subject, comp));
+    }
+
     const isSoldComp = (comp) => Boolean(comp.soldPrice != null || /\b(sold|closed|settled|off market)\b/i.test(comp.status));
     const isPendingComp = (comp) => Boolean(/\b(pending|contingent|backup|under contract|under-contract|active under contract)\b/i.test(comp.status)) && !isSoldComp(comp);
     const isActiveComp = (comp) => Boolean(/\b(active|new|coming soon|for sale)\b/i.test(comp.status)) && !isSoldComp(comp) && !isPendingComp(comp);
@@ -1595,6 +1607,12 @@
         Boolean(subject.garageParking)
       ];
       return checks.filter(Boolean).length / checks.length;
+    }
+
+    function hasCoreSubjectFacts(subject) {
+      return Number.isFinite(subject?.sqft)
+        || (Number.isFinite(subject?.beds) && Number.isFinite(subject?.baths))
+        || Number.isFinite(subject?.yearBuilt);
     }
 
     function shortAddressLabel(value) {
@@ -2229,25 +2247,34 @@
       const manualCurrentMarketComps = filterExcludedComparables(values.manualCurrentMarketComps || [], values.excludedComparableKeys);
       const mergedCompPool = mergeManualCurrentMarketComps(filteredCompPool, manualCurrentMarketComps);
       let subject = buildSubjectProfile(values, mergedCompPool, subjectMatch);
-      const subjectSource = normalizeText(subjectRecord?.source || subjectMatch?.source || "");
       const subjectCompleteness = computeSubjectDataCompleteness(subject);
-      const hasCoreSubjectFacts = Number.isFinite(subject.sqft)
-        || (Number.isFinite(subject.beds) && Number.isFinite(subject.baths))
-        || Number.isFinite(subject.yearBuilt);
-      if (LIVE_PROVIDER_MODE === "attom" && (!subjectSource || subjectSource === "attom-address") && subjectCompleteness < 0.45 && !hasCoreSubjectFacts) {
-        const error = new Error("ATTOM returned sale snapshot comps but not enough subject-property detail to build a reliable CMA. Enter the subject's sqft, beds, baths, and year built manually or switch back to hybrid mode.");
+      if (LIVE_PROVIDER_MODE === "attom" && subjectCompleteness < 0.45 && !hasCoreSubjectFacts(subject)) {
+        const error = new Error("ATTOM did not return enough matching subject-property detail to build a reliable CMA. Enter the subject's sqft, beds, baths, and year built manually or switch back to hybrid mode.");
         error.code = "INSUFFICIENT_ATTOM_SUBJECT_DATA";
         error.payload = payload;
         throw error;
       }
       const locationAwareCompPool = applyComputedDistances(subject, mergedCompPool);
-      const soldSelection = selectSoldComparables(subject, locationAwareCompPool, values);
+      const subjectMarketCompPool = filterComparablePoolToSubjectMarket(subject, locationAwareCompPool);
+      if (LIVE_PROVIDER_MODE === "attom" && !subjectMarketCompPool.length) {
+        const error = new Error("ATTOM returned comparable records outside the subject's market, so no reliable ATTOM-only CMA could be built. Enter stronger subject details manually or switch back to hybrid mode.");
+        error.code = "INSUFFICIENT_ATTOM_COMPS";
+        error.payload = payload;
+        throw error;
+      }
+      const soldSelection = selectSoldComparables(subject, subjectMarketCompPool, values);
       const usedIds = new Set(soldSelection.soldComps.map((comp) => compIdentityKey(comp)));
-      const pendingSelection = selectPendingComparables(subject, locationAwareCompPool, values, usedIds);
+      const pendingSelection = selectPendingComparables(subject, subjectMarketCompPool, values, usedIds);
       pendingSelection.pendingComps.forEach((comp) => usedIds.add(compIdentityKey(comp)));
-      const activeSelection = selectActiveComparable(subject, locationAwareCompPool, values, usedIds);
+      const activeSelection = selectActiveComparable(subject, subjectMarketCompPool, values, usedIds);
+      if (LIVE_PROVIDER_MODE === "attom" && !soldSelection.soldComps.length) {
+        const error = new Error("ATTOM did not return enough in-market sold comps to build a reliable ATTOM-only CMA. Enter stronger subject details manually or switch back to hybrid mode.");
+        error.code = "INSUFFICIENT_ATTOM_COMPS";
+        error.payload = payload;
+        throw error;
+      }
       const marketComp = pendingSelection.pendingComps[0] || activeSelection.activeComp || null;
-      subject = enrichSubjectProfile(subject, [...soldSelection.soldComps, ...pendingSelection.pendingComps, activeSelection.activeComp, ...locationAwareCompPool].filter(Boolean));
+      subject = enrichSubjectProfile(subject, [...soldSelection.soldComps, ...pendingSelection.pendingComps, activeSelection.activeComp, ...subjectMarketCompPool].filter(Boolean));
       const sourceLabel = describeLiveSource(payload?.source);
       const diagnosticsNote = summarizeProviderDiagnostics(payload);
       const sourceNote = soldSelection.usedLiveFallbackPool
@@ -2469,9 +2496,11 @@
 
     function showLiveDataError(values, error) {
       const diagnosticsNote = summarizeProviderDiagnostics({ error });
-      if (error?.code === "INSUFFICIENT_ATTOM_SUBJECT_DATA") {
+      if (error?.code === "INSUFFICIENT_ATTOM_SUBJECT_DATA" || error?.code === "INSUFFICIENT_ATTOM_COMPS") {
         resetReport();
-        reportTimestamp.textContent = "ATTOM-only CMA needs more subject detail.";
+        reportTimestamp.textContent = error.code === "INSUFFICIENT_ATTOM_COMPS"
+          ? "ATTOM-only CMA needs better in-market comps."
+          : "ATTOM-only CMA needs more subject detail.";
         reportEmptyState.textContent = `${error.message}${diagnosticsNote ? ` ${diagnosticsNote}` : ""}`;
         return;
       }
@@ -2497,7 +2526,7 @@
         const payload = await fetchLiveCma(values);
         const report = buildLiveReport(values, payload);
         const subjectRecord = payload?.data?.subjectProperty ? normalizeComp(payload.data.subjectProperty) : null;
-        populateSubjectFormFields(mergeSubjectFormDetails(report.subject, subjectRecord), false);
+        if (subjectRecord && hasCoreSubjectFacts(subjectRecord)) populateSubjectFormFields(subjectRecord, false);
         renderReport(values, report);
       } catch (error) {
         showLiveDataError(values, error);

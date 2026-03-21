@@ -213,6 +213,204 @@ function buildFullAddress(address, city, state, zipCode) {
   return [clean(address), normalizeAttomAddress2(city, state, zipCode)].filter(Boolean).join(", ");
 }
 
+function normalizePostalCode(value) {
+  const match = clean(value).match(/^(\d{5})/);
+  return match?.[1] || clean(value);
+}
+
+function canonicalizeAddressText(value) {
+  let text = normalizeKey(value);
+  if (!text) return "";
+  const replacements = [
+    [/\bln\b/g, "lane"],
+    [/\bst\b/g, "street"],
+    [/\brd\b/g, "road"],
+    [/\bdr\b/g, "drive"],
+    [/\bct\b/g, "court"],
+    [/\bcir\b/g, "circle"],
+    [/\bave\b/g, "avenue"],
+    [/\bblvd\b/g, "boulevard"],
+    [/\bpkwy\b/g, "parkway"],
+    [/\bhwy\b/g, "highway"],
+  ];
+
+  replacements.forEach(([pattern, replacement]) => {
+    text = text.replace(pattern, replacement);
+  });
+
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function streetNumberFromAddress(value) {
+  const match = canonicalizeAddressText(value).match(/^(\d+[a-z]?)/);
+  return match?.[1] || "";
+}
+
+function streetKeyFromAddress(value) {
+  const parts = canonicalizeAddressText(value).split(" ").filter(Boolean);
+  if (!parts.length) return "";
+
+  const filtered = parts.filter((part, index) => {
+    if (index === 0 && /^\d+[a-z]?$/.test(part)) return false;
+    return !["north", "south", "east", "west", "n", "s", "e", "w"].includes(part);
+  });
+
+  return filtered.slice(0, 3).join(" ");
+}
+
+function textLikelyMatches(a, b) {
+  const left = normalizeKey(a);
+  const right = normalizeKey(b);
+  if (!left || !right) return false;
+  return left === right || left.includes(right) || right.includes(left);
+}
+
+function streetLikelyMatches(requested, candidate) {
+  const requestedLine = canonicalizeAddressText(requested);
+  const candidateLine = canonicalizeAddressText(candidate);
+  if (!requestedLine || !candidateLine) return false;
+  if (requestedLine === candidateLine || requestedLine.includes(candidateLine) || candidateLine.includes(requestedLine)) return true;
+
+  const requestedNumber = streetNumberFromAddress(requestedLine);
+  const candidateNumber = streetNumberFromAddress(candidateLine);
+  const requestedKey = streetKeyFromAddress(requestedLine);
+  const candidateKey = streetKeyFromAddress(candidateLine);
+
+  return Boolean(
+    requestedNumber &&
+    candidateNumber &&
+    requestedNumber === candidateNumber &&
+    requestedKey &&
+    candidateKey &&
+    (requestedKey === candidateKey || requestedKey.includes(candidateKey) || candidateKey.includes(requestedKey))
+  );
+}
+
+function isStateCompatible(requested, candidate) {
+  const requestedState = normalizeState(requested);
+  const candidateState = normalizeState(candidate);
+  if (!requestedState || !candidateState) return true;
+  return requestedState === candidateState;
+}
+
+function isCityCompatible(requested, candidate) {
+  const requestedCity = clean(requested);
+  const candidateCity = clean(candidate);
+  if (!requestedCity || !candidateCity) return true;
+  return textLikelyMatches(requestedCity, candidateCity);
+}
+
+function isZipCompatible(requested, candidate) {
+  const requestedZip = normalizePostalCode(requested);
+  const candidateZip = normalizePostalCode(candidate);
+  if (!requestedZip || !candidateZip) return true;
+  return requestedZip === candidateZip;
+}
+
+function buildRequestedSubjectContext({ address, city, state, zipCode }) {
+  return {
+    address: clean(address),
+    city: clean(city),
+    state: normalizeState(state),
+    zipCode: normalizePostalCode(zipCode),
+  };
+}
+
+function isAcceptableAttomSubjectCandidate(candidate, requested) {
+  if (!candidate) return false;
+
+  const candidateStreet = clean(candidate.addressLine1 || candidate.address || candidate.formattedAddress);
+  if (requested.address && !streetLikelyMatches(requested.address, candidateStreet)) return false;
+  if (!isStateCompatible(requested.state, candidate.state)) return false;
+  if (!isZipCompatible(requested.zipCode, candidate.zipCode)) return false;
+  if (!isCityCompatible(requested.city, candidate.city)) return false;
+
+  return true;
+}
+
+function scoreAttomSubjectCandidate(candidate, requested) {
+  if (!candidate) return -1;
+
+  let score = 0;
+  const candidateStreet = clean(candidate.addressLine1 || candidate.address || candidate.formattedAddress);
+
+  if (requested.address && streetLikelyMatches(requested.address, candidateStreet)) score += 40;
+  if (requested.city && candidate.city && isCityCompatible(requested.city, candidate.city)) score += 10;
+  if (requested.state && candidate.state && isStateCompatible(requested.state, candidate.state)) score += 12;
+  if (requested.zipCode && candidate.zipCode && isZipCompatible(requested.zipCode, candidate.zipCode)) score += 14;
+
+  const matchCode = normalizeKey(candidate.matchCode);
+  if (/exact/.test(matchCode)) score += 18;
+  else if (/street/.test(matchCode) || /range/.test(matchCode)) score += 8;
+
+  return score;
+}
+
+function pickBestMappedAttomCandidate(records, mapper, requested) {
+  const candidates = records
+    .map((record) => mapper(record))
+    .filter(Boolean)
+    .filter((candidate) => isAcceptableAttomSubjectCandidate(candidate, requested))
+    .sort((a, b) => scoreAttomSubjectCandidate(b, requested) - scoreAttomSubjectCandidate(a, requested));
+
+  return candidates[0] || null;
+}
+
+function pickBestAttomRecord(records, mapper, requested) {
+  const candidates = records
+    .map((record) => ({ record, candidate: mapper(record) }))
+    .filter(({ candidate }) => Boolean(candidate))
+    .filter(({ candidate }) => isAcceptableAttomSubjectCandidate(candidate, requested))
+    .sort((a, b) => scoreAttomSubjectCandidate(b.candidate, requested) - scoreAttomSubjectCandidate(a.candidate, requested));
+
+  return candidates[0]?.record || null;
+}
+
+function calculateDistanceMiles(lat1, lon1, lat2, lon2) {
+  const coords = [lat1, lon1, lat2, lon2].map((value) => toFiniteNumber(value, null));
+  if (!coords.every((value) => Number.isFinite(value))) return null;
+
+  const [originLat, originLon, targetLat, targetLon] = coords;
+  const earthRadiusMiles = 3958.7613;
+  const dLat = ((targetLat - originLat) * Math.PI) / 180;
+  const dLon = ((targetLon - originLon) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos((originLat * Math.PI) / 180) * Math.cos((targetLat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+
+  return earthRadiusMiles * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+function filterAttomComparablesToSubjectMarket(comparables, requested, subjectProperty = null) {
+  const subjectState = normalizeState(requested.state || subjectProperty?.state);
+  const subjectCity = clean(requested.city || subjectProperty?.city);
+  const subjectZip = normalizePostalCode(requested.zipCode || subjectProperty?.zipCode);
+  const subjectLat = toFiniteNumber(subjectProperty?.latitude, null);
+  const subjectLon = toFiniteNumber(subjectProperty?.longitude, null);
+
+  return comparables
+    .map((comp) => {
+      const existingDistance = toFiniteNumber(comp.distance, null);
+      if (Number.isFinite(existingDistance)) return comp;
+
+      const computedDistance = calculateDistanceMiles(subjectLat, subjectLon, comp.latitude, comp.longitude);
+      return Number.isFinite(computedDistance)
+        ? { ...comp, distance: computedDistance }
+        : comp;
+    })
+    .filter((comp) => {
+      if (subjectState && clean(comp.state) && normalizeState(comp.state) !== subjectState) return false;
+
+      const compZip = normalizePostalCode(comp.zipCode);
+      if (subjectZip && compZip && subjectZip !== compZip) {
+        const sameCity = subjectCity && clean(comp.city) && isCityCompatible(subjectCity, comp.city);
+        const compDistance = toFiniteNumber(comp.distance, null);
+        if (!sameCity && !Number.isFinite(compDistance)) return false;
+      }
+
+      return true;
+    });
+}
+
 function mapPropertyIndicator(propertyType) {
   const normalized = normalizeKey(propertyType);
   if (!normalized) return "";
@@ -951,6 +1149,7 @@ async function fetchAttomBundle({
   const pageSize = clamp(Math.max(Number(limit || 60), compCount * 3), 20, 100);
   const startSaleTransDate = formatAttomDate(monthsAgo(new Date(), saleHistoryMonths));
   const endSaleTransDate = formatAttomDate(new Date());
+  const requestedSubject = buildRequestedSubjectContext({ address, city, state, zipCode });
 
   let subjectProperty = null;
   let attomAvm = null;
@@ -966,7 +1165,9 @@ async function fetchAttomBundle({
     const result = await fetchAttom(url, apiKey);
     const summary = summarizeAttomPayload(result.response, result.data);
     const records = summary.hasResults ? extractAttomRecords(result.data) : [];
-    const addressMatch = records.length ? mapAttomAddressMatch(records[0]) : null;
+    const addressMatch = records.length
+      ? pickBestMappedAttomCandidate(records, (record) => mapAttomAddressMatch(record), requestedSubject)
+      : null;
     const attemptDiagnostics = {
       source: "attom-address",
       label: attempt.label,
@@ -1036,12 +1237,16 @@ async function fetchAttomBundle({
     }
 
     if (summary.hasResults) {
-      subjectProperty = mapAttomRecord(records[0], {
-        fallbackStatus: "Subject",
-        source: "attom-property",
-      });
-      subjectSource = "attom-property";
-      break;
+      const subjectCandidate = pickBestMappedAttomCandidate(
+        records,
+        (record) => mapAttomRecord(record, { fallbackStatus: "Subject", source: "attom-property" }),
+        requestedSubject
+      );
+      if (subjectCandidate) {
+        subjectProperty = subjectCandidate;
+        subjectSource = "attom-property";
+        break;
+      }
     }
 
     if (!summary.noResults || !result.response.ok) {
@@ -1056,7 +1261,11 @@ async function fetchAttomBundle({
     const result = await fetchAttom(url, apiKey);
     const summary = summarizeAttomPayload(result.response, result.data);
     const records = summary.hasResults ? extractAttomRecords(result.data) : [];
-    const avmRecord = records[0] || null;
+    const avmRecord = pickBestAttomRecord(
+      records,
+      (record) => mapAttomRecord(record, { fallbackStatus: "Subject", source: "attom-avm" }),
+      requestedSubject
+    );
     const avmMapped = avmRecord ? mapAttomAvmRecord(avmRecord, "attom-avm") : null;
     const attemptDiagnostics = {
       source: "attom-avm",
@@ -1085,10 +1294,14 @@ async function fetchAttomBundle({
       attomAvm = avmMapped;
       avmSource = "attom-avm";
       if (avmRecord) {
-        const avmSubjectRecord = mapAttomRecord(avmRecord, {
-          fallbackStatus: "Subject",
-          source: "attom-avm",
-        });
+        const avmSubjectRecord = pickBestMappedAttomCandidate(
+          records,
+          (record) => mapAttomRecord(record, {
+            fallbackStatus: "Subject",
+            source: "attom-avm",
+          }),
+          requestedSubject
+        );
         subjectProperty = subjectProperty
           ? mergeDefined(subjectProperty, avmSubjectRecord)
           : avmSubjectRecord;
@@ -1110,7 +1323,11 @@ async function fetchAttomBundle({
       const result = await fetchAttom(url, apiKey);
       const summary = summarizeAttomPayload(result.response, result.data);
       const records = summary.hasResults ? extractAttomRecords(result.data) : [];
-      const avmRecord = records[0] || null;
+      const avmRecord = pickBestAttomRecord(
+        records,
+        (record) => mapAttomRecord(record, { fallbackStatus: "Subject", source: "attom-avm-snapshot" }),
+        requestedSubject
+      );
       const avmMapped = avmRecord ? mapAttomAvmRecord(avmRecord, "attom-avm-snapshot") : null;
       const attemptDiagnostics = {
         source: "attom-avm-snapshot",
@@ -1139,10 +1356,14 @@ async function fetchAttomBundle({
         attomAvm = avmMapped;
         avmSource = "attom-avm-snapshot";
         if (avmRecord) {
-          const avmSubjectRecord = mapAttomRecord(avmRecord, {
-            fallbackStatus: "Subject",
-            source: "attom-avm-snapshot",
-          });
+          const avmSubjectRecord = pickBestMappedAttomCandidate(
+            records,
+            (record) => mapAttomRecord(record, {
+              fallbackStatus: "Subject",
+              source: "attom-avm-snapshot",
+            }),
+            requestedSubject
+          );
           subjectProperty = subjectProperty
             ? mergeDefined(subjectProperty, avmSubjectRecord)
             : avmSubjectRecord;
@@ -1188,10 +1409,15 @@ async function fetchAttomBundle({
       }
 
       if (summary.hasResults) {
-        const basicProfileSubject = mapAttomRecord(records[0], {
-          fallbackStatus: "Subject",
-          source: "attom-basicprofile",
-        });
+        const basicProfileSubject = pickBestMappedAttomCandidate(
+          records,
+          (record) => mapAttomRecord(record, {
+            fallbackStatus: "Subject",
+            source: "attom-basicprofile",
+          }),
+          requestedSubject
+        );
+        if (!basicProfileSubject) continue;
         subjectProperty = subjectProperty
           ? mergeDefined(subjectProperty, basicProfileSubject)
           : basicProfileSubject;
@@ -1269,7 +1495,11 @@ async function fetchAttomBundle({
     );
   }
 
-  const dedupedComparables = dedupeListings(comparables).slice(0, Number(limit || 60));
+  const dedupedComparables = filterAttomComparablesToSubjectMarket(
+    dedupeListings(comparables),
+    requestedSubject,
+    subjectProperty
+  ).slice(0, Number(limit || 60));
   const sourceParts = [];
   if (attomAvm && avmSource) sourceParts.push(avmSource);
   if (subjectProperty && subjectSource && !sourceParts.includes(subjectSource)) sourceParts.push(subjectSource);

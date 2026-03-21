@@ -202,6 +202,14 @@ function normalizeAttomAddress2(city, state, zipCode) {
   return [locality, [region, postal].filter(Boolean).join(" ")].filter(Boolean).join(", ");
 }
 
+function normalizeAttomAddress2Plain(city, state, zipCode) {
+  const locality = clean(city);
+  const region = normalizeState(state);
+  const postal = clean(zipCode);
+  if (!locality && !region && !postal) return "";
+  return [locality, region, postal].filter(Boolean).join(" ");
+}
+
 function normalizeAttomAddress2CityState(city, state) {
   const locality = clean(city);
   const region = normalizeState(state);
@@ -211,6 +219,62 @@ function normalizeAttomAddress2CityState(city, state) {
 
 function buildFullAddress(address, city, state, zipCode) {
   return [clean(address), normalizeAttomAddress2(city, state, zipCode)].filter(Boolean).join(", ");
+}
+
+function stripSecondaryAddressLine(value) {
+  const text = clean(value);
+  if (!text) return "";
+  return text
+    .replace(/\s+(?:apt|apartment|unit|ste|suite|#)\.?\s*[\w-]+$/i, "")
+    .replace(/\s+(?:fl|floor|bldg|building)\.?\s*[\w-]+$/i, "")
+    .trim();
+}
+
+function parseLooseAddress(value) {
+  const full = clean(value);
+  const parts = full.split(",").map((part) => clean(part)).filter(Boolean);
+
+  if (parts.length >= 3) {
+    const stateZip = parts[2] || "";
+    const match = stateZip.match(/^([A-Za-z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/);
+    return {
+      full,
+      street: parts[0] || full,
+      city: parts[1] || "",
+      state: match?.[1] || "",
+      zipCode: match?.[2] || "",
+    };
+  }
+
+  if (parts.length === 2) {
+    const cityStateZip = parts[1].match(/^(.*?)(?:\s+([A-Za-z]{2}))(?:\s+(\d{5}(?:-\d{4})?))?$/);
+    return {
+      full,
+      street: parts[0] || full,
+      city: clean(cityStateZip?.[1] || ""),
+      state: clean(cityStateZip?.[2] || ""),
+      zipCode: clean(cityStateZip?.[3] || ""),
+    };
+  }
+
+  const trailingMatch = full.match(/^(.*?)(?:,\s*|\s+)([^,]+?)\s+([A-Za-z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/);
+  if (trailingMatch) {
+    return {
+      full,
+      street: clean(trailingMatch[1] || full),
+      city: clean(trailingMatch[2] || ""),
+      state: clean(trailingMatch[3] || ""),
+      zipCode: clean(trailingMatch[4] || ""),
+    };
+  }
+
+  return {
+    full,
+    street: full,
+    city: "",
+    state: "",
+    zipCode: "",
+  };
 }
 
 function normalizePostalCode(value) {
@@ -320,10 +384,15 @@ function isAcceptableAttomSubjectCandidate(candidate, requested) {
   if (!candidate) return false;
 
   const candidateStreet = clean(candidate.addressLine1 || candidate.address || candidate.formattedAddress);
-  if (requested.address && !streetLikelyMatches(requested.address, candidateStreet)) return false;
-  if (!isStateCompatible(requested.state, candidate.state)) return false;
-  if (!isZipCompatible(requested.zipCode, candidate.zipCode)) return false;
-  if (!isCityCompatible(requested.city, candidate.city)) return false;
+  const streetMatches = !requested.address || streetLikelyMatches(requested.address, candidateStreet);
+  const stateMatches = isStateCompatible(requested.state, candidate.state);
+  const zipMatches = isZipCompatible(requested.zipCode, candidate.zipCode);
+  const cityMatches = isCityCompatible(requested.city, candidate.city);
+
+  if (!streetMatches || !stateMatches || !zipMatches) return false;
+  if (!cityMatches) {
+    return Boolean(requested.zipCode && candidate.zipCode && zipMatches);
+  }
 
   return true;
 }
@@ -349,21 +418,39 @@ function scoreAttomSubjectCandidate(candidate, requested) {
 function pickBestMappedAttomCandidate(records, mapper, requested) {
   const candidates = records
     .map((record) => mapper(record))
-    .filter(Boolean)
+    .filter(Boolean);
+
+  const accepted = candidates
     .filter((candidate) => isAcceptableAttomSubjectCandidate(candidate, requested))
     .sort((a, b) => scoreAttomSubjectCandidate(b, requested) - scoreAttomSubjectCandidate(a, requested));
 
-  return candidates[0] || null;
+  if (accepted[0]) return accepted[0];
+
+  const fallback = candidates
+    .map((candidate) => ({ candidate, score: scoreAttomSubjectCandidate(candidate, requested) }))
+    .filter(({ score }) => score >= 52)
+    .sort((a, b) => b.score - a.score);
+
+  return fallback[0]?.candidate || null;
 }
 
 function pickBestAttomRecord(records, mapper, requested) {
   const candidates = records
     .map((record) => ({ record, candidate: mapper(record) }))
-    .filter(({ candidate }) => Boolean(candidate))
+    .filter(({ candidate }) => Boolean(candidate));
+
+  const accepted = candidates
     .filter(({ candidate }) => isAcceptableAttomSubjectCandidate(candidate, requested))
     .sort((a, b) => scoreAttomSubjectCandidate(b.candidate, requested) - scoreAttomSubjectCandidate(a.candidate, requested));
 
-  return candidates[0]?.record || null;
+  if (accepted[0]) return accepted[0].record;
+
+  const fallback = candidates
+    .map(({ record, candidate }) => ({ record, score: scoreAttomSubjectCandidate(candidate, requested) }))
+    .filter(({ score }) => score >= 52)
+    .sort((a, b) => b.score - a.score);
+
+  return fallback[0]?.record || null;
 }
 
 function calculateDistanceMiles(lat1, lon1, lat2, lon2) {
@@ -688,6 +775,7 @@ function buildAttomResolvedSubjectAttempts(match) {
 
   return buildAttemptList([
     { label: "resolved-attomId", params: { attomId: match.attomId } },
+    { label: "resolved-ID", params: { ID: match.id } },
     { label: "resolved-id", params: { id: match.id } },
     { label: "resolved-address", params: { address: match.address } },
     { label: "resolved-address1+address2", params: { address1: match.address1, address2: match.address2 } },
@@ -1055,22 +1143,46 @@ async function fetchRentcastBundle({
   };
 }
 
-function buildAttomSubjectAttempts({ fullAddress, address, address2, address2CityState }) {
+function buildAttomSubjectAttempts({
+  rawFullAddress,
+  fullAddress,
+  address,
+  strippedAddress,
+  address2,
+  address2Plain,
+  address2CityState,
+  address2CityStatePlain,
+  zipCode,
+}) {
   return buildAttemptList([
     { label: "address1+address2", params: { address1: address, address2 } },
+    { label: "address1+address2-plain", params: { address1: address, address2: address2Plain } },
     { label: "address1+address2-city-state", params: { address1: address, address2: address2CityState } },
+    { label: "address1+address2-city-state-plain", params: { address1: address, address2: address2CityStatePlain } },
+    { label: "stripped-address1+address2", params: { address1: strippedAddress, address2 } },
+    { label: "stripped-address1+address2-plain", params: { address1: strippedAddress, address2: address2Plain } },
+    { label: "raw-full-address", params: { address: rawFullAddress } },
     { label: "full-address", params: { address: fullAddress } },
+    { label: "postalCode", params: { postalCode: zipCode } },
   ]).filter((attempt) =>
-    clean(attempt.params.address) || (clean(attempt.params.address1) && clean(attempt.params.address2))
+    clean(attempt.params.address)
+    || clean(attempt.params.postalCode)
+    || (clean(attempt.params.address1) && clean(attempt.params.address2))
   );
 }
 
 function buildAttomSaleAttempts({
+  rawFullAddress,
   fullAddress,
   address,
+  strippedAddress,
   address2,
+  address2Plain,
   address2CityState,
+  address2CityStatePlain,
   zipCode,
+  latitude,
+  longitude,
   radius,
   pageSize,
   propertyIndicator,
@@ -1079,16 +1191,48 @@ function buildAttomSaleAttempts({
 }) {
   return buildAttemptList([
     {
+      label: "lat+lon+radius+indicator",
+      params: { latitude, longitude, radius, pageSize, propertyIndicator, startSaleTransDate, endSaleTransDate },
+    },
+    {
+      label: "lat+lon+radius",
+      params: { latitude, longitude, radius, pageSize, startSaleTransDate, endSaleTransDate },
+    },
+    {
       label: "address1+address2+radius+indicator",
       params: { address1: address, address2, radius, pageSize, propertyIndicator, startSaleTransDate, endSaleTransDate },
+    },
+    {
+      label: "address1+address2-plain+radius+indicator",
+      params: { address1: address, address2: address2Plain, radius, pageSize, propertyIndicator, startSaleTransDate, endSaleTransDate },
     },
     {
       label: "address1+address2-city-state+radius+indicator",
       params: { address1: address, address2: address2CityState, radius, pageSize, propertyIndicator, startSaleTransDate, endSaleTransDate },
     },
     {
+      label: "address1+address2-city-state-plain+radius+indicator",
+      params: { address1: address, address2: address2CityStatePlain, radius, pageSize, propertyIndicator, startSaleTransDate, endSaleTransDate },
+    },
+    {
+      label: "stripped-address1+address2+radius+indicator",
+      params: { address1: strippedAddress, address2, radius, pageSize, propertyIndicator, startSaleTransDate, endSaleTransDate },
+    },
+    {
+      label: "stripped-address1+address2-plain+radius+indicator",
+      params: { address1: strippedAddress, address2: address2Plain, radius, pageSize, propertyIndicator, startSaleTransDate, endSaleTransDate },
+    },
+    {
+      label: "raw-full-address+radius+indicator",
+      params: { address: rawFullAddress, radius, pageSize, propertyIndicator, startSaleTransDate, endSaleTransDate },
+    },
+    {
       label: "full-address+radius+indicator",
       params: { address: fullAddress, radius, pageSize, propertyIndicator, startSaleTransDate, endSaleTransDate },
+    },
+    {
+      label: "raw-full-address+radius",
+      params: { address: rawFullAddress, radius, pageSize, startSaleTransDate, endSaleTransDate },
     },
     {
       label: "full-address+radius",
@@ -1099,8 +1243,16 @@ function buildAttomSaleAttempts({
       params: { address1: address, address2, radius, pageSize, startSaleTransDate, endSaleTransDate },
     },
     {
+      label: "address1+address2-plain+radius",
+      params: { address1: address, address2: address2Plain, radius, pageSize, startSaleTransDate, endSaleTransDate },
+    },
+    {
       label: "address1+address2-city-state+radius",
       params: { address1: address, address2: address2CityState, radius, pageSize, startSaleTransDate, endSaleTransDate },
+    },
+    {
+      label: "address1+address2-city-state-plain+radius",
+      params: { address1: address, address2: address2CityStatePlain, radius, pageSize, startSaleTransDate, endSaleTransDate },
     },
     {
       label: "zip+indicator",
@@ -1113,7 +1265,8 @@ function buildAttomSaleAttempts({
   ]).filter((attempt) => {
     const hasAddress = clean(attempt.params.address) || (clean(attempt.params.address1) && clean(attempt.params.address2));
     const hasZip = clean(attempt.params.postalCode);
-    return hasAddress || hasZip;
+    const hasLatLon = clean(attempt.params.latitude) && clean(attempt.params.longitude) && clean(attempt.params.radius);
+    return hasAddress || hasZip || hasLatLon;
   });
 }
 
@@ -1125,6 +1278,7 @@ function buildAttomError(fetchResult, summary) {
 }
 
 async function fetchAttomBundle({
+  fullAddressInput,
   address,
   city,
   state,
@@ -1139,17 +1293,41 @@ async function fetchAttomBundle({
 }) {
   const diagnostics = [];
   const debugAttempts = [];
-  const fullAddress = buildFullAddress(address, city, state, zipCode);
-  const address2 = normalizeAttomAddress2(city, state, zipCode);
-  const address2CityState = normalizeAttomAddress2CityState(city, state);
-  const baseSubjectAttempts = buildAttomSubjectAttempts({ fullAddress, address, address2, address2CityState });
+  const parsedFullAddress = parseLooseAddress(fullAddressInput);
+  const streetAddress = clean(address || parsedFullAddress.street);
+  const locality = clean(city || parsedFullAddress.city);
+  const region = normalizeState(state || parsedFullAddress.state);
+  const postalCode = clean(zipCode || parsedFullAddress.zipCode);
+  const rawFullAddress = clean(fullAddressInput) || buildFullAddress(streetAddress, locality, region, postalCode);
+  const fullAddress = buildFullAddress(streetAddress, locality, region, postalCode) || rawFullAddress;
+  const strippedAddress = stripSecondaryAddressLine(streetAddress);
+  const address2 = normalizeAttomAddress2(locality, region, postalCode);
+  const address2Plain = normalizeAttomAddress2Plain(locality, region, postalCode);
+  const address2CityState = normalizeAttomAddress2CityState(locality, region);
+  const address2CityStatePlain = normalizeAttomAddress2Plain(locality, region, "");
+  const baseSubjectAttempts = buildAttomSubjectAttempts({
+    rawFullAddress,
+    fullAddress,
+    address: streetAddress,
+    strippedAddress,
+    address2,
+    address2Plain,
+    address2CityState,
+    address2CityStatePlain,
+    zipCode: postalCode,
+  });
   const propertyIndicator = mapPropertyIndicator(propertyType);
   const saleHistoryMonths = clamp(Math.max(toFiniteNumber(lookbackMonths, 6) * 2, 24), 24, 36);
   const radius = clamp(searchRadius || 3, 0.25, ATTOM_MAX_RADIUS);
   const pageSize = clamp(Math.max(Number(limit || 60), compCount * 3), 20, 100);
   const startSaleTransDate = formatAttomDate(monthsAgo(new Date(), saleHistoryMonths));
   const endSaleTransDate = formatAttomDate(new Date());
-  const requestedSubject = buildRequestedSubjectContext({ address, city, state, zipCode });
+  const requestedSubject = buildRequestedSubjectContext({
+    address: streetAddress || rawFullAddress,
+    city: locality,
+    state: region,
+    zipCode: postalCode,
+  });
 
   let subjectProperty = null;
   let attomAvm = null;
@@ -1437,13 +1615,21 @@ async function fetchAttomBundle({
   }
 
   const comparables = [];
+  const comparableCenterLatitude = toFiniteNumber(subjectProperty?.latitude ?? resolvedAddressMatch?.latitude, null);
+  const comparableCenterLongitude = toFiniteNumber(subjectProperty?.longitude ?? resolvedAddressMatch?.longitude, null);
 
   for (const attempt of buildAttomSaleAttempts({
+    rawFullAddress,
     fullAddress,
-    address,
+    address: streetAddress,
+    strippedAddress,
     address2,
+    address2Plain,
     address2CityState,
-    zipCode,
+    address2CityStatePlain,
+    zipCode: postalCode,
+    latitude: comparableCenterLatitude,
+    longitude: comparableCenterLongitude,
     radius,
     pageSize,
     propertyIndicator,
@@ -1579,10 +1765,12 @@ export async function handler(event) {
     });
   }
 
-  const address = clean(params.address || params.address1 || params.street);
-  const city = clean(params.city);
-  const state = normalizeState(params.state);
-  const zipCode = clean(params.zip || params.zipCode || params.postalCode);
+  const fullAddressInput = clean(params.fullAddress || params.subjectAddress || params.rawAddress || params.oneLine || params.address);
+  const parsedAddressInput = parseLooseAddress(fullAddressInput);
+  const address = clean(params.address || params.address1 || params.street || parsedAddressInput.street);
+  const city = clean(params.city || parsedAddressInput.city);
+  const state = normalizeState(params.state || parsedAddressInput.state);
+  const zipCode = clean(params.zip || params.zipCode || params.postalCode || parsedAddressInput.zipCode);
   const limit = clean(params.limit || "60");
   const propertyType = clean(params.propertyType);
   const searchRadius = toFiniteNumber(params.searchRadius, 3);
@@ -1642,6 +1830,7 @@ export async function handler(event) {
 
     if (useAttom) {
       const attomBundle = await fetchAttomBundle({
+        fullAddressInput,
         address,
         city,
         state,

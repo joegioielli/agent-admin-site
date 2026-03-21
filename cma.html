@@ -242,9 +242,9 @@
                 <p class="report-subtitle" id="reportTimestamp">Generate a report to load live comps and build the pricing summary.</p>
               </div>
               <div class="report-badges">
-                <span class="badge">3 sold comps</span>
-                <span class="badge">1 active comp</span>
-                <span class="badge badge-accent">Live data connected</span>
+                <span class="badge" id="soldCompBadge">0 sold comps</span>
+                <span class="badge" id="marketCompBadge">0 market comps</span>
+                <span class="badge" id="liveStatusBadge">Awaiting data</span>
               </div>
             </div>
             <div class="report-body">
@@ -313,6 +313,9 @@
     const soldCompGrid = document.getElementById("soldCompGrid");
     const activeCompGrid = document.getElementById("activeCompGrid");
     const printReportBtn = document.getElementById("printReportBtn");
+    const soldCompBadge = document.getElementById("soldCompBadge");
+    const marketCompBadge = document.getElementById("marketCompBadge");
+    const liveStatusBadge = document.getElementById("liveStatusBadge");
     const generateBtn = form.querySelector('button[type="submit"]');
     const SUBJECT_FACT_FIELD_NAMES = [
       "subjectSqft",
@@ -589,6 +592,18 @@
     function setGenerateState(isLoading) {
       generateBtn.disabled = isLoading;
       generateBtn.textContent = isLoading ? "Loading..." : "Generate CMA";
+    }
+
+    function formatCompCount(count, label) {
+      const safeCount = Number.isFinite(count) ? Math.max(0, Math.round(count)) : 0;
+      return `${safeCount} ${label}${safeCount === 1 ? "" : "s"}`;
+    }
+
+    function setReportBadges({ soldCount = 0, marketCount = 0, liveLabel = "Awaiting data", liveAccent = false } = {}) {
+      soldCompBadge.textContent = formatCompCount(soldCount, "sold comp");
+      marketCompBadge.textContent = formatCompCount(marketCount, "market comp");
+      liveStatusBadge.textContent = cleanText(liveLabel) || "Awaiting data";
+      liveStatusBadge.className = `badge${liveAccent ? " badge-accent" : ""}`;
     }
 
     function arrayify(value) {
@@ -2211,6 +2226,7 @@
     async function fetchLiveCma(values) {
       const parsed = parseSubjectAddress(values.subjectAddress);
       const params = new URLSearchParams();
+      params.set("fullAddress", values.subjectAddress);
       if (parsed.street || parsed.full) params.set("address", parsed.street || parsed.full);
       if (parsed.city) params.set("city", parsed.city);
       if (parsed.state) params.set("state", parsed.state.toUpperCase());
@@ -2411,6 +2427,12 @@
       reportSection.dataset.ready = "true";
       reportEmptyState.style.display = "none";
       reportTimestamp.textContent = report.dataSourceNote || `Generated ${formatDateTime(report.generatedAt)}.`;
+      setReportBadges({
+        soldCount: report.soldComps.length,
+        marketCount: report.activeComp ? 1 : 0,
+        liveLabel: report.providerMode === "attom" ? "ATTOM data loaded" : "Live data connected",
+        liveAccent: true
+      });
       subjectPropertyAddress.textContent = values.subjectAddress;
       specialDetailsOutput.textContent = [values.specialDetails, values.conditionNotes].filter(Boolean).join(" ").trim() || "No special details were entered for this subject property.";
       summaryText.textContent = report.summary;
@@ -2477,6 +2499,7 @@
       reportEmptyState.style.display = "";
       reportEmptyState.textContent = "Enter a subject property address and generate the CMA to populate the report. Live provider data will load first, and the page will fall back gracefully if the result set is thin.";
       reportTimestamp.textContent = "Generate a report to load live comps and build the pricing summary.";
+      setReportBadges({ soldCount: 0, marketCount: 0, liveLabel: "Awaiting data", liveAccent: false });
       subjectPropertyAddress.textContent = "Not generated yet.";
       specialDetailsOutput.textContent = "No special details entered yet.";
       summaryText.textContent = "";
@@ -2500,6 +2523,7 @@
       if (ATTOM_DEBUG_REQUESTED) console.info("[CMA] ATTOM debug error payload", error?.payload?.debug?.attom || null);
       if (attomOnlyMode || error?.code === "INSUFFICIENT_ATTOM_SUBJECT_DATA" || error?.code === "INSUFFICIENT_ATTOM_COMPS") {
         resetReport();
+        setReportBadges({ soldCount: 0, marketCount: 0, liveLabel: "ATTOM unavailable", liveAccent: false });
         reportTimestamp.textContent = error?.code === "INSUFFICIENT_ATTOM_COMPS"
           ? "ATTOM-only CMA needs better in-market comps."
           : error?.code === "INSUFFICIENT_ATTOM_SUBJECT_DATA"
@@ -2525,6 +2549,7 @@
       reportEmptyState.style.display = "";
       reportEmptyState.textContent = "Fetching and ranking live comparable properties for this CMA...";
       reportTimestamp.textContent = "Loading live CMA data...";
+      setReportBadges({ soldCount: 0, marketCount: 0, liveLabel: "Loading live data", liveAccent: false });
       try {
         const payload = await fetchLiveCma(values);
         const report = buildLiveReport(values, payload);
@@ -2553,6 +2578,7 @@
     });
 
     updateSubjectFactMissingState();
+    setReportBadges({ soldCount: 0, marketCount: 0, liveLabel: "Awaiting data", liveAccent: false });
 
     printReportBtn.addEventListener("click", () => {
       if (reportSection.dataset.ready !== "true") return;

@@ -1884,7 +1884,10 @@
         .map((item) => normalizeComp(item))
         .filter((comp) => comp.address && (comp.listPrice != null || comp.soldPrice != null));
       if (!comps.length) throw new Error("The live CMA providers returned no comparable listings for this search.");
-      const subjectMatch = subjectRecord || findSubjectComparable(values, comps);
+      const matchedSubjectComp = findSubjectComparable(values, comps);
+      const subjectMatch = subjectRecord && matchedSubjectComp
+        ? mergeComparableDetails(subjectRecord, matchedSubjectComp)
+        : subjectRecord || matchedSubjectComp;
       const compPool = subjectMatch ? comps.filter((comp) => comp.id !== subjectMatch.id && !addressesLikelyMatch(values, comp)) : comps;
       const filteredCompPool = filterExcludedComparables(compPool, values.excludedComparableKeys);
       const manualCurrentMarketComps = filterExcludedComparables(values.manualCurrentMarketComps || [], values.excludedComparableKeys);
@@ -1986,6 +1989,16 @@
     function mergeSubjectFormDetails(baseSubject, incomingSubject = null) {
       const merged = { ...(baseSubject || {}) };
       Object.entries(incomingSubject || {}).forEach(([key, value]) => {
+        if (value == null) return;
+        if (typeof value === "string" && !cleanText(value)) return;
+        merged[key] = value;
+      });
+      return merged;
+    }
+
+    function mergeComparableDetails(baseComp = null, incomingComp = null) {
+      const merged = { ...(baseComp || {}) };
+      Object.entries(incomingComp || {}).forEach(([key, value]) => {
         if (value == null) return;
         if (typeof value === "string" && !cleanText(value)) return;
         merged[key] = value;

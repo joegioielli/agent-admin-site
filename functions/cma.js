@@ -7,8 +7,11 @@ const RENTCAST_AVM_URL = "https://api.rentcast.io/v1/avm/value";
 const RENTCAST_LISTINGS_URL = "https://api.rentcast.io/v1/listings/sale";
 
 const ATTOM_BASE_URL = "https://api.gateway.attomdata.com/propertyapi/v1.0.0";
+const ATTOM_PROPERTY_ADDRESS_URL = `${ATTOM_BASE_URL}/property/address`;
+const ATTOM_PROPERTY_BASIC_PROFILE_URL = `${ATTOM_BASE_URL}/property/basicprofile`;
 const ATTOM_PROPERTY_DETAIL_URL = `${ATTOM_BASE_URL}/property/detail`;
 const ATTOM_SALE_SNAPSHOT_URL = `${ATTOM_BASE_URL}/sale/snapshot`;
+const ATTOM_AVM_SNAPSHOT_URL = `${ATTOM_BASE_URL}/avm/snapshot`;
 const ATTOM_AVM_DETAIL_URL = `${ATTOM_BASE_URL}/attomavm/detail`;
 const ATTOM_MAX_RADIUS = 20;
 
@@ -390,14 +393,83 @@ function buildGarageSummary(record) {
   const spaces = toFiniteNumber(pickFirstValue(record, [
     "building.parking.prkgSpaces",
     "building.parking.spaces",
+    "building.parking.garageSpaces",
+    "building.parking.numGarageSpaces",
   ]), null);
   const garageType = clean(pickFirstValue(record, [
     "building.parking.garagetype",
     "building.parking.prkgType",
     "building.parking.garageType",
+    "building.parking.garageDesc",
+    "building.parking.description",
+    "building.parking.type",
   ]));
 
   return [Number.isFinite(spaces) ? `${spaces}-space` : "", garageType].filter(Boolean).join(" ").trim();
+}
+
+function mapAttomAddressMatch(record) {
+  const propertyRecord = unwrapAttomPropertyRecord(record);
+  if (!propertyRecord || typeof propertyRecord !== "object") return null;
+
+  const line1 = clean(pickFirstValue(propertyRecord, [
+    "address.line1",
+    "address.lineOne",
+  ]));
+  const city = clean(pickFirstValue(propertyRecord, [
+    "address.locality",
+    "address.city",
+  ]));
+  const state = normalizeState(pickFirstValue(propertyRecord, [
+    "address.countrySubd",
+    "address.state",
+  ]));
+  const zipCode = clean(pickFirstValue(propertyRecord, [
+    "address.postal1",
+    "address.zip",
+    "address.zipCode",
+  ]));
+  const address2 = clean(pickFirstValue(propertyRecord, [
+    "address.line2",
+  ], normalizeAttomAddress2(city, state, zipCode)));
+  const fullAddress = clean(pickFirstValue(propertyRecord, [
+    "address.oneLine",
+    "address.fullAddress",
+  ], [line1, address2].filter(Boolean).join(", ")));
+
+  return {
+    attomId: clean(pickFirstValue(propertyRecord, [
+      "identifier.attomId",
+    ])),
+    id: clean(pickFirstValue(propertyRecord, [
+      "identifier.Id",
+      "identifier.id",
+      "identifier.obPropId",
+    ])),
+    address: fullAddress,
+    address1: line1,
+    address2,
+    matchCode: clean(pickFirstValue(propertyRecord, [
+      "address.matchCode",
+    ])),
+  };
+}
+
+function buildAttomResolvedSubjectAttempts(match) {
+  if (!match) return [];
+
+  return buildAttemptList([
+    { label: "resolved-attomId", params: { attomId: match.attomId } },
+    { label: "resolved-id", params: { id: match.id } },
+    { label: "resolved-address", params: { address: match.address } },
+    { label: "resolved-address1+address2", params: { address1: match.address1, address2: match.address2 } },
+  ]);
+}
+
+function subjectPropertyNeedsAttomEnrichment(subjectProperty) {
+  return !clean(subjectProperty?.subdivision)
+    || !clean(subjectProperty?.stories)
+    || (!clean(subjectProperty?.garage) && !Number.isFinite(subjectProperty?.garageSpaces));
 }
 
 function mapRentcastAvmResponse(data, subjectProperty = null) {
@@ -444,7 +516,7 @@ function mapRentcastAvmResponse(data, subjectProperty = null) {
   };
 }
 
-function mapAttomAvmRecord(record) {
+function mapAttomAvmRecord(record, source = "attom-avm") {
   const propertyRecord = unwrapAttomPropertyRecord(record);
   if (!propertyRecord || typeof propertyRecord !== "object") return null;
 
@@ -492,7 +564,7 @@ function mapAttomAvmRecord(record) {
 
   return {
     provider: "ATTOM AVM",
-    source: "attom-avm",
+    source,
     address: formattedAddress,
     value,
     low,
@@ -586,7 +658,11 @@ function mapAttomRecord(record, { fallbackStatus = "Sold", source = "attom-sale"
     ]), null),
     subdivision: clean(pickFirstValue(propertyRecord, [
       "area.subdname",
+      "area.subdName",
+      "area.subdivision",
+      "area.subdivisionName",
       "area.neighborhood",
+      "area.neighborhoodName",
       "area.munName",
     ])),
     propertyType: clean(pickFirstValue(propertyRecord, [
@@ -597,8 +673,12 @@ function mapAttomRecord(record, { fallbackStatus = "Sold", source = "attom-sale"
     ])),
     stories: pickFirstValue(propertyRecord, [
       "building.summary.levels",
+      "building.summary.levelsCount",
       "building.summary.storyDesc",
+      "building.summary.storyCount",
       "building.summary.storydescription",
+      "building.summary.storyDescription",
+      "summary.levels",
     ], ""),
     architecturalStyle: clean(pickFirstValue(propertyRecord, [
       "building.summary.archStyle",
@@ -609,6 +689,8 @@ function mapAttomRecord(record, { fallbackStatus = "Sold", source = "attom-sale"
     garageSpaces: toFiniteNumber(pickFirstValue(propertyRecord, [
       "building.parking.prkgSpaces",
       "building.parking.spaces",
+      "building.parking.garageSpaces",
+      "building.parking.numGarageSpaces",
     ]), null),
     garage: garageSummary,
     parking: garageSummary,
@@ -750,7 +832,9 @@ function buildAttomSubjectAttempts({ fullAddress, address, address2, address2Cit
     { label: "address1+address2", params: { address1: address, address2 } },
     { label: "address1+address2-city-state", params: { address1: address, address2: address2CityState } },
     { label: "full-address", params: { address: fullAddress } },
-  ]);
+  ]).filter((attempt) =>
+    clean(attempt.params.address) || (clean(attempt.params.address1) && clean(attempt.params.address2))
+  );
 }
 
 function buildAttomSaleAttempts({
@@ -830,6 +914,7 @@ async function fetchAttomBundle({
   const fullAddress = buildFullAddress(address, city, state, zipCode);
   const address2 = normalizeAttomAddress2(city, state, zipCode);
   const address2CityState = normalizeAttomAddress2CityState(city, state);
+  const baseSubjectAttempts = buildAttomSubjectAttempts({ fullAddress, address, address2, address2CityState });
   const propertyIndicator = mapPropertyIndicator(propertyType);
   const saleHistoryMonths = clamp(Math.max(toFiniteNumber(lookbackMonths, 6) * 2, 24), 24, 36);
   const radius = clamp(searchRadius || 3, 0.25, ATTOM_MAX_RADIUS);
@@ -839,14 +924,63 @@ async function fetchAttomBundle({
 
   let subjectProperty = null;
   let attomAvm = null;
+  let resolvedAddressMatch = null;
   let lastError = null;
 
-  for (const attempt of buildAttomSubjectAttempts({ fullAddress, address, address2, address2CityState })) {
+  for (const attempt of baseSubjectAttempts) {
+    const url = new URL(ATTOM_PROPERTY_ADDRESS_URL);
+    Object.entries(attempt.params).forEach(([key, value]) => url.searchParams.set(key, value));
+
+    const result = await fetchAttom(url, apiKey);
+    const summary = summarizeAttomPayload(result.response, result.data);
+    const records = summary.hasResults ? extractAttomRecords(result.data) : [];
+    const addressMatch = records.length ? mapAttomAddressMatch(records[0]) : null;
+    const attemptDiagnostics = {
+      source: "attom-address",
+      label: attempt.label,
+      request: attempt.params,
+      statusCode: result.response.status,
+      attomStatusCode: summary.code,
+      attomMessage: summary.message,
+      resultCount: summary.resultCount,
+      matchCode: addressMatch?.matchCode || "",
+    };
+
+    diagnostics.push(attemptDiagnostics);
+    if (debug) {
+      debugAttempts.push({
+        ...attemptDiagnostics,
+        url: url.toString(),
+        addressMatch,
+        payloadPreview: buildAttomPayloadPreview(result.data, {
+          fallbackStatus: "Subject",
+          source: "attom-address",
+        }),
+      });
+    }
+
+    if (summary.hasResults && addressMatch) {
+      resolvedAddressMatch = addressMatch;
+      break;
+    }
+
+    if (!summary.noResults || !result.response.ok) {
+      lastError = buildAttomError(result, summary);
+    }
+  }
+
+  const subjectAttempts = buildAttemptList([
+    ...buildAttomResolvedSubjectAttempts(resolvedAddressMatch),
+    ...baseSubjectAttempts,
+  ]);
+
+  for (const attempt of subjectAttempts) {
     const url = new URL(ATTOM_PROPERTY_DETAIL_URL);
     Object.entries(attempt.params).forEach(([key, value]) => url.searchParams.set(key, value));
 
     const result = await fetchAttom(url, apiKey);
     const summary = summarizeAttomPayload(result.response, result.data);
+    const records = summary.hasResults ? extractAttomRecords(result.data) : [];
     const attemptDiagnostics = {
       source: "attom-property",
       label: attempt.label,
@@ -870,7 +1004,7 @@ async function fetchAttomBundle({
     }
 
     if (summary.hasResults) {
-      subjectProperty = mapAttomRecord(extractAttomRecords(result.data)[0], {
+      subjectProperty = mapAttomRecord(records[0], {
         fallbackStatus: "Subject",
         source: "attom-property",
       });
@@ -882,12 +1016,15 @@ async function fetchAttomBundle({
     }
   }
 
-  for (const attempt of buildAttomSubjectAttempts({ fullAddress, address, address2, address2CityState })) {
+  for (const attempt of subjectAttempts) {
     const url = new URL(ATTOM_AVM_DETAIL_URL);
     Object.entries(attempt.params).forEach(([key, value]) => url.searchParams.set(key, value));
 
     const result = await fetchAttom(url, apiKey);
     const summary = summarizeAttomPayload(result.response, result.data);
+    const records = summary.hasResults ? extractAttomRecords(result.data) : [];
+    const avmRecord = records[0] || null;
+    const avmMapped = avmRecord ? mapAttomAvmRecord(avmRecord, "attom-avm") : null;
     const attemptDiagnostics = {
       source: "attom-avm",
       label: attempt.label,
@@ -903,13 +1040,130 @@ async function fetchAttomBundle({
       debugAttempts.push({
         ...attemptDiagnostics,
         url: url.toString(),
-        avmMapped: summary.hasResults ? mapAttomAvmRecord(extractAttomRecords(result.data)[0]) : null,
+        avmMapped,
+        payloadPreview: buildAttomPayloadPreview(result.data, {
+          fallbackStatus: "Subject",
+          source: "attom-avm",
+        }),
       });
     }
 
     if (summary.hasResults) {
-      attomAvm = mapAttomAvmRecord(extractAttomRecords(result.data)[0]);
+      attomAvm = avmMapped;
+      if (avmRecord) {
+        const avmSubjectRecord = mapAttomRecord(avmRecord, {
+          fallbackStatus: "Subject",
+          source: "attom-avm",
+        });
+        subjectProperty = subjectProperty
+          ? mergeDefined(subjectProperty, avmSubjectRecord)
+          : avmSubjectRecord;
+      }
       break;
+    }
+
+    if (!summary.noResults || !result.response.ok) {
+      lastError = buildAttomError(result, summary);
+    }
+  }
+
+  if (!attomAvm) {
+    for (const attempt of subjectAttempts) {
+      const url = new URL(ATTOM_AVM_SNAPSHOT_URL);
+      Object.entries(attempt.params).forEach(([key, value]) => url.searchParams.set(key, value));
+
+      const result = await fetchAttom(url, apiKey);
+      const summary = summarizeAttomPayload(result.response, result.data);
+      const records = summary.hasResults ? extractAttomRecords(result.data) : [];
+      const avmRecord = records[0] || null;
+      const avmMapped = avmRecord ? mapAttomAvmRecord(avmRecord, "attom-avm-snapshot") : null;
+      const attemptDiagnostics = {
+        source: "attom-avm-snapshot",
+        label: attempt.label,
+        request: attempt.params,
+        statusCode: result.response.status,
+        attomStatusCode: summary.code,
+        attomMessage: summary.message,
+        resultCount: summary.resultCount,
+      };
+
+      diagnostics.push(attemptDiagnostics);
+      if (debug) {
+        debugAttempts.push({
+          ...attemptDiagnostics,
+          url: url.toString(),
+          avmMapped,
+          payloadPreview: buildAttomPayloadPreview(result.data, {
+            fallbackStatus: "Subject",
+            source: "attom-avm-snapshot",
+          }),
+        });
+      }
+
+      if (summary.hasResults) {
+        attomAvm = avmMapped;
+        if (avmRecord) {
+          const avmSubjectRecord = mapAttomRecord(avmRecord, {
+            fallbackStatus: "Subject",
+            source: "attom-avm-snapshot",
+          });
+          subjectProperty = subjectProperty
+            ? mergeDefined(subjectProperty, avmSubjectRecord)
+            : avmSubjectRecord;
+        }
+        break;
+      }
+
+      if (!summary.noResults || !result.response.ok) {
+        lastError = buildAttomError(result, summary);
+      }
+    }
+  }
+
+  if (!subjectProperty || subjectPropertyNeedsAttomEnrichment(subjectProperty)) {
+    for (const attempt of subjectAttempts) {
+      const url = new URL(ATTOM_PROPERTY_BASIC_PROFILE_URL);
+      Object.entries(attempt.params).forEach(([key, value]) => url.searchParams.set(key, value));
+
+      const result = await fetchAttom(url, apiKey);
+      const summary = summarizeAttomPayload(result.response, result.data);
+      const records = summary.hasResults ? extractAttomRecords(result.data) : [];
+      const attemptDiagnostics = {
+        source: "attom-basicprofile",
+        label: attempt.label,
+        request: attempt.params,
+        statusCode: result.response.status,
+        attomStatusCode: summary.code,
+        attomMessage: summary.message,
+        resultCount: summary.resultCount,
+      };
+
+      diagnostics.push(attemptDiagnostics);
+      if (debug) {
+        debugAttempts.push({
+          ...attemptDiagnostics,
+          url: url.toString(),
+          payloadPreview: buildAttomPayloadPreview(result.data, {
+            fallbackStatus: "Subject",
+            source: "attom-basicprofile",
+          }),
+        });
+      }
+
+      if (summary.hasResults) {
+        const basicProfileSubject = mapAttomRecord(records[0], {
+          fallbackStatus: "Subject",
+          source: "attom-basicprofile",
+        });
+        subjectProperty = subjectProperty
+          ? mergeDefined(subjectProperty, basicProfileSubject)
+          : basicProfileSubject;
+        if (!subjectPropertyNeedsAttomEnrichment(subjectProperty)) break;
+      }
+
+      if (!summary.noResults || !result.response.ok) {
+        lastError = buildAttomError(result, summary);
+      }
     }
   }
 
@@ -988,6 +1242,7 @@ async function fetchAttomBundle({
     debug: debug ? {
       enabled: true,
       source: sourceParts.join("+"),
+      resolvedAddressMatch,
       attomAvm,
       subjectPropertyMapped: subjectProperty,
       comparableCount: dedupedComparables.length,

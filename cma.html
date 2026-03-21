@@ -326,6 +326,11 @@
       "subjectGarageParking"
     ];
     const MANUAL_CURRENT_MARKET_COMP_SLOTS = [1, 2, 3];
+    const ATTOM_DEBUG_REQUESTED = (() => {
+      const params = new URLSearchParams(window.location.search);
+      const flag = params.get("debugAttom") || params.get("debug") || "";
+      return /^(1|true|yes|on)$/i.test(flag);
+    })();
 
     FIXED_SEARCH_PARAMS.forEach((item) => {
       const li = document.createElement("li");
@@ -530,7 +535,7 @@
       const summary = [];
 
       if (providers.attomConfigured === true) {
-        summary.push((attemptedSources.has("attom-avm") || attemptedSources.has("attom-property") || attemptedSources.has("attom-sale"))
+        summary.push((attemptedSources.has("attom-avm") || attemptedSources.has("attom-avm-snapshot") || attemptedSources.has("attom-property") || attemptedSources.has("attom-sale"))
           ? attomContributed
             ? "ATTOM contributed data."
             : "ATTOM was attempted but did not contribute usable data."
@@ -2128,8 +2133,10 @@
       params.set("compCount", "20");
       params.set("limit", "60");
       params.set("lookbackMonths", String(values.lookbackMonths || 6));
+      if (ATTOM_DEBUG_REQUESTED) params.set("debugAttom", "1");
       const response = await fetch(`/.netlify/functions/cma?${params.toString()}`, { headers: { Accept: "application/json" } });
       const payload = await response.json().catch(() => ({}));
+      if (ATTOM_DEBUG_REQUESTED) console.info("[CMA] ATTOM debug payload", payload?.debug?.attom || null);
       if (!response.ok) {
         const error = new Error(payload?.details || payload?.error || `Request failed (${response.status})`);
         error.payload = payload;
@@ -2377,6 +2384,7 @@
 
     function showLiveDataError(values, error) {
       const fallbackReport = buildMockReport(values);
+      if (ATTOM_DEBUG_REQUESTED) console.info("[CMA] ATTOM debug error payload", error?.payload?.debug?.attom || null);
       const diagnosticsNote = summarizeProviderDiagnostics({ error });
       fallbackReport.dataSourceNote = `${error?.message || "Live data is currently unavailable."}${diagnosticsNote ? ` ${diagnosticsNote}` : ""} Sample comps are shown below so the CMA stays usable while live data recovers.`;
       renderReport(values, fallbackReport);

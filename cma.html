@@ -330,6 +330,10 @@
     ];
     const MANUAL_CURRENT_MARKET_COMP_SLOTS = [1, 2, 3];
     const LIVE_PROVIDER_MODE = "attom";
+    const autoPopulatedSubjectFieldNames = new Set();
+    let lastGeneratedSubjectAddressKey = "";
+    let activeCmaRequestId = 0;
+    let activeCmaAbortController = null;
     const ATTOM_DEBUG_REQUESTED = (() => {
       const params = new URLSearchParams(window.location.search);
       const flag = params.get("debugAttom") || params.get("debug") || "";
@@ -592,6 +596,31 @@
     function setGenerateState(isLoading) {
       generateBtn.disabled = isLoading;
       generateBtn.textContent = isLoading ? "Loading..." : "Generate CMA";
+    }
+
+    function rememberAutoPopulatedField(fieldName) {
+      if (SUBJECT_FACT_FIELD_NAMES.includes(fieldName)) autoPopulatedSubjectFieldNames.add(fieldName);
+    }
+
+    function forgetAutoPopulatedField(fieldName) {
+      autoPopulatedSubjectFieldNames.delete(fieldName);
+    }
+
+    function clearAutoPopulatedSubjectFields() {
+      autoPopulatedSubjectFieldNames.forEach((fieldName) => {
+        const field = form.elements?.[fieldName];
+        if (!field) return;
+        field.value = "";
+      });
+      autoPopulatedSubjectFieldNames.clear();
+      updateSubjectFactMissingState();
+    }
+
+    function prepareSubjectFieldsForAddress(address) {
+      const nextAddressKey = canonicalizeAddress(address);
+      if (!nextAddressKey || !lastGeneratedSubjectAddressKey || nextAddressKey === lastGeneratedSubjectAddressKey) return;
+      clearAutoPopulatedSubjectFields();
+      lastGeneratedSubjectAddressKey = "";
     }
 
     function formatCompCount(count, label) {
@@ -2223,7 +2252,7 @@
       );
     }
 
-    async function fetchLiveCma(values) {
+    async function fetchLiveCma(values, signal) {
       const parsed = parseSubjectAddress(values.subjectAddress);
       const params = new URLSearchParams();
       params.set("fullAddress", values.subjectAddress);
@@ -2238,7 +2267,7 @@
       params.set("lookbackMonths", String(values.lookbackMonths || 6));
       params.set("providerMode", LIVE_PROVIDER_MODE);
       if (ATTOM_DEBUG_REQUESTED) params.set("debugAttom", "1");
-      const response = await fetch(`/.netlify/functions/cma?${params.toString()}`, { headers: { Accept: "application/json" } });
+      const response = await fetch(`/.netlify/functions/cma?${params.toString()}`, { headers: { Accept: "application/json" }, signal });
       const payload = await response.json().catch(() => ({}));
       if (ATTOM_DEBUG_REQUESTED) console.info("[CMA] ATTOM debug payload", payload?.debug?.attom || null);
       if (!response.ok) {
@@ -2375,10 +2404,11 @@
 
     function setFormFieldValue(fieldName, value, formatter = (input) => String(input), overwrite = true) {
       const field = form.elements?.[fieldName];
-      if (!field) return;
-      if (!overwrite && cleanText(field.value)) return;
-      if (value == null || value === "") return;
+      if (!field) return false;
+      if (!overwrite && cleanText(field.value)) return false;
+      if (value == null || value === "") return false;
       field.value = formatter(value);
+      return true;
     }
 
     function mergeSubjectFormDetails(baseSubject, incomingSubject = null) {
@@ -2411,15 +2441,15 @@
 
     function populateSubjectFormFields(subject, overwrite = true) {
       if (!subject || typeof subject !== "object") return;
-      setFormFieldValue("subjectSqft", subject.sqft, (value) => String(Math.round(value)), overwrite);
-      setFormFieldValue("subjectBeds", subject.beds, (value) => String(value), overwrite);
-      setFormFieldValue("subjectBaths", subject.baths, (value) => String(value), overwrite);
-      setFormFieldValue("subjectYearBuilt", subject.yearBuilt, (value) => String(value), overwrite);
-      setFormFieldValue("subjectLotSize", subject.lotSize, (value) => value >= 1 ? Number(value).toFixed(2) : Number(value).toFixed(3), overwrite);
-      setFormFieldValue("subjectPropertyType", subject.propertyType, (value) => displayPropertyType(value), overwrite);
-      setFormFieldValue("subjectSubdivision", subject.subdivision, (value) => String(value), overwrite);
-      setFormFieldValue("subjectStoryCount", subject.storyCount, (value) => Number.isFinite(value) ? String(value) : String(value), overwrite);
-      setFormFieldValue("subjectGarageParking", subject.garageParking, (value) => String(value), overwrite);
+      if (setFormFieldValue("subjectSqft", subject.sqft, (value) => String(Math.round(value)), overwrite)) rememberAutoPopulatedField("subjectSqft");
+      if (setFormFieldValue("subjectBeds", subject.beds, (value) => String(value), overwrite)) rememberAutoPopulatedField("subjectBeds");
+      if (setFormFieldValue("subjectBaths", subject.baths, (value) => String(value), overwrite)) rememberAutoPopulatedField("subjectBaths");
+      if (setFormFieldValue("subjectYearBuilt", subject.yearBuilt, (value) => String(value), overwrite)) rememberAutoPopulatedField("subjectYearBuilt");
+      if (setFormFieldValue("subjectLotSize", subject.lotSize, (value) => value >= 1 ? Number(value).toFixed(2) : Number(value).toFixed(3), overwrite)) rememberAutoPopulatedField("subjectLotSize");
+      if (setFormFieldValue("subjectPropertyType", subject.propertyType, (value) => displayPropertyType(value), overwrite)) rememberAutoPopulatedField("subjectPropertyType");
+      if (setFormFieldValue("subjectSubdivision", subject.subdivision, (value) => String(value), overwrite)) rememberAutoPopulatedField("subjectSubdivision");
+      if (setFormFieldValue("subjectStoryCount", subject.storyCount, (value) => Number.isFinite(value) ? String(value) : String(value), overwrite)) rememberAutoPopulatedField("subjectStoryCount");
+      if (setFormFieldValue("subjectGarageParking", subject.garageParking, (value) => String(value), overwrite)) rememberAutoPopulatedField("subjectGarageParking");
       updateSubjectFactMissingState();
     }
 
@@ -2495,6 +2525,10 @@
     }
 
     function resetReport() {
+      if (activeCmaAbortController) {
+        activeCmaAbortController.abort();
+        activeCmaAbortController = null;
+      }
       reportSection.dataset.ready = "false";
       reportEmptyState.style.display = "";
       reportEmptyState.textContent = "Enter a subject property address and generate the CMA to populate the report. Live provider data will load first, and the page will fall back gracefully if the result set is thin.";
@@ -2514,6 +2548,8 @@
       avmGrid.innerHTML = "";
       soldCompGrid.innerHTML = "";
       activeCompGrid.innerHTML = "";
+      autoPopulatedSubjectFieldNames.clear();
+      lastGeneratedSubjectAddressKey = "";
       updateSubjectFactMissingState();
     }
 
@@ -2539,11 +2575,16 @@
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
+      prepareSubjectFieldsForAddress(form.subjectAddress.value);
       const values = readFormValues();
       if (!values.subjectAddress) {
         form.subjectAddress.focus();
         return;
       }
+      if (activeCmaAbortController) activeCmaAbortController.abort();
+      const requestId = activeCmaRequestId + 1;
+      activeCmaRequestId = requestId;
+      activeCmaAbortController = new AbortController();
       setGenerateState(true);
       reportSection.dataset.ready = "false";
       reportEmptyState.style.display = "";
@@ -2551,15 +2592,22 @@
       reportTimestamp.textContent = "Loading live CMA data...";
       setReportBadges({ soldCount: 0, marketCount: 0, liveLabel: "Loading live data", liveAccent: false });
       try {
-        const payload = await fetchLiveCma(values);
+        const payload = await fetchLiveCma(values, activeCmaAbortController.signal);
+        if (requestId !== activeCmaRequestId) return;
         const report = buildLiveReport(values, payload);
         const subjectRecord = payload?.data?.subjectProperty ? normalizeComp(payload.data.subjectProperty) : null;
         if (subjectRecord && hasCoreSubjectFacts(subjectRecord)) populateSubjectFormFields(subjectRecord, false);
+        lastGeneratedSubjectAddressKey = canonicalizeAddress(values.subjectAddress);
         renderReport(values, report);
       } catch (error) {
+        if (error?.name === "AbortError") return;
+        if (requestId !== activeCmaRequestId) return;
         showLiveDataError(values, error);
       } finally {
-        setGenerateState(false);
+        if (requestId === activeCmaRequestId) {
+          activeCmaAbortController = null;
+          setGenerateState(false);
+        }
       }
     });
 
@@ -2573,8 +2621,14 @@
     SUBJECT_FACT_FIELD_NAMES.forEach((fieldName) => {
       const field = form.elements?.[fieldName];
       if (!field) return;
-      field.addEventListener("input", updateSubjectFactMissingState);
-      field.addEventListener("change", updateSubjectFactMissingState);
+      field.addEventListener("input", () => {
+        forgetAutoPopulatedField(fieldName);
+        updateSubjectFactMissingState();
+      });
+      field.addEventListener("change", () => {
+        forgetAutoPopulatedField(fieldName);
+        updateSubjectFactMissingState();
+      });
     });
 
     updateSubjectFactMissingState();

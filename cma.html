@@ -1720,16 +1720,18 @@
 
     function buildHistoricalReference(values, marketTrend, conditionPct) {
       const references = [];
+      let recentAppraisal = null;
       const annualTrend = marketTrend.trend === "strengthening" ? 0.04 : marketTrend.trend === "softening" ? -0.01 : 0.02;
       if (Number.isFinite(values.priorAppraisalValue) && values.priorAppraisalDate) {
         const monthsOld = monthsSince(values.priorAppraisalDate);
         if (monthsOld != null && monthsOld <= 48) {
-          references.push({
+          const appraisalReference = {
             kind: "appraisal",
             monthsOld,
             value: values.priorAppraisalValue * (1 + annualTrend * (monthsOld / 12)) * (1 + conditionPct * 0.75),
             weight: clamp(1.8 - (monthsOld / 24), 0.45, 1.8)
-          });
+          };
+          if (monthsOld <= 18) recentAppraisal = appraisalReference;
         }
       }
       if (Number.isFinite(values.priorPurchasePrice) && values.priorPurchaseDate) {
@@ -1746,7 +1748,7 @@
       return {
         value: weightedAverage(references, "value", "weight"),
         references,
-        recentAppraisal: references.find((reference) => reference.kind === "appraisal" && reference.monthsOld <= 18) || null
+        recentAppraisal
       };
     }
 
@@ -1887,10 +1889,14 @@
       const anchorStrength = coreValueModel?.averageSimilarity ?? average(soldComps.map((comp) => comp.similarityScore));
       const anchorSpreadPct = coreValueModel?.anchorSpreadPct ?? rangePaddingPct;
       const sameMarketShare = coreValueModel?.sameMarketShare ?? 0;
+      const localizedAnchorCount = coreValueModel?.localizedAnchorCount ?? 0;
       if (soldComps.length <= 3) score -= 10;
       else if (soldComps.length <= 5) score -= 6;
       if (anchorCount < 2) score -= 15;
       else if (anchorCount < 3) score -= 8;
+      if (localizedAnchorCount === 0) score -= 12;
+      else if (localizedAnchorCount === 1) score -= 7;
+      else if (localizedAnchorCount === 2) score -= 3;
       if (anchorStrength < 72) score -= 14;
       else if (anchorStrength < 80) score -= 7;
       if (sameMarketShare < 0.5) score -= 10;
@@ -1913,6 +1919,34 @@
       return { score, label: "Guarded", note: "The sold comp set is thinner or less consistent, so the pricing range is intentionally wider to stay defensible." };
     }
 
+    function getConservativeCurrentMarketAdjustment(comp) {
+      if (!comp) return 1;
+      if (isPendingComp(comp)) return 0.975;
+      if (isActiveComp(comp)) return 0.955;
+      return 1;
+    }
+
+    function getConservativeCurrentMarketValue(comp) {
+      const value = comp?.listPrice ?? comp?.soldPrice;
+      if (!Number.isFinite(value)) return null;
+      return value * getConservativeCurrentMarketAdjustment(comp);
+    }
+
+    function getConservativeCurrentMarketPpsf(comp) {
+      if (!Number.isFinite(comp?.pricePerSqft)) return null;
+      return comp.pricePerSqft * getConservativeCurrentMarketAdjustment(comp);
+    }
+
+    function getSoldRecencyWeightMultiplier(comp) {
+      const recencyDays = daysSince(comp?.soldDate || comp?.listDate);
+      if (!Number.isFinite(recencyDays)) return 0.9;
+      if (recencyDays <= 60) return 1.18;
+      if (recencyDays <= 120) return 1.05;
+      if (recencyDays <= 180) return 0.9;
+      if (recencyDays <= 270) return 0.74;
+      return 0.6;
+    }
+
     function buildSoldPricingWeights(subject, soldComps, pendingComps = [], activeComp = null) {
       const weights = new Map();
       if (!soldComps.length) return weights;
@@ -1920,8 +1954,8 @@
       const soldMedianPrice = median(soldComps.map((comp) => comp.soldPrice ?? comp.listPrice));
       const soldMedianPpsf = median(soldComps.map((comp) => comp.pricePerSqft));
       const currentMarketAnchor = average([
-        weightedAverage(pendingComps, (comp) => comp.listPrice ?? comp.soldPrice, (comp) => Math.max(comp.similarityScore || 0, 1)),
-        Number.isFinite(activeComp?.listPrice) ? activeComp.listPrice : null
+        weightedAverage(pendingComps, getConservativeCurrentMarketValue, (comp) => Math.max(comp.similarityScore || 0, 1)),
+        getConservativeCurrentMarketValue(activeComp)
       ].filter((value) => Number.isFinite(value)));
 
       soldComps.forEach((comp, index) => {
@@ -1930,6 +1964,7 @@
         const similarityGap = bestSimilarity - similarity;
         const compPrice = comp.soldPrice ?? comp.listPrice;
         let weight = clamp(similarity / 18, 1, 5.5);
+        weight *= getSoldRecencyWeightMultiplier(comp);
 
         if (isSameSubdivision(subject, comp)) weight *= 1.28;
         else if (isNearbyMicroMarket(subject, comp)) weight *= 1.1;
@@ -1963,7 +1998,7 @@
       const soldCompWeight = (comp) => getCompPricingWeight(comp, soldPricingWeights, compWeight(comp));
       const compPpsf = soldComps.map((comp) => comp.pricePerSqft).filter((value) => Number.isFinite(value));
       const compPrices = soldComps.map((comp) => comp.soldPrice ?? comp.listPrice).filter((value) => Number.isFinite(value));
-      const pendingPrices = pendingComps.map((comp) => comp.listPrice ?? comp.soldPrice).filter((value) => Number.isFinite(value));
+      const pendingPrices = pendingComps.map((comp) => getConservativeCurrentMarketValue(comp)).filter((value) => Number.isFinite(value));
       const subjectSqft = Number.isFinite(subject.sqft) ? subject.sqft : median(soldComps.map((comp) => comp.sqft));
       const subjectCondition = analyzeConditionText(`${subject.specialDetails} ${subject.conditionNotes}`);
       const detailAdjustment = evaluateSubjectDetailAdjustments(subject.specialDetails, subject.conditionNotes);
@@ -1977,16 +2012,17 @@
       const avgPpsf = average(compPpsf);
       const strongestPendingAnchor = weightedAverage(
         pendingComps.slice(0, Math.min(2, pendingComps.length)),
-        (comp) => comp.listPrice ?? comp.soldPrice,
+        getConservativeCurrentMarketValue,
         compWeight
       );
-      const pendingMedianWeighted = weightedPercentile(pendingComps, (comp) => comp.listPrice ?? comp.soldPrice, compWeight, 0.5) ?? median(pendingPrices);
-      const pendingPpsfMedianWeighted = weightedPercentile(pendingComps, "pricePerSqft", compWeight, 0.5) ?? median(pendingComps.map((comp) => comp.pricePerSqft));
+      const pendingMedianWeighted = weightedPercentile(pendingComps, getConservativeCurrentMarketValue, compWeight, 0.5) ?? median(pendingPrices);
+      const pendingPpsfMedianWeighted = weightedPercentile(pendingComps, getConservativeCurrentMarketPpsf, compWeight, 0.5) ?? median(pendingComps.map((comp) => getConservativeCurrentMarketPpsf(comp)));
+      const activeCurrentMarketValue = getConservativeCurrentMarketValue(activeComp);
       const currentMarketSupport = weightedAverage([
         Number.isFinite(strongestPendingAnchor) ? { value: strongestPendingAnchor, weight: 1.05 } : null,
         Number.isFinite(pendingMedianWeighted) ? { value: pendingMedianWeighted, weight: 0.85 } : null,
         Number.isFinite(pendingPpsfMedianWeighted) && Number.isFinite(subjectSqft) ? { value: pendingPpsfMedianWeighted * subjectSqft, weight: 0.65 } : null,
-        Number.isFinite(activeComp?.listPrice) && (activeComp?.similarityScore || 0) >= 70 ? { value: activeComp.listPrice, weight: 0.8 } : null
+        Number.isFinite(activeCurrentMarketValue) && (activeComp?.similarityScore || 0) >= 70 ? { value: activeCurrentMarketValue, weight: 0.8 } : null
       ].filter(Boolean), "value", "weight");
       const sameSubdivisionSoldComps = soldComps.filter((comp) => isSameSubdivision(subject, comp));
       const sameMarketSoldComps = soldComps.filter((comp) => isSameSubdivision(subject, comp) || isNearbyMicroMarket(subject, comp));
@@ -2039,21 +2075,15 @@
       let historicalGapPct = Number.isFinite(coreValueEstimate) && Number.isFinite(historicalAnchor) && coreValueEstimate > 0
         ? Math.abs(historicalAnchor - coreValueEstimate) / coreValueEstimate
         : 0;
-      if (Number.isFinite(coreValueEstimate) && Number.isFinite(recentAppraisalValue)) {
-        const appraisalGapPct = Math.abs(recentAppraisalValue - coreValueEstimate) / coreValueEstimate;
-        historicalGapPct = appraisalGapPct;
-        if (appraisalGapPct <= 0.05) {
-          coreValueEstimate = weightedAverage([
-            { value: coreValueEstimate, weight: 1.9 },
-            { value: recentAppraisalValue, weight: 0.55 }
-          ], "value", "weight");
-        }
-      } else if (Number.isFinite(coreValueEstimate) && Number.isFinite(historicalAnchor) && historicalGapPct <= 0.04) {
+      if (Number.isFinite(coreValueEstimate) && Number.isFinite(historicalAnchor) && historicalGapPct <= 0.04) {
         coreValueEstimate = weightedAverage([
           { value: coreValueEstimate, weight: 1.85 },
           { value: historicalAnchor, weight: 0.25 }
         ], "value", "weight");
       }
+      const appraisalCrossCheckGapPct = Number.isFinite(coreValueEstimate) && Number.isFinite(recentAppraisalValue) && coreValueEstimate > 0
+        ? Math.abs(recentAppraisalValue - coreValueEstimate) / coreValueEstimate
+        : null;
 
       const soldAnchorPpsfQ1 = weightedPercentile(coreValueModel.anchorComps.length ? coreValueModel.anchorComps : soldComps, "pricePerSqft", soldCompWeight, 0.25) ?? percentile(compPpsf, 0.25);
       const soldAnchorPpsfQ3 = weightedPercentile(coreValueModel.anchorComps.length ? coreValueModel.anchorComps : soldComps, "pricePerSqft", soldCompWeight, 0.75) ?? percentile(compPpsf, 0.75);
@@ -2084,13 +2114,6 @@
       if (!Number.isFinite(low) || !Number.isFinite(high)) {
         low = Number.isFinite(coreValueEstimate) ? coreValueEstimate * (1 - Math.max(rangePaddingPct, 0.04)) : 0;
         high = Number.isFinite(coreValueEstimate) ? coreValueEstimate * (1 + Math.max(rangePaddingPct, 0.04)) : 0;
-      }
-      if (Number.isFinite(recentAppraisalValue) && Number.isFinite(coreValueEstimate)) {
-        const appraisalGapPct = Math.abs(recentAppraisalValue - coreValueEstimate) / coreValueEstimate;
-        if (appraisalGapPct <= 0.05) {
-          low = Math.min(low, recentAppraisalValue * 0.99);
-          high = Math.max(high, recentAppraisalValue * 1.005);
-        }
       }
       if (
         Number.isFinite(currentMarketSupport) &&
@@ -2123,9 +2146,10 @@
       if ((coreValueModel.averageSimilarity ?? 0) >= 82) listAdjustmentPct += 0.003;
       else if ((coreValueModel.averageSimilarity ?? 0) < 72) listAdjustmentPct -= 0.004;
       listAdjustmentPct += clamp(conditionPct * 0.45, -0.012, 0.012);
-      if (Number.isFinite(recentAppraisalValue) && Number.isFinite(coreValueEstimate) && coreValueEstimate > 0) {
-        const appraisalSupportPct = (recentAppraisalValue - coreValueEstimate) / coreValueEstimate;
-        if (Math.abs(appraisalSupportPct) <= 0.05) listAdjustmentPct += clamp(appraisalSupportPct * 0.3, -0.006, 0.008);
+      if (pricingConfidence.label === "Guarded") {
+        listAdjustmentPct = clamp(listAdjustmentPct * 0.45, -0.008, strongCurrentSupport ? 0.003 : 0.0015);
+      } else if (pricingConfidence.label === "Moderate") {
+        listAdjustmentPct = clamp(listAdjustmentPct * 0.75, -0.01, 0.009);
       }
 
       let suggestedBase = Number.isFinite(coreValueEstimate) ? coreValueEstimate * (1 + listAdjustmentPct) : average(compPrices);
@@ -2133,6 +2157,27 @@
         suggestedBase = Math.min(suggestedBase, coreValueEstimate * (strongCurrentSupport ? 1.01 : 1.005));
       }
       if (Number.isFinite(suggestedBase) && rangeHigh > rangeLow) {
+        const rangeSpan = high - low;
+        const targetLaunchRatio = pricingConfidence.label === "High"
+          ? marketTrend.pricingLean === "aggressive"
+            ? 0.58
+            : marketTrend.pricingLean === "conservative"
+              ? 0.43
+              : 0.5
+          : pricingConfidence.label === "Moderate"
+            ? marketTrend.pricingLean === "aggressive"
+              ? 0.54
+              : marketTrend.pricingLean === "conservative"
+                ? 0.45
+                : 0.49
+            : marketTrend.pricingLean === "aggressive" && strongCurrentSupport
+              ? 0.47
+              : 0.42;
+        const confidenceCenteredBase = low + (rangeSpan * targetLaunchRatio);
+        suggestedBase = weightedAverage([
+          { value: suggestedBase, weight: pricingConfidence.label === "High" ? 1.3 : pricingConfidence.label === "Moderate" ? 1 : 0.7 },
+          { value: confidenceCenteredBase, weight: pricingConfidence.label === "Guarded" ? 1.55 : pricingConfidence.label === "Moderate" ? 0.9 : 0.55 }
+        ], "value", "weight");
         const floor = low + ((high - low) * 0.18);
         const ceiling = high - ((high - low) * 0.06);
         suggestedBase = clamp(suggestedBase, floor, ceiling);
@@ -2143,18 +2188,28 @@
       const coreAnchorText = coreValueModel.anchorLabels.length ? coreValueModel.anchorLabels.join(", ") : "the strongest qualified sold comps";
       const marketPressureNote = Number.isFinite(currentMarketSupport) && Number.isFinite(coreValueEstimate)
         ? currentMarketGapPct >= 0.015
-          ? " Current-market listings support leaning slightly above core value."
+          ? " Current-market listings, after a conservative pending/active adjustment, support leaning slightly above core value."
           : currentMarketGapPct <= -0.015
-            ? " Current-market listings support opening a touch below core value."
-            : " Current-market listings support opening near core value."
+            ? " Current-market listings, after a conservative pending/active adjustment, support opening a touch below core value."
+            : " Current-market listings, after a conservative pending/active adjustment, support opening near core value."
+        : "";
+      const appraisalGapText = appraisalCrossCheckGapPct != null
+        ? appraisalCrossCheckGapPct <= 0.03
+          ? " (closely aligned with core value)"
+          : ` (${Math.round(appraisalCrossCheckGapPct * 100)}% ${recentAppraisalValue > coreValueEstimate ? "above" : "below"} core value)`
         : "";
       const historicalNote = Number.isFinite(recentAppraisalValue)
-        ? ` A recent appraisal of ${formatCurrency(recentAppraisalValue)} was used only as a reconciliation check.`
+        ? ` A prior appraisal cross-check trended to current market suggests ${formatCurrency(recentAppraisalValue)}${appraisalGapText} and is shown for reference only.`
         : Number.isFinite(historicalAnchor)
           ? " Historical pricing evidence was used only as a secondary reconciliation check."
           : "";
       const strategyBase = `Core value is anchored by sold comps at ${coreAnchorText}.`;
-      const strategyNote = `${strategyBase}${marketPressureNote}${historicalNote} Pricing confidence is ${pricingConfidence.label.toLowerCase()}.`;
+      const launchPostureNote = pricingConfidence.label === "Guarded"
+        ? " The launch recommendation is intentionally centered inside the supported range because the comp evidence is thinner."
+        : pricingConfidence.label === "Moderate"
+          ? " The launch recommendation is slightly tempered toward the middle of the supported range."
+          : "";
+      const strategyNote = `${strategyBase}${marketPressureNote}${historicalNote}${launchPostureNote} Pricing confidence is ${pricingConfidence.label.toLowerCase()}.`;
 
       const conditionSupport = conditionPct > 0
         ? "The subject's upgrades and condition notes support nudging the list price toward the upper half of the range."
@@ -2162,12 +2217,18 @@
           ? "The subject's condition notes suggest staying closer to core value or the lower half of the range."
           : "With neutral condition notes, the sold comp anchor supports a balanced launch around core value.";
       const detailAdjustmentNote = detailAdjustment.summaryLong ? ` ${detailAdjustment.summaryLong}` : "";
+      const suggestedListPriceNote = pricingConfidence.label === "Guarded"
+        ? "Launch recommendation is intentionally conservative because the best sold anchors are limited or less aligned."
+        : pricingConfidence.label === "Moderate"
+          ? "Launch recommendation is slightly tempered toward the middle of the supported range."
+          : "Primary launch recommendation after applying market pressure, DOM, and comp strength.";
 
       return {
         coreValueEstimate,
         coreAnchorLabels: coreValueModel.anchorLabels,
         recommendedRange: [rangeLow, rangeHigh],
         suggestedListPrice: suggested,
+        suggestedListPriceNote,
         ppsfSummary: { low: lowPpsf, average: avgPpsf, high: highPpsf, averageDom: marketTrend.avgDom },
         marketTrend,
         strategyNote,
@@ -2333,6 +2394,7 @@
         coreAnchorLabels: pricing.coreAnchorLabels,
         recommendedRange: pricing.recommendedRange,
         suggestedListPrice: pricing.suggestedListPrice,
+        suggestedListPriceNote: pricing.suggestedListPriceNote,
         ppsfSummary: pricing.ppsfSummary,
         marketTrend: pricing.marketTrend,
         pricingOptions: pricing.pricingOptions,
@@ -2642,7 +2704,7 @@
 
       estimateGrid.innerHTML = "";
       estimateGrid.appendChild(renderEstimateCard("Core value estimate", formatCurrency(report.coreValueEstimate), `Weighted sold-comp anchor from ${report.coreAnchorLabels?.length || report.soldComps.length} primary closed comps.`, false));
-      estimateGrid.appendChild(renderEstimateCard("Suggested list price", formatCurrency(report.suggestedListPrice), "Primary launch recommendation after applying market pressure, DOM, and comp strength.", true));
+      estimateGrid.appendChild(renderEstimateCard("Suggested list price", formatCurrency(report.suggestedListPrice), report.suggestedListPriceNote || "Primary launch recommendation after applying market pressure, DOM, and comp strength.", true));
       estimateGrid.appendChild(renderEstimateCard("Recommended price range", `${formatCurrency(report.recommendedRange[0])} - ${formatCurrency(report.recommendedRange[1])}`, "Sold-comp-supported low/high range with reconciliation checks when available.", false));
       estimateGrid.appendChild(renderEstimateCard("Pricing confidence", report.confidenceLabel ? `${report.confidenceLabel} (${report.confidenceScore}/100)` : "Pending", "Higher confidence means the top sold anchors are tighter and more consistent.", false));
 

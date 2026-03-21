@@ -293,6 +293,27 @@
       "foreclosure", "short sale", "distressed", "investor special", "estate sale", "handyman"
     ];
 
+    const SUBJECT_DETAIL_ADJUSTMENT_RULES = [
+      { key: "updated_kitchen", label: "updated kitchen", pct: 0.0125, patterns: ["updated kitchen", "renovated kitchen", "remodeled kitchen", "new kitchen"] },
+      { key: "updated_bathrooms", label: "updated bathrooms", pct: 0.008, patterns: ["updated bath", "updated baths", "updated bathroom", "updated bathrooms", "renovated bathroom", "renovated bathrooms", "remodeled bathroom", "remodeled bathrooms"] },
+      { key: "updated_flooring", label: "updated flooring", pct: 0.0045, patterns: ["updated flooring", "new flooring"] },
+      { key: "new_roof", label: "new roof", pct: 0.006, patterns: ["new roof"] },
+      { key: "new_hvac", label: "new HVAC", pct: 0.0045, patterns: ["new hvac", "new ac", "modern systems"] },
+      { key: "fresh_paint", label: "fresh paint", pct: 0.0025, patterns: ["fresh paint"] },
+      { key: "outdoor_living", label: "outdoor living", pct: 0.003, patterns: ["covered patio", "outdoor living"] },
+      { key: "curb_appeal", label: "curb appeal", pct: 0.0025, patterns: ["curb appeal"] },
+      { key: "lot_premium", label: "lot premium", pct: 0.0045, patterns: ["corner lot", "lot premium"] },
+      { key: "pool", label: "pool", pct: 0.005, patterns: ["pool"] },
+      { key: "fenced_yard", label: "fenced yard", pct: 0.0025, patterns: ["fenced yard", "fenced in yard", "fenced-in yard", "fully fenced yard", "privacy fence", "privacy fenced yard"] },
+      { key: "general_renovation", label: "general renovation", pct: 0.005, patterns: ["renovated", "remodeled", "upgrade", "upgrades"], requiresNoneOf: ["updated_kitchen", "updated_bathrooms", "updated_flooring", "new_roof", "new_hvac"] },
+      { key: "busy_road", label: "busy-road influence", pct: -0.0125, patterns: ["busy road", "commercial"] },
+      { key: "dated", label: "dated finishes", pct: -0.0075, patterns: ["dated"] },
+      { key: "deferred_maintenance", label: "deferred maintenance", pct: -0.015, patterns: ["deferred maintenance"] },
+      { key: "needs_work", label: "needs work", pct: -0.018, patterns: ["needs work", "fixer", "as-is", "as is"] },
+      { key: "functional_obsolescence", label: "functional obsolescence", pct: -0.014, patterns: ["functional obsolescence"] },
+      { key: "inferior_lot", label: "inferior lot influence", pct: -0.0085, patterns: ["inferior lot", "backs to", "backs up to"] }
+    ];
+
     const form = document.getElementById("cmaForm");
     const fixedParameterList = document.getElementById("fixedParameterList");
     const reportSection = document.getElementById("reportSection");
@@ -497,6 +518,20 @@
       const parsed = parseDateValue(date);
       if (!parsed) return "N/A";
       return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(parsed);
+    }
+
+    function formatPercentDelta(value, digits = 1) {
+      if (!Number.isFinite(value)) return "N/A";
+      const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+      return `${sign}${Math.abs(value * 100).toFixed(digits)}%`;
+    }
+
+    function joinWithAnd(items) {
+      const cleaned = items.filter(Boolean);
+      if (!cleaned.length) return "";
+      if (cleaned.length === 1) return cleaned[0];
+      if (cleaned.length === 2) return `${cleaned[0]} and ${cleaned[1]}`;
+      return `${cleaned.slice(0, -1).join(", ")}, and ${cleaned[cleaned.length - 1]}`;
     }
 
     function describeLiveSource(source) {
@@ -787,6 +822,83 @@
       const positiveMatches = POSITIVE_DETAIL_KEYWORDS.filter((keyword) => normalized.includes(keyword));
       const negativeMatches = NEGATIVE_DETAIL_KEYWORDS.filter((keyword) => normalized.includes(keyword));
       return { positiveMatches, negativeMatches, netScore: positiveMatches.length - negativeMatches.length };
+    }
+
+    function evaluateSubjectDetailAdjustments(specialDetails, conditionNotes) {
+      const normalizedText = normalizeText(`${specialDetails} ${conditionNotes}`);
+      if (!normalizedText) {
+        return {
+          hits: [],
+          positiveHits: [],
+          negativeHits: [],
+          positivePct: 0,
+          negativePct: 0,
+          rawNetPct: 0,
+          netPct: 0,
+          wasCapped: false,
+          summaryShort: "",
+          summaryLong: ""
+        };
+      }
+
+      const matchedKeys = new Set();
+      const hits = [];
+      SUBJECT_DETAIL_ADJUSTMENT_RULES.forEach((rule) => {
+        if (rule.requiresNoneOf?.some((key) => matchedKeys.has(key))) return;
+        if (!rule.patterns.some((pattern) => normalizedText.includes(pattern))) return;
+        matchedKeys.add(rule.key);
+        hits.push(rule);
+      });
+
+      if (!hits.length) {
+        return {
+          hits: [],
+          positiveHits: [],
+          negativeHits: [],
+          positivePct: 0,
+          negativePct: 0,
+          rawNetPct: 0,
+          netPct: 0,
+          wasCapped: false,
+          summaryShort: "",
+          summaryLong: ""
+        };
+      }
+
+      const positiveHits = hits.filter((rule) => rule.pct > 0);
+      const negativeHits = hits.filter((rule) => rule.pct < 0);
+      const positivePctRaw = positiveHits.reduce((sum, rule) => sum + rule.pct, 0);
+      const negativePctRaw = Math.abs(negativeHits.reduce((sum, rule) => sum + rule.pct, 0));
+      const positivePct = clamp(positivePctRaw, 0, 0.035);
+      const negativePct = clamp(negativePctRaw, 0, 0.04);
+      const rawNetPct = positivePctRaw - negativePctRaw;
+      const netPct = clamp(positivePct - negativePct, -0.04, 0.04);
+      const wasCapped = positivePct !== positivePctRaw || negativePct !== negativePctRaw || netPct !== rawNetPct;
+      const positiveLabels = positiveHits.map((rule) => rule.label);
+      const negativeLabels = negativeHits.map((rule) => rule.label);
+      const driverLabels = hits.slice(0, 4).map((rule) => rule.label);
+
+      let summaryLong = "";
+      if (positiveLabels.length && negativeLabels.length) {
+        summaryLong = `Pricing model adjustment ${formatPercentDelta(netPct)} after credit for ${joinWithAnd(positiveLabels)} and deductions for ${joinWithAnd(negativeLabels)}${wasCapped ? ". The net adjustment was capped to stay disciplined." : "."}`;
+      } else if (positiveLabels.length) {
+        summaryLong = `Pricing model adjustment ${formatPercentDelta(netPct)} for ${joinWithAnd(positiveLabels)}${wasCapped ? ". The positive adjustment was capped to stay disciplined." : "."}`;
+      } else if (negativeLabels.length) {
+        summaryLong = `Pricing model adjustment ${formatPercentDelta(netPct)} for ${joinWithAnd(negativeLabels)}${wasCapped ? ". The negative adjustment was capped to stay disciplined." : "."}`;
+      }
+
+      return {
+        hits,
+        positiveHits,
+        negativeHits,
+        positivePct,
+        negativePct,
+        rawNetPct,
+        netPct,
+        wasCapped,
+        summaryShort: `${formatPercentDelta(netPct)} net detail adjustment${driverLabels.length ? ` from ${joinWithAnd(driverLabels)}` : ""}${wasCapped ? " (capped)." : "."}`,
+        summaryLong
+      };
     }
 
     function buildCompAddress(item) {
@@ -1854,7 +1966,8 @@
       const pendingPrices = pendingComps.map((comp) => comp.listPrice ?? comp.soldPrice).filter((value) => Number.isFinite(value));
       const subjectSqft = Number.isFinite(subject.sqft) ? subject.sqft : median(soldComps.map((comp) => comp.sqft));
       const subjectCondition = analyzeConditionText(`${subject.specialDetails} ${subject.conditionNotes}`);
-      const conditionPct = clamp(subjectCondition.netScore * 0.0055, -0.025, 0.025);
+      const detailAdjustment = evaluateSubjectDetailAdjustments(subject.specialDetails, subject.conditionNotes);
+      const conditionPct = detailAdjustment.netPct;
       const marketTrend = inferMarketTrend(soldComps, activeComp, pendingComps);
       const historicalReference = buildHistoricalReference(values, marketTrend, conditionPct);
       const historicalAnchor = historicalReference.value;
@@ -1921,7 +2034,7 @@
           ], "value", "weight");
         }
       }
-      if (Number.isFinite(coreValueEstimate)) coreValueEstimate *= 1 + (conditionPct * 0.7);
+      if (Number.isFinite(coreValueEstimate)) coreValueEstimate *= 1 + (conditionPct * 0.75);
 
       let historicalGapPct = Number.isFinite(coreValueEstimate) && Number.isFinite(historicalAnchor) && coreValueEstimate > 0
         ? Math.abs(historicalAnchor - coreValueEstimate) / coreValueEstimate
@@ -2009,7 +2122,7 @@
       }
       if ((coreValueModel.averageSimilarity ?? 0) >= 82) listAdjustmentPct += 0.003;
       else if ((coreValueModel.averageSimilarity ?? 0) < 72) listAdjustmentPct -= 0.004;
-      listAdjustmentPct += clamp(subjectCondition.netScore * 0.004, -0.01, 0.01);
+      listAdjustmentPct += clamp(conditionPct * 0.45, -0.012, 0.012);
       if (Number.isFinite(recentAppraisalValue) && Number.isFinite(coreValueEstimate) && coreValueEstimate > 0) {
         const appraisalSupportPct = (recentAppraisalValue - coreValueEstimate) / coreValueEstimate;
         if (Math.abs(appraisalSupportPct) <= 0.05) listAdjustmentPct += clamp(appraisalSupportPct * 0.3, -0.006, 0.008);
@@ -2043,11 +2156,12 @@
       const strategyBase = `Core value is anchored by sold comps at ${coreAnchorText}.`;
       const strategyNote = `${strategyBase}${marketPressureNote}${historicalNote} Pricing confidence is ${pricingConfidence.label.toLowerCase()}.`;
 
-      const conditionSupport = subjectCondition.netScore > 0
+      const conditionSupport = conditionPct > 0
         ? "The subject's upgrades and condition notes support nudging the list price toward the upper half of the range."
-        : subjectCondition.netScore < 0
+        : conditionPct < 0
           ? "The subject's condition notes suggest staying closer to core value or the lower half of the range."
           : "With neutral condition notes, the sold comp anchor supports a balanced launch around core value.";
+      const detailAdjustmentNote = detailAdjustment.summaryLong ? ` ${detailAdjustment.summaryLong}` : "";
 
       return {
         coreValueEstimate,
@@ -2060,12 +2174,15 @@
         confidenceLabel: pricingConfidence.label,
         confidenceScore: pricingConfidence.score,
         historicalAnchor,
+        conditionAdjustmentPct: detailAdjustment.netPct,
+        conditionAdjustmentSummaryShort: detailAdjustment.summaryShort,
+        conditionAdjustmentSummaryLong: detailAdjustment.summaryLong,
         pricingOptions: [
           { label: "Maximum price with patience", price: psychPrice(rangeHigh, "down"), note: "Upper-range strategy for more room if traffic and presentation are strong." },
           { label: "Balanced market pricing", price: suggested, note: "Best mix of exposure, perceived value, and negotiation flexibility." },
           { label: "Faster sale strategy", price: psychPrice(rangeLow, "up"), note: "Lower-range strategy for stronger early activity and faster absorption." }
         ],
-        explanation: `Core value estimate is ${formatCurrency(coreValueEstimate)}, anchored by sold comps at ${coreAnchorText}. Recommend listing at ${formatCurrency(suggested)} with a defensible range of ${formatCurrency(rangeLow)} to ${formatCurrency(rangeHigh)}. ${conditionSupport} ${pricingConfidence.note}${marketPressureNote}${historicalNote}`
+        explanation: `Core value estimate is ${formatCurrency(coreValueEstimate)}, anchored by sold comps at ${coreAnchorText}. Recommend listing at ${formatCurrency(suggested)} with a defensible range of ${formatCurrency(rangeLow)} to ${formatCurrency(rangeHigh)}. ${conditionSupport}${detailAdjustmentNote} ${pricingConfidence.note}${marketPressureNote}${historicalNote}`
       };
     }
 
@@ -2087,6 +2204,7 @@
         `Pricing confidence: ${pricing.confidenceLabel}`
       ];
       if (Number.isFinite(pricing.coreValueEstimate)) items.push(`Core value estimate: ${formatCurrency(pricing.coreValueEstimate)}`);
+      if (pricing.conditionAdjustmentSummaryShort) items.push(`Special-details adjustment: ${pricing.conditionAdjustmentSummaryShort}`);
       if (pricing.coreAnchorLabels?.length) items.push(`Primary sold anchors: ${pricing.coreAnchorLabels.join("; ")}`);
       if (selection.manualCurrentMarketCount) items.push(`Manual current-market overrides: ${selection.manualCurrentMarketCount}`);
       if (selection.excludedComparableCount) items.push(`Excluded feed comps: ${selection.excludedComparableCount}`);
@@ -2160,6 +2278,12 @@
             ? " The two AVMs are meaningfully split, so the comp set should stay in the driver's seat."
             : "";
       }
+      if (Number.isFinite(coreValueEstimate) && coreValueEstimate > 0) {
+        const maxGapPct = Math.max(...models
+          .filter((model) => Number.isFinite(model.value))
+          .map((model) => Math.abs(model.value - coreValueEstimate) / coreValueEstimate), 0);
+        if (maxGapPct >= 0.08) alignmentNote += " One or more AVMs sit materially away from the comp-based core value, so they remain a loose cross-check only.";
+      }
 
       const cards = modelSlots.map((slot) => {
         const model = slot.model;
@@ -2176,6 +2300,10 @@
         if (Number.isFinite(model.confidenceScore)) footnote.push(`Confidence ${Math.round(model.confidenceScore)}/100.`);
         if (Number.isFinite(model.comparablesCount)) footnote.push(`${Math.round(model.comparablesCount)} comps in model.`);
         if (model.eventDate) footnote.push(`As of ${formatDateOnly(model.eventDate)}.`);
+        if (Number.isFinite(coreValueEstimate) && Number.isFinite(model.value) && coreValueEstimate > 0) {
+          const gapPct = Math.abs(model.value - coreValueEstimate) / coreValueEstimate;
+          if (gapPct >= 0.04) footnote.push(`${Math.round(gapPct * 100)}% ${model.value > coreValueEstimate ? "above" : "below"} the current comp-based core value.`);
+        }
         if (closestProvider && model.provider === closestProvider) footnote.push("Closest to the current comp-based core value.");
         return {
           label: model.provider,
@@ -2211,6 +2339,9 @@
         strategyNote: pricing.strategyNote,
         confidenceLabel: pricing.confidenceLabel,
         confidenceScore: pricing.confidenceScore,
+        conditionAdjustmentPct: pricing.conditionAdjustmentPct,
+        conditionAdjustmentSummaryShort: pricing.conditionAdjustmentSummaryShort,
+        conditionAdjustmentSummaryLong: pricing.conditionAdjustmentSummaryLong,
         summary: pricing.explanation,
         searchSummary: buildSearchSummary(values, subject, selectionMeta, pricing),
         dataSourceNote: sourceNote,
@@ -2468,7 +2599,7 @@
         liveAccent: true
       });
       subjectPropertyAddress.textContent = values.subjectAddress;
-      specialDetailsOutput.textContent = [values.specialDetails, values.conditionNotes].filter(Boolean).join(" ").trim() || "No special details were entered for this subject property.";
+      specialDetailsOutput.textContent = [values.specialDetails, values.conditionNotes, report.conditionAdjustmentSummaryLong].filter(Boolean).join(" ").trim() || "No special details were entered for this subject property.";
       summaryText.textContent = report.summary;
       strategyNoteText.textContent = report.strategyNote || "No strategy note available.";
       marketTrendText.textContent = report.marketTrend?.note || "";

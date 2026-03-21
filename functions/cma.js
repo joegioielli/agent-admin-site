@@ -1,5 +1,5 @@
 // netlify/functions/cma.js
-// Hybrid CMA data source:
+// CMA data sources (switchable with the providerMode query param):
 // - RentCast for AVM + live listing coverage
 // - ATTOM for exact subject-property detail + sold-sale fallback
 
@@ -1261,12 +1261,40 @@ export async function handler(event) {
     };
   }
 
+  const params = event.queryStringParameters || {};
+  const providerModeInput = normalizeKey(params.providerMode || params.provider || "hybrid");
+  const providerMode = providerModeInput === "attom"
+    ? "attom"
+    : providerModeInput === "rentcast"
+      ? "rentcast"
+      : "hybrid";
   const rentcastApiKey = clean(process.env.RENTCAST_API_KEY);
   const attomApiKey = clean(process.env.ATTOM_API_KEY);
+  const useRentcast = providerMode !== "attom" && Boolean(rentcastApiKey);
+  const useAttom = providerMode !== "rentcast" && Boolean(attomApiKey);
   const providers = {
+    requestedMode: providerMode,
     rentcastConfigured: Boolean(rentcastApiKey),
     attomConfigured: Boolean(attomApiKey),
+    rentcastEnabled: useRentcast,
+    attomEnabled: useAttom,
   };
+
+  if (providerMode === "attom" && !attomApiKey) {
+    return json(500, {
+      error: "Missing ATTOM credentials",
+      details: "ATTOM-only mode was requested, but ATTOM_API_KEY is not configured in the Netlify environment.",
+      providers,
+    });
+  }
+
+  if (providerMode === "rentcast" && !rentcastApiKey) {
+    return json(500, {
+      error: "Missing RentCast credentials",
+      details: "RentCast-only mode was requested, but RENTCAST_API_KEY is not configured in the Netlify environment.",
+      providers,
+    });
+  }
 
   if (!rentcastApiKey && !attomApiKey) {
     return json(500, {
@@ -1276,7 +1304,6 @@ export async function handler(event) {
     });
   }
 
-  const params = event.queryStringParameters || {};
   const address = clean(params.address || params.address1 || params.street);
   const city = clean(params.city);
   const state = normalizeState(params.state);
@@ -1308,13 +1335,15 @@ export async function handler(event) {
     const sourceParts = [];
     let attomDebug = debugAttom ? {
       enabled: true,
-      note: attomApiKey
+      note: useAttom
         ? "ATTOM debug mode is enabled for this response."
-        : "ATTOM debug mode was requested, but ATTOM_API_KEY is not configured.",
+        : providerMode === "rentcast"
+          ? "ATTOM debug mode was requested, but provider mode is set to RentCast only."
+          : "ATTOM debug mode was requested, but ATTOM_API_KEY is not configured.",
       attempts: [],
     } : null;
 
-    if (rentcastApiKey) {
+    if (useRentcast) {
       const rentcastBundle = await fetchRentcastBundle({
         address,
         city,
@@ -1336,7 +1365,7 @@ export async function handler(event) {
       if (rentcastBundle.lastError) lastError = rentcastBundle.lastError;
     }
 
-    if (attomApiKey) {
+    if (useAttom) {
       const attomBundle = await fetchAttomBundle({
         address,
         city,
@@ -1370,12 +1399,13 @@ export async function handler(event) {
     const soldCount = estimateSoldComparableCount(listingData);
 
     if (!listingData.length) {
-      const fallbackError = lastError?.details || "No comparable listings were returned by the configured CMA providers.";
+      const fallbackError = lastError?.details || "No comparable listings were returned by the selected CMA providers.";
       return json(lastError?.statusCode || 404, {
         error: "No comparable data found",
         details: fallbackError,
         providers,
         request: {
+          providerMode,
           address,
           city,
           state,
@@ -1392,9 +1422,10 @@ export async function handler(event) {
     }
 
     return json(200, {
-      source: sourceParts.filter(Boolean).join("+") || (attomApiKey ? "attom-sale" : "rentcast-listings"),
+      source: sourceParts.filter(Boolean).join("+") || (useAttom ? "attom-sale" : "rentcast-listings"),
       providers,
       request: {
+        providerMode,
         address,
         city,
         state,

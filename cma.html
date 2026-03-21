@@ -93,7 +93,7 @@
       <header class="main-header">
         <div>
           <div class="main-title">CMA Report Builder</div>
-          <div class="main-subtitle">Use live RentCast results with staged comp search, similarity scoring, and pricing guidance.</div>
+          <div class="main-subtitle">Use live ATTOM results with staged comp search, similarity scoring, and pricing guidance.</div>
         </div>
       </header>
       <section class="main-content">
@@ -142,7 +142,7 @@
               <section class="sub-card">
                 <div class="section-label">Manual Market Overrides</div>
                 <h3 class="section-title">Add pending or under-contract comps from MLS</h3>
-                <p class="section-copy">Use these fields when RentCast misses the strongest current-market listings. These manual comps will supplement the live feed and can move the price bracket.</p>
+                <p class="section-copy">Use these fields when ATTOM misses the strongest current-market listings. These manual comps will supplement the live feed and can move the price bracket.</p>
                 <div class="form-stack" style="margin-top: 12px;">
                   <section class="sub-card">
                     <div class="section-label">Override 1</div>
@@ -249,7 +249,7 @@
             </div>
             <div class="report-body">
               <div class="print-toolbar"><button type="button" class="print-btn" id="printReportBtn">Print Report</button></div>
-              <div class="empty-state" id="reportEmptyState">Enter a subject property address and generate the CMA to populate the report. Live RentCast data will load first, and the page will fall back gracefully if the result set is thin.</div>
+              <div class="empty-state" id="reportEmptyState">Enter a subject property address and generate the CMA to populate the report. Live ATTOM data will load first, and the page will fall back gracefully if the result set is thin.</div>
               <div class="report-grid">
                 <section class="report-card span-7"><div class="section-label">Subject Property</div><h3 class="section-title">Subject property overview</h3><p class="section-copy" id="subjectPropertyAddress">Not generated yet.</p><div class="metrics" id="subjectPropertyMetrics"></div></section>
                 <section class="report-card span-5"><div class="section-label">Special Details</div><h3 class="section-title">Value-impact notes</h3><p class="section-copy" id="specialDetailsOutput">No special details entered yet.</p></section>
@@ -258,7 +258,7 @@
                 <section class="report-card span-7"><div class="section-label">PPSF Support</div><h3 class="section-title">Price per square foot and market read</h3><div class="metrics" id="ppsfMetrics"></div><p class="muted-text" id="marketTrendText"></p></section>
                 <section class="report-card span-5 print-hide"><div class="section-label">Pricing Strategy</div><h3 class="section-title">Recommended positioning</h3><p class="section-copy" id="strategyNoteText"></p><div class="strategy-grid" id="strategyOptions"></div></section>
                 <section class="report-card span-7"><div class="section-label">Value Guidance</div><h3 class="section-title">Pricing recommendation</h3><div class="estimate-grid" id="estimateGrid"></div></section>
-                <section class="report-card span-5"><div class="section-label">AVM Cross-Check</div><h3 class="section-title">Automated valuation models</h3><p class="section-copy" id="avmSummaryText">Generate a report to compare the RentCast and ATTOM AVMs side by side.</p><div class="estimate-grid" id="avmGrid"></div></section>
+                <section class="report-card span-5"><div class="section-label">AVM Cross-Check</div><h3 class="section-title">Automated valuation models</h3><p class="section-copy" id="avmSummaryText">Generate a report to review the ATTOM AVM and any returned model values.</p><div class="estimate-grid" id="avmGrid"></div></section>
                 <section class="report-card"><div class="section-label">Comparable Sales</div><h3 class="section-title">Closed comparable properties</h3><p class="muted-text">These cards show the best sold matches returned after staged search filtering and similarity scoring.</p><div class="comp-grid" id="soldCompGrid"></div></section>
                 <section class="report-card"><div class="section-label">Competitive Listing</div><h3 class="section-title">Current market comparable</h3><p class="muted-text">This card shows the strongest current benchmark available from the live search, including pending or under-contract listings.</p><div class="comp-grid" id="activeCompGrid"></div></section>
               </div>
@@ -326,6 +326,7 @@
       "subjectGarageParking"
     ];
     const MANUAL_CURRENT_MARKET_COMP_SLOTS = [1, 2, 3];
+    const LIVE_PROVIDER_MODE = "attom";
     const ATTOM_DEBUG_REQUESTED = (() => {
       const params = new URLSearchParams(window.location.search);
       const flag = params.get("debugAttom") || params.get("debug") || "";
@@ -523,6 +524,12 @@
 
     function summarizeProviderDiagnostics(payload) {
       const providers = payload?.providers || payload?.error?.payload?.providers || {};
+      const providerMode = normalizeText(
+        payload?.request?.providerMode ||
+        payload?.error?.payload?.request?.providerMode ||
+        providers.requestedMode ||
+        ""
+      );
       const attempts = Array.isArray(payload?.attempts)
         ? payload.attempts
         : Array.isArray(payload?.error?.payload?.attempts)
@@ -535,21 +542,25 @@
       const summary = [];
 
       if (providers.attomConfigured === true) {
-        summary.push((attemptedSources.has("attom-avm") || attemptedSources.has("attom-avm-snapshot") || attemptedSources.has("attom-property") || attemptedSources.has("attom-sale"))
-          ? attomContributed
-            ? "ATTOM contributed data."
-            : "ATTOM was attempted but did not contribute usable data."
-          : "ATTOM is configured but was not attempted in this response.");
+        summary.push(providerMode === "rentcast"
+          ? "ATTOM was intentionally skipped in RentCast-only mode."
+          : (attemptedSources.has("attom-avm") || attemptedSources.has("attom-avm-snapshot") || attemptedSources.has("attom-property") || attemptedSources.has("attom-sale"))
+            ? attomContributed
+              ? "ATTOM contributed data."
+              : "ATTOM was attempted but did not contribute usable data."
+            : "ATTOM is configured but was not attempted in this response.");
       } else if (providers.attomConfigured === false) {
         summary.push("ATTOM is not configured in the function runtime.");
       }
 
       if (providers.rentcastConfigured === true) {
-        summary.push((attemptedSources.has("rentcast-avm") || attemptedSources.has("rentcast-listings"))
-          ? rentcastContributed
-            ? "RentCast contributed data."
-            : "RentCast was attempted but did not contribute usable data."
-          : "RentCast is configured but was not attempted in this response.");
+        summary.push(providerMode === "attom"
+          ? "RentCast was intentionally skipped in ATTOM-only mode."
+          : (attemptedSources.has("rentcast-avm") || attemptedSources.has("rentcast-listings"))
+            ? rentcastContributed
+              ? "RentCast contributed data."
+              : "RentCast was attempted but did not contribute usable data."
+            : "RentCast is configured but was not attempted in this response.");
       } else if (providers.rentcastConfigured === false) {
         summary.push("RentCast is not configured in the function runtime.");
       }
@@ -1992,16 +2003,22 @@
       };
     }
 
-    function buildAvmSummary(providerAvms, coreValueEstimate = null) {
+    function buildAvmSummary(providerAvms, coreValueEstimate = null, providerMode = LIVE_PROVIDER_MODE) {
+      const normalizedMode = normalizeText(providerMode || LIVE_PROVIDER_MODE);
       const modelSlots = [
-        { key: "rentcast", provider: "RentCast AVM", model: normalizeAvmModel(providerAvms?.rentcast, "RentCast AVM") },
-        { key: "attom", provider: "ATTOM AVM", model: normalizeAvmModel(providerAvms?.attom, "ATTOM AVM") }
-      ];
+        normalizedMode === "attom" ? null : { key: "rentcast", provider: "RentCast AVM", model: normalizeAvmModel(providerAvms?.rentcast, "RentCast AVM") },
+        normalizedMode === "rentcast" ? null : { key: "attom", provider: "ATTOM AVM", model: normalizeAvmModel(providerAvms?.attom, "ATTOM AVM") }
+      ].filter(Boolean);
       const models = modelSlots.map((slot) => slot.model).filter(Boolean);
 
       if (!models.length) {
+        const noModelNote = normalizedMode === "attom"
+          ? "These model values are shown only as a secondary check against the comp-driven CMA. ATTOM did not return an AVM for this address."
+          : normalizedMode === "rentcast"
+            ? "These model values are shown only as a secondary check against the comp-driven CMA. RentCast did not return an AVM for this address."
+            : "These model values are shown only as a secondary check against the comp-driven CMA. Neither RentCast nor ATTOM returned an AVM for this address.";
         return {
-          note: "These model values are shown only as a secondary check against the comp-driven CMA. Neither RentCast nor ATTOM returned an AVM for this address.",
+          note: noModelNote,
           cards: modelSlots.map((slot) => ({
             label: slot.provider,
             value: "Unavailable",
@@ -2067,6 +2084,7 @@
       subject.estimatedValue = pricing.coreValueEstimate ?? pricing.suggestedListPrice;
       return {
         generatedAt: new Date(),
+        providerMode: LIVE_PROVIDER_MODE,
         subject,
         soldComps,
         activeComp,
@@ -2116,7 +2134,7 @@
           manualCurrentMarketCount: manualCurrentMarketComps.length,
           excludedComparableCount: values.excludedComparableKeys?.size || 0
         },
-        "Live RentCast data was unavailable or too thin for a reliable set, so sample comps are shown as a working fallback.",
+        "Live ATTOM data was unavailable or too thin for a reliable set, so sample comps are shown as a working fallback.",
         null
       );
     }
@@ -2133,6 +2151,7 @@
       params.set("compCount", "20");
       params.set("limit", "60");
       params.set("lookbackMonths", String(values.lookbackMonths || 6));
+      params.set("providerMode", LIVE_PROVIDER_MODE);
       if (ATTOM_DEBUG_REQUESTED) params.set("debugAttom", "1");
       const response = await fetch(`/.netlify/functions/cma?${params.toString()}`, { headers: { Accept: "application/json" } });
       const payload = await response.json().catch(() => ({}));
@@ -2171,7 +2190,7 @@
       const sourceNote = soldSelection.usedLiveFallbackPool
         ? `Generated ${formatDateTime(new Date())} using ${sourceLabel}. The sold comp set was thin, so the report ranked the closest available live comparables in the returned pool.${diagnosticsNote ? ` ${diagnosticsNote}` : ""}`
         : `Generated ${formatDateTime(new Date())} using ${sourceLabel}.${diagnosticsNote ? ` ${diagnosticsNote}` : ""}`;
-      return buildReport(
+      const report = buildReport(
         values,
         subject,
         soldSelection.soldComps,
@@ -2188,6 +2207,8 @@
         sourceNote,
         payload?.data?.providerAvms || null
       );
+      report.providerMode = cleanText(payload?.request?.providerMode) || LIVE_PROVIDER_MODE;
+      return report;
     }
 
     function renderMetric(label, value) {
@@ -2304,7 +2325,7 @@
       summaryText.textContent = report.summary;
       strategyNoteText.textContent = report.strategyNote || "No strategy note available.";
       marketTrendText.textContent = report.marketTrend?.note || "";
-      const avmSummary = buildAvmSummary(report.providerAvms, report.coreValueEstimate);
+      const avmSummary = buildAvmSummary(report.providerAvms, report.coreValueEstimate, report.providerMode);
       avmSummaryText.textContent = avmSummary.note;
 
       subjectPropertyMetrics.innerHTML = "";
@@ -2370,7 +2391,7 @@
       summaryText.textContent = "";
       strategyNoteText.textContent = "";
       marketTrendText.textContent = "";
-      avmSummaryText.textContent = "Generate a report to compare the RentCast and ATTOM AVMs side by side.";
+      avmSummaryText.textContent = "Generate a report to review the ATTOM AVM and any returned model values.";
       subjectPropertyMetrics.innerHTML = "";
       searchSummaryList.innerHTML = "";
       ppsfMetrics.innerHTML = "";

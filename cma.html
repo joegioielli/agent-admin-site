@@ -2496,16 +2496,19 @@
 
     function showLiveDataError(values, error) {
       const diagnosticsNote = summarizeProviderDiagnostics({ error });
-      if (error?.code === "INSUFFICIENT_ATTOM_SUBJECT_DATA" || error?.code === "INSUFFICIENT_ATTOM_COMPS") {
+      const attomOnlyMode = LIVE_PROVIDER_MODE === "attom";
+      if (ATTOM_DEBUG_REQUESTED) console.info("[CMA] ATTOM debug error payload", error?.payload?.debug?.attom || null);
+      if (attomOnlyMode || error?.code === "INSUFFICIENT_ATTOM_SUBJECT_DATA" || error?.code === "INSUFFICIENT_ATTOM_COMPS") {
         resetReport();
-        reportTimestamp.textContent = error.code === "INSUFFICIENT_ATTOM_COMPS"
+        reportTimestamp.textContent = error?.code === "INSUFFICIENT_ATTOM_COMPS"
           ? "ATTOM-only CMA needs better in-market comps."
-          : "ATTOM-only CMA needs more subject detail.";
-        reportEmptyState.textContent = `${error.message}${diagnosticsNote ? ` ${diagnosticsNote}` : ""}`;
+          : error?.code === "INSUFFICIENT_ATTOM_SUBJECT_DATA"
+            ? "ATTOM-only CMA needs more subject detail."
+            : "ATTOM-only CMA is unavailable.";
+        reportEmptyState.textContent = `${error?.message || "ATTOM did not return usable CMA data for this address."}${diagnosticsNote ? ` ${diagnosticsNote}` : ""}`;
         return;
       }
       const fallbackReport = buildMockReport(values);
-      if (ATTOM_DEBUG_REQUESTED) console.info("[CMA] ATTOM debug error payload", error?.payload?.debug?.attom || null);
       fallbackReport.dataSourceNote = `${error?.message || "Live data is currently unavailable."}${diagnosticsNote ? ` ${diagnosticsNote}` : ""} Sample comps are shown below so the CMA stays usable while live data recovers.`;
       renderReport(values, fallbackReport);
     }

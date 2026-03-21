@@ -9,6 +9,7 @@ const RENTCAST_LISTINGS_URL = "https://api.rentcast.io/v1/listings/sale";
 const ATTOM_BASE_URL = "https://api.gateway.attomdata.com/propertyapi/v1.0.0";
 const ATTOM_PROPERTY_DETAIL_URL = `${ATTOM_BASE_URL}/property/detail`;
 const ATTOM_SALE_SNAPSHOT_URL = `${ATTOM_BASE_URL}/sale/snapshot`;
+const ATTOM_AVM_DETAIL_URL = `${ATTOM_BASE_URL}/attomavm/detail`;
 const ATTOM_MAX_RADIUS = 20;
 
 function corsHeaders(extra = {}) {
@@ -365,6 +366,7 @@ function buildAttomRecordPreview(record, options = {}) {
       area: propertyRecord.area || null,
       location: propertyRecord.location || null,
       sale: propertyRecord.sale || null,
+      avm: propertyRecord.avm || null,
     },
   };
 }
@@ -396,6 +398,114 @@ function buildGarageSummary(record) {
   ]));
 
   return [Number.isFinite(spaces) ? `${spaces}-space` : "", garageType].filter(Boolean).join(" ").trim();
+}
+
+function mapRentcastAvmResponse(data, subjectProperty = null) {
+  if (!data || typeof data !== "object") return null;
+
+  const value = toFiniteNumber(pickFirstValue(data, [
+    "price",
+    "value",
+    "estimate",
+    "estimatedValue",
+    "avm",
+    "avm.value",
+  ]), null);
+  const low = toFiniteNumber(pickFirstValue(data, [
+    "priceRangeLow",
+    "valueRangeLow",
+    "range.low",
+    "low",
+  ]), null);
+  const high = toFiniteNumber(pickFirstValue(data, [
+    "priceRangeHigh",
+    "valueRangeHigh",
+    "range.high",
+    "high",
+  ]), null);
+  const confidenceScore = toFiniteNumber(pickFirstValue(data, [
+    "confidenceScore",
+    "confidence",
+    "score",
+  ]), null);
+  const comparablesCount = extractItems(data?.comparables || data).length || null;
+
+  if (!Number.isFinite(value) && !Number.isFinite(low) && !Number.isFinite(high)) return null;
+
+  return {
+    provider: "RentCast AVM",
+    source: "rentcast-avm",
+    address: clean(subjectProperty?.formattedAddress || data?.subjectProperty?.formattedAddress),
+    value,
+    low,
+    high,
+    confidenceScore,
+    comparablesCount,
+  };
+}
+
+function mapAttomAvmRecord(record) {
+  const propertyRecord = unwrapAttomPropertyRecord(record);
+  if (!propertyRecord || typeof propertyRecord !== "object") return null;
+
+  const line1 = clean(pickFirstValue(propertyRecord, [
+    "address.line1",
+    "address.lineOne",
+  ]));
+  const city = clean(pickFirstValue(propertyRecord, [
+    "address.locality",
+    "address.city",
+  ]));
+  const state = normalizeState(pickFirstValue(propertyRecord, [
+    "address.countrySubd",
+    "address.state",
+  ]));
+  const zipCode = clean(pickFirstValue(propertyRecord, [
+    "address.postal1",
+    "address.zip",
+    "address.zipCode",
+  ]));
+  const formattedAddress = clean(pickFirstValue(propertyRecord, [
+    "address.oneLine",
+    "address.fullAddress",
+  ], [line1, [city, state, zipCode].filter(Boolean).join(" ")].filter(Boolean).join(", ")));
+  const value = toFiniteNumber(pickFirstValue(propertyRecord, [
+    "avm.amount.value",
+  ]), null);
+  const low = toFiniteNumber(pickFirstValue(propertyRecord, [
+    "avm.amount.low",
+  ]), null);
+  const high = toFiniteNumber(pickFirstValue(propertyRecord, [
+    "avm.amount.high",
+  ]), null);
+  const confidenceScore = toFiniteNumber(pickFirstValue(propertyRecord, [
+    "avm.amount.scr",
+  ]), null);
+  const pricePerSqft = toFiniteNumber(pickFirstValue(propertyRecord, [
+    "avm.calculations.perSizeUnit",
+  ]), null);
+  const eventDate = clean(pickFirstValue(propertyRecord, [
+    "avm.eventDate",
+  ]));
+
+  if (!Number.isFinite(value) && !Number.isFinite(low) && !Number.isFinite(high)) return null;
+
+  return {
+    provider: "ATTOM AVM",
+    source: "attom-avm",
+    address: formattedAddress,
+    value,
+    low,
+    high,
+    confidenceScore,
+    pricePerSqft,
+    eventDate,
+    avmId: clean(pickFirstValue(propertyRecord, [
+      "avm.avmID",
+      "avm.avmId",
+      "avm.avmid",
+    ])),
+  };
 }
 
 function mapAttomRecord(record, { fallbackStatus = "Sold", source = "attom-sale" } = {}) {
@@ -630,6 +740,7 @@ async function fetchRentcastBundle({
     subjectProperty: avmSubject,
     comparables: dedupeListings(combined).slice(0, Number(limit || 60)),
     avm: avmFetch.response.ok ? avmFetch.data : null,
+    rentcastAvm: avmFetch.response.ok ? mapRentcastAvmResponse(avmFetch.data, avmSubject) : null,
     lastError,
   };
 }
@@ -727,6 +838,7 @@ async function fetchAttomBundle({
   const endSaleTransDate = formatAttomDate(new Date());
 
   let subjectProperty = null;
+  let attomAvm = null;
   let lastError = null;
 
   for (const attempt of buildAttomSubjectAttempts({ fullAddress, address, address2, address2CityState })) {
@@ -767,6 +879,37 @@ async function fetchAttomBundle({
 
     if (!summary.noResults || !result.response.ok) {
       lastError = buildAttomError(result, summary);
+    }
+  }
+
+  for (const attempt of buildAttomSubjectAttempts({ fullAddress, address, address2, address2CityState })) {
+    const url = new URL(ATTOM_AVM_DETAIL_URL);
+    Object.entries(attempt.params).forEach(([key, value]) => url.searchParams.set(key, value));
+
+    const result = await fetchAttom(url, apiKey);
+    const summary = summarizeAttomPayload(result.response, result.data);
+    const attemptDiagnostics = {
+      source: "attom-avm",
+      label: attempt.label,
+      request: attempt.params,
+      statusCode: result.response.status,
+      attomStatusCode: summary.code,
+      attomMessage: summary.message,
+      resultCount: summary.resultCount,
+    };
+
+    diagnostics.push(attemptDiagnostics);
+    if (debug) {
+      debugAttempts.push({
+        ...attemptDiagnostics,
+        url: url.toString(),
+        avmMapped: summary.hasResults ? mapAttomAvmRecord(extractAttomRecords(result.data)[0]) : null,
+      });
+    }
+
+    if (summary.hasResults) {
+      attomAvm = mapAttomAvmRecord(extractAttomRecords(result.data)[0]);
+      break;
     }
   }
 
@@ -831,18 +974,21 @@ async function fetchAttomBundle({
 
   const dedupedComparables = dedupeListings(comparables).slice(0, Number(limit || 60));
   const sourceParts = [];
+  if (attomAvm) sourceParts.push("attom-avm");
   if (subjectProperty) sourceParts.push("attom-property");
   if (dedupedComparables.length) sourceParts.push("attom-sale");
 
   return {
     diagnostics,
     source: sourceParts.join("+"),
+    attomAvm,
     subjectProperty,
     comparables: dedupedComparables,
     lastError,
     debug: debug ? {
       enabled: true,
       source: sourceParts.join("+"),
+      attomAvm,
       subjectPropertyMapped: subjectProperty,
       comparableCount: dedupedComparables.length,
       comparableSample: dedupedComparables.slice(0, 3),
@@ -899,6 +1045,10 @@ export async function handler(event) {
     let subjectProperty = null;
     let comparables = [];
     let avm = null;
+    const providerAvms = {
+      rentcast: null,
+      attom: null,
+    };
     let lastError = null;
     const sourceParts = [];
     let attomDebug = debugAttom ? {
@@ -927,6 +1077,7 @@ export async function handler(event) {
       if (rentcastBundle.subjectProperty) subjectProperty = rentcastBundle.subjectProperty;
       if (rentcastBundle.comparables.length) comparables = mergeComparablePools(comparables, rentcastBundle.comparables);
       if (rentcastBundle.avm) avm = rentcastBundle.avm;
+      if (rentcastBundle.rentcastAvm) providerAvms.rentcast = rentcastBundle.rentcastAvm;
       if (rentcastBundle.lastError) lastError = rentcastBundle.lastError;
     }
 
@@ -953,6 +1104,7 @@ export async function handler(event) {
           : attomBundle.subjectProperty;
       }
       if (attomBundle.comparables.length) comparables = mergeComparablePools(comparables, attomBundle.comparables);
+      if (attomBundle.attomAvm) providerAvms.attom = attomBundle.attomAvm;
       if (attomBundle.lastError) lastError = attomBundle.lastError;
       if (debugAttom) attomDebug = attomBundle.debug;
     }
@@ -1003,6 +1155,7 @@ export async function handler(event) {
         subjectProperty,
         comparables: listingData,
         avm,
+        providerAvms,
         stats: {
           totalComparables: listingData.length,
           soldComparableSignals: soldCount,

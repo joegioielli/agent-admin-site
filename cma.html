@@ -257,7 +257,8 @@
                 <section class="report-card span-5 print-hide"><div class="section-label">Search Summary</div><h3 class="section-title">Parameters used</h3><ul class="search-list" id="searchSummaryList"></ul></section>
                 <section class="report-card span-7"><div class="section-label">PPSF Support</div><h3 class="section-title">Price per square foot and market read</h3><div class="metrics" id="ppsfMetrics"></div><p class="muted-text" id="marketTrendText"></p></section>
                 <section class="report-card span-5 print-hide"><div class="section-label">Pricing Strategy</div><h3 class="section-title">Recommended positioning</h3><p class="section-copy" id="strategyNoteText"></p><div class="strategy-grid" id="strategyOptions"></div></section>
-                <section class="report-card"><div class="section-label">Value Guidance</div><h3 class="section-title">Pricing recommendation</h3><div class="estimate-grid" id="estimateGrid"></div></section>
+                <section class="report-card span-7"><div class="section-label">Value Guidance</div><h3 class="section-title">Pricing recommendation</h3><div class="estimate-grid" id="estimateGrid"></div></section>
+                <section class="report-card span-5"><div class="section-label">AVM Cross-Check</div><h3 class="section-title">Automated valuation models</h3><p class="section-copy" id="avmSummaryText">Generate a report to compare the RentCast and ATTOM AVMs side by side.</p><div class="estimate-grid" id="avmGrid"></div></section>
                 <section class="report-card"><div class="section-label">Comparable Sales</div><h3 class="section-title">Closed comparable properties</h3><p class="muted-text">These cards show the best sold matches returned after staged search filtering and similarity scoring.</p><div class="comp-grid" id="soldCompGrid"></div></section>
                 <section class="report-card"><div class="section-label">Competitive Listing</div><h3 class="section-title">Current market comparable</h3><p class="muted-text">This card shows the strongest current benchmark available from the live search, including pending or under-contract listings.</p><div class="comp-grid" id="activeCompGrid"></div></section>
               </div>
@@ -307,6 +308,8 @@
     const strategyNoteText = document.getElementById("strategyNoteText");
     const strategyOptions = document.getElementById("strategyOptions");
     const estimateGrid = document.getElementById("estimateGrid");
+    const avmSummaryText = document.getElementById("avmSummaryText");
+    const avmGrid = document.getElementById("avmGrid");
     const soldCompGrid = document.getElementById("soldCompGrid");
     const activeCompGrid = document.getElementById("activeCompGrid");
     const printReportBtn = document.getElementById("printReportBtn");
@@ -349,6 +352,20 @@
       for (const key of keys) {
         const value = obj?.[key];
         if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+      }
+      return fallback;
+    }
+
+    function getPathValue(obj, path) {
+      return String(path)
+        .split(".")
+        .reduce((current, part) => (current == null ? undefined : current[part]), obj);
+    }
+
+    function pickFirstPath(obj, paths, fallback = null) {
+      for (const path of paths) {
+        const value = getPathValue(obj, path);
+        if (value !== undefined && value !== null && (typeof value !== "string" || value.trim() !== "")) return value;
       }
       return fallback;
     }
@@ -473,7 +490,13 @@
       const normalized = cleanText(source);
       if (!normalized) return "live comparable-property data";
       if (normalized.includes("rentcast") && normalized.includes("attom")) {
-        return "hybrid RentCast listing data with ATTOM property and sale records";
+        return "hybrid RentCast and ATTOM valuation and comparable-property data";
+      }
+      if (normalized.includes("attom-avm") && (normalized.includes("attom-property") || normalized.includes("attom-sale"))) {
+        return "live ATTOM AVM, property detail, and sold-sale data";
+      }
+      if (normalized.includes("attom-avm")) {
+        return "live ATTOM AVM data";
       }
       if (normalized.includes("attom-property") && normalized.includes("attom-sale")) {
         return "live ATTOM property detail and sold-sale data";
@@ -507,7 +530,7 @@
       const summary = [];
 
       if (providers.attomConfigured === true) {
-        summary.push((attemptedSources.has("attom-property") || attemptedSources.has("attom-sale"))
+        summary.push((attemptedSources.has("attom-avm") || attemptedSources.has("attom-property") || attemptedSources.has("attom-sale"))
           ? attomContributed
             ? "ATTOM contributed data."
             : "ATTOM was attempted but did not contribute usable data."
@@ -605,8 +628,19 @@
     }
 
     function normalizeStoryCount(value) {
+      const raw = cleanText(value);
+      const lower = raw.toLowerCase();
       const text = normalizeText(value);
       if (!text) return null;
+      const halfStoryMatch = lower.match(/\b(\d+(?:\.\d+)?)\s*(?:[- ]?\s*1\/2|\.5)\b/);
+      if (halfStoryMatch) {
+        const base = Number(halfStoryMatch[1]);
+        if (Number.isFinite(base)) return base >= 10 ? base : base + 0.5;
+      }
+      if (/\bone and (?:a )?half\b|\bone and one half\b/.test(text)) return 1.5;
+      if (/\btwo and (?:a )?half\b|\btwo and one half\b/.test(text)) return 2.5;
+      if (/\bbi level\b|\bsplit level\b|\bsplit foyer\b|\braised ranch\b/.test(text)) return 2;
+      if (/\btri level\b/.test(text)) return 3;
       if (/\b(one|single|1)\b/.test(text)) return 1;
       if (/\b(two|2)\b/.test(text)) return 2;
       if (/\b(three|3)\b/.test(text)) return 3;
@@ -619,10 +653,51 @@
       if (!text) return "";
       const numeric = coerceNumber(text);
       if (Number.isFinite(numeric)) {
-        if (numeric <= 0) return "";
+        if (numeric <= 0) {
+          return /\b(garage|carport|parking|attached|detached)\b/i.test(text) ? text : "";
+        }
         return `${numeric}-car garage`;
       }
       return text;
+    }
+
+    function buildGarageParkingSummary(item) {
+      const garageText = cleanText(pickFirstPath(item, [
+        "garage",
+        "parking",
+        "garageParking",
+        "garageType",
+        "parkingType",
+        "parkingDescription",
+        "garageDescription",
+        "building.parking.garagetype",
+        "building.parking.prkgType",
+        "building.parking.garageType"
+      ], ""));
+      const spaces = coerceNumber(pickFirstPath(item, [
+        "garageSpaces",
+        "parkingSpaces",
+        "building.parking.prkgSpaces",
+        "building.parking.spaces"
+      ], null));
+      const baseLabel = normalizeGarageParking(garageText);
+
+      if (Number.isFinite(spaces) && spaces > 0) {
+        const descriptor = cleanText(
+          baseLabel
+            .replace(/^\d+(?:\.\d+)?(?:-car|-space)?\s*/i, "")
+            .replace(/\bgarage\s+attached\b/i, "attached garage")
+            .replace(/\bgarage\s+detached\b/i, "detached garage")
+        );
+        if (descriptor) {
+          return /\bgarage\b|\bcarport\b|\bparking\b/i.test(descriptor)
+            ? `${spaces}-car ${descriptor}`
+            : `${spaces}-car ${descriptor} garage`;
+        }
+        return `${spaces}-car garage`;
+      }
+
+      return baseLabel;
     }
 
     function summarizeStoryCount(value) {
@@ -637,12 +712,19 @@
     }
 
     function buildCompAddress(item) {
-      const direct = pickFirst(item, ["formattedAddress", "address", "fullAddress", "addressLine1"]);
+      const direct = pickFirstPath(item, [
+        "formattedAddress",
+        "address.oneLine",
+        "address.fullAddress",
+        "fullAddress",
+        "oneLine",
+        "addressLine1"
+      ]);
       if (direct && String(direct).includes(",")) return String(direct);
-      const line1 = pickFirst(item, ["addressLine1", "streetAddress", "address", "formattedAddress"], "");
-      const city = pickFirst(item, ["city"], "");
-      const state = pickFirst(item, ["state"], "");
-      const zip = pickFirst(item, ["zipCode", "postalCode"], "");
+      const line1 = pickFirstPath(item, ["addressLine1", "streetAddress", "address.line1", "address.lineOne"], "");
+      const city = pickFirstPath(item, ["city", "address.locality", "address.city"], "");
+      const state = pickFirstPath(item, ["state", "address.countrySubd", "address.state"], "");
+      const zip = pickFirstPath(item, ["zipCode", "postalCode", "address.postal1", "address.zip"], "");
       return [line1, [city, state, zip].filter(Boolean).join(" ")].filter(Boolean).join(", ") || "Comparable property";
     }
 
@@ -738,40 +820,81 @@
     }
 
     function normalizeComp(item) {
-      const status = cleanText(pickFirst(item, ["status", "listingStatus", "propertyStatus", "saleType"], "Unknown"));
-      const remarks = cleanText(pickFirst(item, ["remarks", "publicRemarks", "description", "marketingRemarks", "privateRemarks"], ""));
-      const listPrice = coerceNumber(pickFirst(item, ["listPrice", "price", "listingPrice", "askingPrice"]));
-      const soldPrice = coerceNumber(pickFirst(item, ["soldPrice", "lastSalePrice", "salePrice", "closedPrice"]));
-      const sqft = coerceNumber(pickFirst(item, ["squareFootage", "livingArea", "livingAreaSquareFeet", "sqft", "squareFeet"]));
+      const status = cleanText(pickFirstPath(item, ["status", "listingStatus", "propertyStatus", "saleType"], "Unknown"));
+      const remarks = cleanText(pickFirstPath(item, ["remarks", "publicRemarks", "description", "marketingRemarks", "privateRemarks"], ""));
+      const listPrice = coerceNumber(pickFirstPath(item, ["listPrice", "price", "listingPrice", "askingPrice"]));
+      const soldPrice = coerceNumber(pickFirstPath(item, ["soldPrice", "lastSalePrice", "salePrice", "closedPrice"]));
+      const sqft = coerceNumber(pickFirstPath(item, [
+        "squareFootage",
+        "livingArea",
+        "livingAreaSquareFeet",
+        "sqft",
+        "squareFeet",
+        "building.size.universalsize",
+        "building.size.livingsize",
+        "building.size.grosssizeadjusted",
+        "building.size.grosssize",
+        "building.size.sizeLiving"
+      ]));
       const address = buildCompAddress(item);
       const derivedPrice = soldPrice ?? listPrice;
       const pricePerSqft = Number.isFinite(derivedPrice) && Number.isFinite(sqft) && sqft > 0 ? derivedPrice / sqft : null;
       return {
-        id: cleanText(pickFirst(item, ["id", "listingId", "propertyId", "mlsNumber"], buildCompAddress(item))),
+        id: cleanText(pickFirstPath(item, ["id", "listingId", "propertyId", "mlsNumber", "identifier.attomId", "identifier.obPropId"], buildCompAddress(item))),
         address,
-        city: cleanText(pickFirst(item, ["city"], "")),
-        state: cleanText(pickFirst(item, ["state"], "")),
-        zipCode: cleanText(pickFirst(item, ["zipCode", "postalCode"], "")),
+        city: cleanText(pickFirstPath(item, ["city", "address.locality", "address.city"], "")),
+        state: cleanText(pickFirstPath(item, ["state", "address.countrySubd", "address.state"], "")),
+        zipCode: cleanText(pickFirstPath(item, ["zipCode", "postalCode", "address.postal1", "address.zip"], "")),
         status,
         listPrice,
         soldPrice,
         sqft,
-        beds: coerceNumber(pickFirst(item, ["bedrooms", "beds", "bedroomCount"])),
-        baths: coerceNumber(pickFirst(item, ["bathrooms", "baths", "bathroomCount", "fullBathrooms"])),
-        yearBuilt: coerceNumber(pickFirst(item, ["yearBuilt", "builtYear"])),
-        lotSize: normalizeLotSize(pickFirst(item, ["lotSize", "lotSizeAcres", "lotSizeSquareFeet", "acreage"])),
-        daysOnMarket: coerceNumber(pickFirst(item, ["daysOnMarket", "dom", "daysListed"])),
-        distanceMiles: coerceNumber(pickFirst(item, ["distance", "distanceMiles", "distanceFromSubject"])),
-        subdivision: cleanText(pickFirst(item, ["subdivision", "subdivisionName", "subdname", "neighborhood", "community", "legalSubdivision"], "")) || inferSubdivisionFromRemarks(remarks),
-        schoolZone: cleanText(pickFirst(item, ["schoolDistrict", "schoolZone"], "")),
-        propertyType: normalizePropertyType(pickFirst(item, ["propertyType", "type", "propertySubType", "homeType"], "")),
-        storyCount: normalizeStoryCount(pickFirst(item, ["stories", "storyCount", "storiesTotal", "storyDescription", "storyDesc", "levels", "style"], "")),
-        styleText: normalizeText(pickFirst(item, ["architecturalStyle", "style", "designStyle", "propertyStyle"], "")),
+        beds: coerceNumber(pickFirstPath(item, ["bedrooms", "beds", "bedroomCount", "building.rooms.beds", "building.rooms.bedrooms"])),
+        baths: coerceNumber(pickFirstPath(item, ["bathrooms", "baths", "bathroomCount", "fullBathrooms", "building.rooms.bathsTotal", "building.rooms.bathstotal", "building.rooms.bathsfull"])),
+        yearBuilt: coerceNumber(pickFirstPath(item, ["yearBuilt", "builtYear", "summary.yearbuilt", "building.summary.yearbuilt", "building.summary.yearBuilt"])),
+        lotSize: normalizeLotSize(pickFirstPath(item, ["lotSize", "lotSizeAcres", "lotSizeSquareFeet", "acreage", "lot.lotsize1", "lot.lotSize1", "lot.lotsize2", "lot.lotSize2"])),
+        daysOnMarket: coerceNumber(pickFirstPath(item, ["daysOnMarket", "dom", "daysListed"])),
+        distanceMiles: coerceNumber(pickFirstPath(item, ["distance", "distanceMiles", "distanceFromSubject", "location.distance", "location.dist"])),
+        subdivision: cleanText(pickFirstPath(item, [
+          "subdivision",
+          "subdivisionName",
+          "subdname",
+          "neighborhood",
+          "community",
+          "legalSubdivision",
+          "area.subdname",
+          "area.neighborhood",
+          "area.munName"
+        ], "")) || inferSubdivisionFromRemarks(remarks),
+        schoolZone: cleanText(pickFirstPath(item, ["schoolDistrict", "schoolZone"], "")),
+        propertyType: normalizePropertyType(pickFirstPath(item, ["propertyType", "type", "propertySubType", "homeType", "summary.proptype", "summary.propsubtype", "summary.propertyType", "summary.propclass"], "")),
+        storyCount: normalizeStoryCount(pickFirstPath(item, [
+          "stories",
+          "storyCount",
+          "storiesTotal",
+          "storyDescription",
+          "storyDesc",
+          "levels",
+          "style",
+          "building.summary.levels",
+          "building.summary.storyDesc",
+          "building.summary.storydescription"
+        ], "")),
+        styleText: normalizeText(pickFirstPath(item, [
+          "architecturalStyle",
+          "style",
+          "designStyle",
+          "propertyStyle",
+          "architecturalStyle",
+          "building.summary.archStyle",
+          "building.summary.bldgType",
+          "building.summary.imprType"
+        ], "")),
         streetNameKey: streetNameKeyFromAddress(address),
         streetNumber: streetNumberFromAddress(address),
-        garageParking: normalizeGarageParking(pickFirst(item, ["garage", "parking", "garageParking", "garageType", "parkingType", "garageSpaces", "parkingSpaces"], "")),
-        soldDate: parseDateValue(pickFirst(item, ["soldDate", "saleDate", "closeDate", "lastSaleDate", "offMarketDate"])),
-        listDate: parseDateValue(pickFirst(item, ["listDate", "listedDate", "onMarketDate", "createdDate"])),
+        garageParking: buildGarageParkingSummary(item),
+        soldDate: parseDateValue(pickFirstPath(item, ["soldDate", "saleDate", "closeDate", "lastSaleDate", "offMarketDate", "sale.saleTransDate", "sale.amount.salerecdate", "sale.recordingDate"])),
+        listDate: parseDateValue(pickFirstPath(item, ["listDate", "listedDate", "onMarketDate", "createdDate"])),
         pricePerSqft,
         distressed: DISTRESS_KEYWORDS.some((keyword) => normalizeText(`${status} ${remarks}`).includes(keyword)),
         conditionSignal: analyzeConditionText(remarks),
@@ -961,7 +1084,7 @@
 
     function inferSubjectSubdivision(subject, comps) {
       if (subject.subdivision) return subject.subdivision;
-      const candidates = comps
+      let candidates = comps
         .filter((comp) => comp.subdivision)
         .filter((comp) =>
           isSameStreet(subject, comp) ||
@@ -972,6 +1095,20 @@
           (b.similarityScore ?? 0) - (a.similarityScore ?? 0) ||
           (a.distanceMiles ?? 99) - (b.distanceMiles ?? 99)
         );
+      if (!candidates.length) {
+        candidates = comps
+          .filter((comp) => comp.subdivision)
+          .filter((comp) => matchesPropertyType(subject, comp))
+          .filter((comp) =>
+            (subject.zipCode && comp.zipCode === subject.zipCode) ||
+            (subject.city && comp.city && normalizeText(subject.city) === normalizeText(comp.city))
+          )
+          .sort((a, b) =>
+            (b.similarityScore ?? 0) - (a.similarityScore ?? 0) ||
+            (a.distanceMiles ?? 99) - (b.distanceMiles ?? 99)
+          )
+          .slice(0, 8);
+      }
       if (!candidates.length) return "";
       const counts = new Map();
       candidates.forEach((comp) => {
@@ -980,13 +1117,16 @@
         if (Number.isFinite(comp.similarityScore)) weight += comp.similarityScore >= 80 ? 2 : comp.similarityScore >= 70 ? 1 : 0;
         counts.set(key, (counts.get(key) || 0) + weight);
       });
-      return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+      const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+      if (!ranked.length) return "";
+      if (ranked.length === 1) return ranked[0][0];
+      return ranked[0][1] >= ranked[1][1] * 1.35 ? ranked[0][0] : "";
     }
 
     function inferSubjectStoryCount(subject, comps) {
       if (Number.isFinite(subject.storyCount)) return subject.storyCount;
       const weightedCounts = new Map();
-      comps
+      let candidates = comps
         .filter((comp) => Number.isFinite(comp.storyCount))
         .filter((comp) =>
           isSameSubdivision(subject, comp) ||
@@ -998,20 +1138,33 @@
           (b.similarityScore ?? 0) - (a.similarityScore ?? 0) ||
           (a.distanceMiles ?? 99) - (b.distanceMiles ?? 99)
         )
-        .slice(0, 12)
-        .forEach((comp) => {
-          const key = Number(comp.storyCount);
-          let weight = isSameSubdivision(subject, comp) ? 5 : isSameStreet(subject, comp) ? 4 : isNearbyMicroMarket(subject, comp) ? 3 : 1;
-          if (Number.isFinite(comp.similarityScore)) weight += comp.similarityScore >= 80 ? 2 : comp.similarityScore >= 70 ? 1 : 0;
-          weightedCounts.set(key, (weightedCounts.get(key) || 0) + weight);
-        });
-      return [...weightedCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+        .slice(0, 12);
+      if (!candidates.length) {
+        candidates = comps
+          .filter((comp) => Number.isFinite(comp.storyCount))
+          .filter((comp) => matchesPropertyType(subject, comp))
+          .sort((a, b) =>
+            (b.similarityScore ?? 0) - (a.similarityScore ?? 0) ||
+            (a.distanceMiles ?? 99) - (b.distanceMiles ?? 99)
+          )
+          .slice(0, 6);
+      }
+      candidates.forEach((comp) => {
+        const key = Number(comp.storyCount);
+        let weight = isSameSubdivision(subject, comp) ? 5 : isSameStreet(subject, comp) ? 4 : isNearbyMicroMarket(subject, comp) ? 3 : 1;
+        if (Number.isFinite(comp.similarityScore)) weight += comp.similarityScore >= 80 ? 2 : comp.similarityScore >= 70 ? 1 : 0;
+        weightedCounts.set(key, (weightedCounts.get(key) || 0) + weight);
+      });
+      const ranked = [...weightedCounts.entries()].sort((a, b) => b[1] - a[1]);
+      if (!ranked.length) return null;
+      if (ranked.length === 1) return ranked[0][0];
+      return ranked[0][1] >= ranked[1][1] * 1.25 ? ranked[0][0] : null;
     }
 
     function inferSubjectGarageParking(subject, comps) {
       if (cleanText(subject.garageParking)) return subject.garageParking;
       const weightedCounts = new Map();
-      comps
+      let candidates = comps
         .filter((comp) => cleanText(comp.garageParking))
         .filter((comp) =>
           isSameSubdivision(subject, comp) ||
@@ -1023,18 +1176,31 @@
           (b.similarityScore ?? 0) - (a.similarityScore ?? 0) ||
           (a.distanceMiles ?? 99) - (b.distanceMiles ?? 99)
         )
-        .slice(0, 12)
-        .forEach((comp) => {
-          const label = normalizeGarageParking(comp.garageParking);
-          if (!label) return;
-          const key = normalizeText(label);
-          let weight = isSameSubdivision(subject, comp) ? 5 : isSameStreet(subject, comp) ? 4 : isNearbyMicroMarket(subject, comp) ? 3 : 1;
-          if (Number.isFinite(comp.similarityScore)) weight += comp.similarityScore >= 80 ? 2 : comp.similarityScore >= 70 ? 1 : 0;
-          const current = weightedCounts.get(key) || { label, weight: 0 };
-          current.weight += weight;
-          weightedCounts.set(key, current);
-        });
-      return [...weightedCounts.values()].sort((a, b) => b.weight - a.weight)[0]?.label || "";
+        .slice(0, 12);
+      if (!candidates.length) {
+        candidates = comps
+          .filter((comp) => cleanText(comp.garageParking))
+          .filter((comp) => matchesPropertyType(subject, comp))
+          .sort((a, b) =>
+            (b.similarityScore ?? 0) - (a.similarityScore ?? 0) ||
+            (a.distanceMiles ?? 99) - (b.distanceMiles ?? 99)
+          )
+          .slice(0, 6);
+      }
+      candidates.forEach((comp) => {
+        const label = normalizeGarageParking(comp.garageParking);
+        if (!label) return;
+        const key = normalizeText(label);
+        let weight = isSameSubdivision(subject, comp) ? 5 : isSameStreet(subject, comp) ? 4 : isNearbyMicroMarket(subject, comp) ? 3 : 1;
+        if (Number.isFinite(comp.similarityScore)) weight += comp.similarityScore >= 80 ? 2 : comp.similarityScore >= 70 ? 1 : 0;
+        const current = weightedCounts.get(key) || { label, weight: 0 };
+        current.weight += weight;
+        weightedCounts.set(key, current);
+      });
+      const ranked = [...weightedCounts.values()].sort((a, b) => b.weight - a.weight);
+      if (!ranked.length) return "";
+      if (ranked.length === 1) return ranked[0].label;
+      return ranked[0].weight >= ranked[1].weight * 1.25 ? ranked[0].label : "";
     }
 
     function enrichSubjectProfile(subject, comps) {
@@ -1799,7 +1965,83 @@
       return items;
     }
 
-    function buildReport(values, subject, soldComps, activeComp, pendingComps, selectionMeta, sourceNote) {
+    function normalizeAvmModel(value, fallbackProvider = "AVM") {
+      const provider = cleanText(value?.provider || fallbackProvider || "AVM");
+      const low = coerceNumber(value?.low);
+      const high = coerceNumber(value?.high);
+      const estimate = coerceNumber(value?.value ?? value?.amount ?? average([low, high]));
+      const confidenceScore = coerceNumber(value?.confidenceScore ?? value?.score ?? value?.scr);
+      const comparablesCount = coerceNumber(value?.comparablesCount ?? value?.comparableCount ?? value?.compsCount);
+      const eventDate = parseDateValue(value?.eventDate ?? value?.asOfDate ?? value?.date);
+
+      if (![estimate, low, high].some((item) => Number.isFinite(item))) return null;
+
+      return {
+        provider,
+        value: estimate,
+        low,
+        high,
+        confidenceScore,
+        comparablesCount,
+        eventDate
+      };
+    }
+
+    function buildAvmSummary(providerAvms, coreValueEstimate = null) {
+      const models = [
+        normalizeAvmModel(providerAvms?.rentcast, "RentCast AVM"),
+        normalizeAvmModel(providerAvms?.attom, "ATTOM AVM")
+      ].filter(Boolean);
+
+      if (!models.length) {
+        return {
+          note: "These model values are shown only as a secondary check against the comp-driven CMA. No AVMs were returned for this address.",
+          cards: []
+        };
+      }
+
+      let closestProvider = "";
+      if (Number.isFinite(coreValueEstimate)) {
+        const closestModel = models
+          .filter((model) => Number.isFinite(model.value))
+          .sort((a, b) => Math.abs(a.value - coreValueEstimate) - Math.abs(b.value - coreValueEstimate))[0];
+        closestProvider = closestModel?.provider || "";
+      }
+
+      let alignmentNote = "";
+      if (models.length >= 2 && models.every((model) => Number.isFinite(model.value))) {
+        const spread = Math.abs(models[0].value - models[1].value);
+        const midpoint = average(models.map((model) => model.value));
+        const spreadPct = Number.isFinite(midpoint) && midpoint > 0 ? spread / midpoint : null;
+        alignmentNote = spreadPct != null && spreadPct <= 0.03
+          ? " The two AVMs are closely aligned."
+          : spreadPct != null
+            ? " The two AVMs are meaningfully split, so the comp set should stay in the driver's seat."
+            : "";
+      }
+
+      const cards = models.map((model) => {
+        const footnote = [];
+        if (Number.isFinite(model.low) && Number.isFinite(model.high)) footnote.push(`Range ${formatCurrency(model.low)} to ${formatCurrency(model.high)}.`);
+        if (Number.isFinite(model.confidenceScore)) footnote.push(`Confidence ${Math.round(model.confidenceScore)}/100.`);
+        if (Number.isFinite(model.comparablesCount)) footnote.push(`${Math.round(model.comparablesCount)} comps in model.`);
+        if (model.eventDate) footnote.push(`As of ${formatDateOnly(model.eventDate)}.`);
+        if (closestProvider && model.provider === closestProvider) footnote.push("Closest to the current comp-based core value.");
+        return {
+          label: model.provider,
+          value: formatCurrency(model.value),
+          footnote: footnote.join(" ") || "Provider AVM returned without a confidence band.",
+          featured: false
+        };
+      });
+
+      return {
+        note: `These model values are shown separately as a secondary check against the comp-driven CMA.${alignmentNote}${closestProvider ? ` ${closestProvider} is closest to the current comp-based core value.` : ""}`,
+        cards
+      };
+    }
+
+    function buildReport(values, subject, soldComps, activeComp, pendingComps, selectionMeta, sourceNote, providerAvms = null) {
       if (!soldComps.length) throw new Error("No sold comparable properties passed the CMA rules for this search.");
       const pricing = buildPricingModel(values, subject, soldComps, activeComp, pendingComps);
       subject.estimatedValue = pricing.coreValueEstimate ?? pricing.suggestedListPrice;
@@ -1820,7 +2062,8 @@
         confidenceScore: pricing.confidenceScore,
         summary: pricing.explanation,
         searchSummary: buildSearchSummary(values, subject, selectionMeta, pricing),
-        dataSourceNote: sourceNote
+        dataSourceNote: sourceNote,
+        providerAvms
       };
     }
 
@@ -1853,7 +2096,8 @@
           manualCurrentMarketCount: manualCurrentMarketComps.length,
           excludedComparableCount: values.excludedComparableKeys?.size || 0
         },
-        "Live RentCast data was unavailable or too thin for a reliable set, so sample comps are shown as a working fallback."
+        "Live RentCast data was unavailable or too thin for a reliable set, so sample comps are shown as a working fallback.",
+        null
       );
     }
 
@@ -1919,7 +2163,8 @@
           manualCurrentMarketCount: manualCurrentMarketComps.length,
           excludedComparableCount: values.excludedComparableKeys?.size || 0
         },
-        sourceNote
+        sourceNote,
+        payload?.data?.providerAvms || null
       );
     }
 
@@ -2037,6 +2282,8 @@
       summaryText.textContent = report.summary;
       strategyNoteText.textContent = report.strategyNote || "No strategy note available.";
       marketTrendText.textContent = report.marketTrend?.note || "";
+      const avmSummary = buildAvmSummary(report.providerAvms, report.coreValueEstimate);
+      avmSummaryText.textContent = avmSummary.note;
 
       subjectPropertyMetrics.innerHTML = "";
       subjectPropertyMetrics.appendChild(renderMetric("Property Type", displayPropertyType(report.subject.propertyType)));
@@ -2078,6 +2325,10 @@
       estimateGrid.appendChild(renderEstimateCard("Recommended price range", `${formatCurrency(report.recommendedRange[0])} - ${formatCurrency(report.recommendedRange[1])}`, "Sold-comp-supported low/high range with reconciliation checks when available.", false));
       estimateGrid.appendChild(renderEstimateCard("Pricing confidence", report.confidenceLabel ? `${report.confidenceLabel} (${report.confidenceScore}/100)` : "Pending", "Higher confidence means the top sold anchors are tighter and more consistent.", false));
 
+      avmGrid.innerHTML = "";
+      if (avmSummary.cards.length) avmSummary.cards.forEach((card) => avmGrid.appendChild(renderEstimateCard(card.label, card.value, card.footnote, card.featured)));
+      else avmGrid.appendChild(renderEstimateCard("AVM Status", "Unavailable", "Neither provider returned an AVM for this search.", false));
+
       soldCompGrid.innerHTML = "";
       if (report.soldComps.length) report.soldComps.forEach((comp) => soldCompGrid.appendChild(renderCompCard(comp)));
       else soldCompGrid.appendChild(renderCompEmpty("No sold comparables passed the current CMA rules."));
@@ -2097,11 +2348,13 @@
       summaryText.textContent = "";
       strategyNoteText.textContent = "";
       marketTrendText.textContent = "";
+      avmSummaryText.textContent = "Generate a report to compare the RentCast and ATTOM AVMs side by side.";
       subjectPropertyMetrics.innerHTML = "";
       searchSummaryList.innerHTML = "";
       ppsfMetrics.innerHTML = "";
       strategyOptions.innerHTML = "";
       estimateGrid.innerHTML = "";
+      avmGrid.innerHTML = "";
       soldCompGrid.innerHTML = "";
       activeCompGrid.innerHTML = "";
       updateSubjectFactMissingState();

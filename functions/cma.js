@@ -783,7 +783,16 @@ function buildAttomResolvedSubjectAttempts(match) {
 }
 
 function subjectPropertyNeedsAttomEnrichment(subjectProperty) {
-  return !clean(subjectProperty?.subdivision)
+  const bedrooms = toFiniteNumber(subjectProperty?.bedrooms ?? subjectProperty?.beds, null);
+  const bathrooms = toFiniteNumber(subjectProperty?.bathrooms ?? subjectProperty?.baths, null);
+  const squareFootage = toFiniteNumber(subjectProperty?.squareFootage ?? subjectProperty?.sqft, null);
+  const yearBuilt = toFiniteNumber(subjectProperty?.yearBuilt, null);
+
+  return !Number.isFinite(bedrooms)
+    || !Number.isFinite(bathrooms)
+    || !Number.isFinite(squareFootage)
+    || !Number.isFinite(yearBuilt)
+    || !clean(subjectProperty?.subdivision)
     || !clean(subjectProperty?.stories)
     || (!clean(subjectProperty?.garage) && !Number.isFinite(subjectProperty?.garageSpaces));
 }

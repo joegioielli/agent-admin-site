@@ -93,7 +93,7 @@
       <header class="main-header">
         <div>
           <div class="main-title">CMA Report Builder</div>
-          <div class="main-subtitle">Use live ATTOM results with staged comp search, similarity scoring, and pricing guidance.</div>
+          <div class="main-subtitle">Use live RentCast and ATTOM results with staged comp search, similarity scoring, and pricing guidance.</div>
         </div>
       </header>
       <section class="main-content">
@@ -142,7 +142,7 @@
               <section class="sub-card">
                 <div class="section-label">Manual Market Overrides</div>
                 <h3 class="section-title">Add pending or under-contract comps from MLS</h3>
-                <p class="section-copy">Use these fields when ATTOM misses the strongest current-market listings. These manual comps will supplement the live feed and can move the price bracket.</p>
+                <p class="section-copy">Use these fields when the live feed misses the strongest current-market listings. These manual comps will supplement the live data and can move the price bracket.</p>
                 <div class="form-stack" style="margin-top: 12px;">
                   <section class="sub-card">
                     <div class="section-label">Override 1</div>
@@ -249,7 +249,7 @@
             </div>
             <div class="report-body">
               <div class="print-toolbar"><button type="button" class="print-btn" id="printReportBtn">Print Report</button></div>
-              <div class="empty-state" id="reportEmptyState">Enter a subject property address and generate the CMA to populate the report. Live ATTOM data will load first, and the page will fall back gracefully if the result set is thin.</div>
+              <div class="empty-state" id="reportEmptyState">Enter a subject property address and generate the CMA to populate the report. Live RentCast and ATTOM data will load first, and the page will fall back gracefully if the result set is thin.</div>
               <div class="report-grid">
                 <section class="report-card span-7"><div class="section-label">Subject Property</div><h3 class="section-title">Subject property overview</h3><p class="section-copy" id="subjectPropertyAddress">Not generated yet.</p><div class="metrics" id="subjectPropertyMetrics"></div></section>
                 <section class="report-card span-5"><div class="section-label">Special Details</div><h3 class="section-title">Value-impact notes</h3><p class="section-copy" id="specialDetailsOutput">No special details entered yet.</p></section>
@@ -258,7 +258,7 @@
                 <section class="report-card span-7"><div class="section-label">PPSF Support</div><h3 class="section-title">Price per square foot and market read</h3><div class="metrics" id="ppsfMetrics"></div><p class="muted-text" id="marketTrendText"></p></section>
                 <section class="report-card span-5 print-hide"><div class="section-label">Pricing Strategy</div><h3 class="section-title">Recommended positioning</h3><p class="section-copy" id="strategyNoteText"></p><div class="strategy-grid" id="strategyOptions"></div></section>
                 <section class="report-card span-7"><div class="section-label">Value Guidance</div><h3 class="section-title">Pricing recommendation</h3><div class="estimate-grid" id="estimateGrid"></div></section>
-                <section class="report-card span-5"><div class="section-label">AVM Cross-Check</div><h3 class="section-title">Automated valuation models</h3><p class="section-copy" id="avmSummaryText">Generate a report to review the ATTOM AVM and any returned model values.</p><div class="estimate-grid" id="avmGrid"></div></section>
+                <section class="report-card span-5"><div class="section-label">AVM Cross-Check</div><h3 class="section-title">Automated valuation models</h3><p class="section-copy" id="avmSummaryText">Generate a report to review the RentCast and ATTOM AVMs and any returned model values.</p><div class="estimate-grid" id="avmGrid"></div></section>
                 <section class="report-card"><div class="section-label">Comparable Sales</div><h3 class="section-title">Closed comparable properties</h3><p class="muted-text">These cards show the best sold matches returned after staged search filtering and similarity scoring.</p><div class="comp-grid" id="soldCompGrid"></div></section>
                 <section class="report-card"><div class="section-label">Competitive Listing</div><h3 class="section-title">Current market comparable</h3><p class="muted-text">This card shows the strongest current benchmark available from the live search, including pending or under-contract listings.</p><div class="comp-grid" id="activeCompGrid"></div></section>
               </div>
@@ -329,7 +329,7 @@
       "subjectGarageParking"
     ];
     const MANUAL_CURRENT_MARKET_COMP_SLOTS = [1, 2, 3];
-    const LIVE_PROVIDER_MODE = "attom";
+    const LIVE_PROVIDER_MODE = "hybrid";
     const autoPopulatedSubjectFieldNames = new Set();
     let lastGeneratedSubjectAddressKey = "";
     let activeCmaRequestId = 0;
@@ -2247,7 +2247,7 @@
           manualCurrentMarketCount: manualCurrentMarketComps.length,
           excludedComparableCount: values.excludedComparableKeys?.size || 0
         },
-        "Live ATTOM data was unavailable or too thin for a reliable set, so sample comps are shown as a working fallback.",
+        "Live provider data was unavailable or too thin for a reliable set, so sample comps are shown as a working fallback.",
         null
       );
     }
@@ -2460,7 +2460,11 @@
       setReportBadges({
         soldCount: report.soldComps.length,
         marketCount: report.activeComp ? 1 : 0,
-        liveLabel: report.providerMode === "attom" ? "ATTOM data loaded" : "Live data connected",
+        liveLabel: report.providerMode === "attom"
+          ? "ATTOM data loaded"
+          : report.providerMode === "rentcast"
+            ? "RentCast data loaded"
+            : "RentCast + ATTOM loaded",
         liveAccent: true
       });
       subjectPropertyAddress.textContent = values.subjectAddress;
@@ -2539,7 +2543,7 @@
       summaryText.textContent = "";
       strategyNoteText.textContent = "";
       marketTrendText.textContent = "";
-      avmSummaryText.textContent = "Generate a report to review the ATTOM AVM and any returned model values.";
+      avmSummaryText.textContent = "Generate a report to review the RentCast and ATTOM AVMs and any returned model values.";
       subjectPropertyMetrics.innerHTML = "";
       searchSummaryList.innerHTML = "";
       ppsfMetrics.innerHTML = "";
@@ -2596,7 +2600,8 @@
         if (requestId !== activeCmaRequestId) return;
         const report = buildLiveReport(values, payload);
         const subjectRecord = payload?.data?.subjectProperty ? normalizeComp(payload.data.subjectProperty) : null;
-        if (subjectRecord && hasCoreSubjectFacts(subjectRecord)) populateSubjectFormFields(subjectRecord, false);
+        const subjectAutoFillSource = report?.subject || subjectRecord;
+        if (subjectAutoFillSource && hasCoreSubjectFacts(subjectAutoFillSource)) populateSubjectFormFields(subjectAutoFillSource, false);
         lastGeneratedSubjectAddressKey = canonicalizeAddress(values.subjectAddress);
         renderReport(values, report);
       } catch (error) {

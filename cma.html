@@ -1033,11 +1033,7 @@
       return "";
     }
 
-    function addressesLikelyMatch(values, comp) {
-      const subjectSignature = buildAddressSignature(values.subjectAddress);
-      if (!subjectSignature.street) return false;
-      const compSignature = buildAddressSignature(comp?.address, comp?.city, comp?.state, comp?.zipCode);
-
+    function buildStreetMatchDetails(subjectSignature, compSignature) {
       const streetMatches = addressStringsLikelyMatch(subjectSignature.street, compSignature.street);
       const streetNumberAndKeyMatch = Boolean(
         subjectSignature.streetNumber &&
@@ -1047,27 +1043,102 @@
         compSignature.streetKey &&
         addressStringsLikelyMatch(subjectSignature.streetKey, compSignature.streetKey)
       );
+      return { streetMatches, streetNumberAndKeyMatch };
+    }
 
-      if (!streetMatches && !streetNumberAndKeyMatch) return false;
-      if (subjectSignature.unit && compSignature.unit && subjectSignature.unit !== compSignature.unit) return false;
-      if (subjectSignature.zipCode && compSignature.zipCode && subjectSignature.zipCode !== compSignature.zipCode) return false;
-      if (subjectSignature.state && compSignature.state && subjectSignature.state !== compSignature.state) return false;
+    function addressLocalityConflicts(subjectSignature, compSignature, streetNumberAndKeyMatch) {
+      if (subjectSignature.unit && compSignature.unit && subjectSignature.unit !== compSignature.unit) return true;
+      if (subjectSignature.zipCode && compSignature.zipCode && subjectSignature.zipCode !== compSignature.zipCode) return true;
+      if (subjectSignature.state && compSignature.state && subjectSignature.state !== compSignature.state) return true;
       if (
         subjectSignature.city &&
         compSignature.city &&
         subjectSignature.city !== compSignature.city &&
         !(subjectSignature.zipCode && compSignature.zipCode && subjectSignature.zipCode === compSignature.zipCode && streetNumberAndKeyMatch)
-      ) return false;
+      ) return true;
+      return false;
+    }
+
+    function countMatchingSubjectFacts(subject, comp) {
+      if (!subject || !comp) return { matched: 0, compared: 0 };
+      let matched = 0;
+      let compared = 0;
+
+      if (Number.isFinite(subject.sqft) && Number.isFinite(comp.sqft) && subject.sqft > 0) {
+        compared += 1;
+        if (Math.abs(subject.sqft - comp.sqft) <= Math.max(80, subject.sqft * 0.05)) matched += 1;
+      }
+      if (Number.isFinite(subject.beds) && Number.isFinite(comp.beds)) {
+        compared += 1;
+        if (subject.beds === comp.beds) matched += 1;
+      }
+      if (Number.isFinite(subject.baths) && Number.isFinite(comp.baths)) {
+        compared += 1;
+        if (Math.abs(subject.baths - comp.baths) <= 0.5) matched += 1;
+      }
+      if (Number.isFinite(subject.yearBuilt) && Number.isFinite(comp.yearBuilt)) {
+        compared += 1;
+        if (Math.abs(subject.yearBuilt - comp.yearBuilt) <= 1) matched += 1;
+      }
+      if (Number.isFinite(subject.lotSize) && Number.isFinite(comp.lotSize) && subject.lotSize > 0) {
+        compared += 1;
+        const lotPct = percentDifference(subject.lotSize, comp.lotSize);
+        if (lotPct != null && lotPct <= 0.10) matched += 1;
+      }
+      if (subject.propertyType && comp.propertyType) {
+        compared += 1;
+        if (subject.propertyType === comp.propertyType) matched += 1;
+      }
+
+      return { matched, compared };
+    }
+
+    function addressesLikelyMatch(values, comp) {
+      const subjectSignature = buildAddressSignature(values.subjectAddress);
+      if (!subjectSignature.street) return false;
+      const compSignature = buildAddressSignature(comp?.address, comp?.city, comp?.state, comp?.zipCode);
+      const { streetMatches, streetNumberAndKeyMatch } = buildStreetMatchDetails(subjectSignature, compSignature);
+
+      if (!streetMatches && !streetNumberAndKeyMatch) return false;
+      if (addressLocalityConflicts(subjectSignature, compSignature, streetNumberAndKeyMatch)) return false;
       return true;
     }
 
-    function findSubjectComparable(values, comps) {
-      return comps.find((comp) => addressesLikelyMatch(values, comp)) || null;
+    function samePropertyAsSubject(subject, comp, values = null) {
+      const subjectAddress = cleanText(subject?.address || values?.subjectAddress || "");
+      if (!subjectAddress || !comp) return false;
+      if (addressesLikelyMatch({ subjectAddress }, comp)) return true;
+
+      const subjectSignature = buildAddressSignature(subjectAddress, subject?.city, subject?.state, subject?.zipCode);
+      const compSignature = buildAddressSignature(comp?.address, comp?.city, comp?.state, comp?.zipCode);
+      const { streetMatches, streetNumberAndKeyMatch } = buildStreetMatchDetails(subjectSignature, compSignature);
+      if (addressLocalityConflicts(subjectSignature, compSignature, streetNumberAndKeyMatch)) return false;
+
+      const subjectFactMatches = countMatchingSubjectFacts(subject, comp);
+      const coordinateDistance = calculateDistanceMiles(
+        coerceNumber(subject?.latitude),
+        coerceNumber(subject?.longitude),
+        coerceNumber(comp?.latitude),
+        coerceNumber(comp?.longitude)
+      );
+
+      if (Number.isFinite(coordinateDistance)) {
+        if (coordinateDistance <= 0.005 && subjectFactMatches.matched >= 2) return true;
+        if (coordinateDistance <= 0.015 && streetNumberAndKeyMatch && subjectFactMatches.matched >= 1) return true;
+      }
+
+      if (streetNumberAndKeyMatch && subjectFactMatches.compared >= 3 && subjectFactMatches.matched >= 3) return true;
+      if (streetMatches && subjectFactMatches.compared >= 3 && (subjectFactMatches.matched / subjectFactMatches.compared) >= 0.8) return true;
+      return false;
     }
 
-    function filterSubjectComparablePool(values, comps) {
+    function findSubjectComparable(values, comps, subject = null) {
+      return comps.find((comp) => samePropertyAsSubject(subject, comp, values)) || null;
+    }
+
+    function filterSubjectComparablePool(values, comps, subject = null) {
       if (!Array.isArray(comps) || !comps.length) return [];
-      return comps.filter((comp) => !addressesLikelyMatch(values, comp));
+      return comps.filter((comp) => !samePropertyAsSubject(subject, comp, values));
     }
 
     function normalizeComp(item) {
@@ -2442,10 +2513,9 @@
     }
 
     function buildReport(values, subject, soldComps, activeComp, pendingComps, selectionMeta, sourceNote, providerAvms = null) {
-      const subjectComparableCheck = { subjectAddress: subject?.address || values?.subjectAddress || "" };
-      const reportSoldComps = filterSubjectComparablePool(subjectComparableCheck, soldComps);
-      const reportPendingComps = filterSubjectComparablePool(subjectComparableCheck, pendingComps || []);
-      const reportActiveComp = activeComp && !addressesLikelyMatch(subjectComparableCheck, activeComp) ? activeComp : null;
+      const reportSoldComps = filterSubjectComparablePool(values, soldComps, subject);
+      const reportPendingComps = filterSubjectComparablePool(values, pendingComps || [], subject);
+      const reportActiveComp = activeComp && !samePropertyAsSubject(subject, activeComp, values) ? activeComp : null;
       if (!reportSoldComps.length) throw new Error("No sold comparable properties passed the CMA rules for this search.");
       const pricing = buildPricingModel(values, subject, reportSoldComps, reportActiveComp, reportPendingComps);
       subject.estimatedValue = pricing.coreValueEstimate ?? pricing.suggestedListPrice;
@@ -2484,7 +2554,7 @@
         normalizeComp({ id: "sample-3", formattedAddress: "85 Oak Hollow Ln, Springfield, IL 62704", status: "Sold", soldPrice: 389500, listPrice: 384900, squareFootage: 2140, bedrooms: 3, bathrooms: 3, yearBuilt: 2012, lotSizeAcres: 0.22, daysOnMarket: 18, soldDate: "2025-12-22", subdivision: "Oak Hollow", propertyType: subject.propertyType || "Single Family", stories: "2" })
       ].map((comp) => scoreComparable(subject, comp, values, { radius: 1.5 }, "sold"));
       const sampleActiveComp = scoreComparable(subject, normalizeComp({ id: "sample-4", formattedAddress: "109 Willow Creek Ct, Springfield, IL 62704", status: "Active", listPrice: 414900, squareFootage: 2288, bedrooms: 4, bathrooms: 3, yearBuilt: 2016, lotSizeAcres: 0.25, daysOnMarket: 22, listDate: "2026-03-01", subdivision: "Willow Creek", propertyType: subject.propertyType || "Single Family", stories: "2" }), values, { radius: 1.5 }, "active");
-      const manualCurrentMarketComps = filterSubjectComparablePool(values, filterExcludedComparables(values.manualCurrentMarketComps || [], values.excludedComparableKeys));
+      const manualCurrentMarketComps = filterSubjectComparablePool(values, filterExcludedComparables(values.manualCurrentMarketComps || [], values.excludedComparableKeys), subject);
       const usedIds = new Set(soldComps.map((comp) => compIdentityKey(comp)));
       const pendingSelection = selectPendingComparables(subject, manualCurrentMarketComps, values, usedIds);
       pendingSelection.pendingComps.forEach((comp) => usedIds.add(compIdentityKey(comp)));
@@ -2541,13 +2611,13 @@
         .map((item) => normalizeComp(item))
         .filter((comp) => comp.address && (comp.listPrice != null || comp.soldPrice != null));
       if (!comps.length) throw new Error("The live CMA providers returned no comparable listings for this search.");
-      const matchedSubjectComp = findSubjectComparable(values, comps);
+      const matchedSubjectComp = findSubjectComparable(values, comps, subjectRecord);
       const subjectMatch = subjectRecord && matchedSubjectComp
         ? mergeComparableDetails(subjectRecord, matchedSubjectComp)
         : subjectRecord || matchedSubjectComp;
       const compPool = subjectMatch ? comps.filter((comp) => comp.id !== subjectMatch.id && !addressesLikelyMatch(values, comp)) : comps;
-      const filteredCompPool = filterSubjectComparablePool(values, filterExcludedComparables(compPool, values.excludedComparableKeys));
-      const manualCurrentMarketComps = filterSubjectComparablePool(values, filterExcludedComparables(values.manualCurrentMarketComps || [], values.excludedComparableKeys));
+      const filteredCompPool = filterSubjectComparablePool(values, filterExcludedComparables(compPool, values.excludedComparableKeys), subjectMatch);
+      const manualCurrentMarketComps = filterSubjectComparablePool(values, filterExcludedComparables(values.manualCurrentMarketComps || [], values.excludedComparableKeys), subjectMatch);
       const mergedCompPool = mergeManualCurrentMarketComps(filteredCompPool, manualCurrentMarketComps);
       let subject = buildSubjectProfile(values, mergedCompPool, subjectMatch);
       const subjectCompleteness = computeSubjectDataCompleteness(subject);
@@ -2557,8 +2627,9 @@
         error.payload = payload;
         throw error;
       }
-      const locationAwareCompPool = filterSubjectComparablePool(values, applyComputedDistances(subject, mergedCompPool));
-      const subjectMarketCompPool = filterSubjectComparablePool(values, filterComparablePoolToSubjectMarket(subject, locationAwareCompPool));
+      const locationAwareCompPool = applyComputedDistances(subject, mergedCompPool);
+      const subjectComparableSafePool = filterSubjectComparablePool(values, locationAwareCompPool, subject);
+      const subjectMarketCompPool = filterComparablePoolToSubjectMarket(subject, subjectComparableSafePool);
       if (LIVE_PROVIDER_MODE === "attom" && !subjectMarketCompPool.length) {
         const error = new Error("ATTOM returned comparable records outside the subject's market, so no reliable ATTOM-only CMA could be built. Enter stronger subject details manually or switch back to hybrid mode.");
         error.code = "INSUFFICIENT_ATTOM_COMPS";

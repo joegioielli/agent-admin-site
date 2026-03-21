@@ -30,7 +30,7 @@
     .hero,.card,.report-shell{background:var(--bg-card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;border:1px solid var(--border)}
     .hero-eyebrow,.section-label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--primary);font-weight:700}.hero-title{font-size:clamp(1.7rem,4vw,2.4rem);line-height:1.05;margin-top:6px}.hero-copy,.section-copy,.muted-text,.report-subtitle{color:var(--muted);font-size:14px;line-height:1.55;margin-top:8px}.layout{display:grid;grid-template-columns:minmax(320px,420px) minmax(0,1fr);gap:14px;align-items:start}.section-title{font-size:18px;font-weight:700;margin-top:4px}
     .form-stack{display:grid;gap:14px;margin-top:14px}.field-grid{display:grid;gap:12px}.field-grid.two-col{grid-template-columns:repeat(2,minmax(0,1fr))}.field{display:grid;gap:6px}.field label,legend{font-size:13px;font-weight:600}input[type="text"],input[type="number"],select,textarea{width:100%;min-height:46px;padding:11px 12px;border-radius:12px;border:1px solid #dbe1ea;background:#fff;color:var(--text);font:inherit}textarea{min-height:110px;resize:vertical}input:focus,select:focus,textarea:focus{outline:none;border-color:rgba(37,99,235,.45);box-shadow:0 0 0 4px rgba(37,99,235,.12)}
-    .sub-card{border:1px solid var(--border);border-radius:12px;background:#f8fafc;padding:14px}.fixed-list,.search-list{margin-top:10px;padding-left:18px;color:var(--muted);display:grid;gap:8px;font-size:14px;line-height:1.45}fieldset{border:0;min-width:0}.checkbox-row{display:grid;gap:10px;margin-top:12px}.toggle{display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:12px;border:1px solid var(--border);background:#fff}.toggle input{width:18px;height:18px;margin-top:2px;accent-color:var(--primary)}.toggle strong{display:block;font-size:14px}.toggle span:last-child{color:var(--muted);font-size:13px;line-height:1.45}
+    .sub-card{border:1px solid var(--border);border-radius:12px;background:#f8fafc;padding:14px}.sub-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}.inline-link-btn{border:none;background:none;padding:0;color:#4338ca;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}.inline-link-btn:hover{text-decoration:underline}.inline-link-btn:focus-visible{outline:2px solid rgba(37,99,235,.35);outline-offset:4px;border-radius:6px}.inline-note{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.45}.fixed-list,.search-list{margin-top:10px;padding-left:18px;color:var(--muted);display:grid;gap:8px;font-size:14px;line-height:1.45}fieldset{border:0;min-width:0}.checkbox-row{display:grid;gap:10px;margin-top:12px}.toggle{display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:12px;border:1px solid var(--border);background:#fff}.toggle input{width:18px;height:18px;margin-top:2px;accent-color:var(--primary)}.toggle strong{display:block;font-size:14px}.toggle span:last-child{color:var(--muted);font-size:13px;line-height:1.45}
     .toolbar{display:flex;flex-wrap:wrap;gap:10px}.btn,.print-btn{min-height:42px;border:none;border-radius:var(--pill);padding:0 14px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:transform .12s ease,box-shadow .2s ease,background .2s ease}.btn-primary,.badge-accent{background:var(--primary-soft);color:#fff;box-shadow:0 10px 24px rgba(37,99,235,.24)}.btn-secondary,.print-btn{background:#eef2ff;color:#4338ca}.btn:hover,.print-btn:hover{transform:translateY(-1px)}
     .report-shell{padding:0;overflow:hidden}.report-head{padding:16px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.92);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}.report-title{font-size:20px;font-weight:700}.report-badges{display:flex;flex-wrap:wrap;gap:8px}.badge,.comp-status{min-height:28px;display:inline-flex;align-items:center;padding:0 10px;border-radius:var(--pill);background:#eef2ff;color:#4338ca;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.report-body{padding:16px;display:grid;gap:14px}.print-toolbar{display:flex;justify-content:flex-end}
     .empty-state{padding:34px 18px;text-align:center;color:var(--muted);font-size:14px;line-height:1.6;border:1px dashed var(--border);border-radius:12px;background:#f8fafc}.report-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px}.report-card{grid-column:span 12;padding:14px;border-radius:12px;border:1px solid var(--border);background:#fff;box-shadow:var(--shadow)}.span-7{grid-column:span 7}.span-5{grid-column:span 5}
@@ -140,9 +140,16 @@
                 </div>
               </section>
               <section class="sub-card">
-                <div class="section-label">Manual Market Overrides</div>
-                <h3 class="section-title">Add pending or under-contract comps from MLS</h3>
+                <div class="sub-card-head">
+                  <div>
+                    <div class="section-label">Manual Market Overrides</div>
+                    <h3 class="section-title">Add pending or under-contract comps from MLS</h3>
+                  </div>
+                  <button type="button" class="inline-link-btn" id="manualOverridesToggle" aria-expanded="false" aria-controls="manualOverridesPanel">Show overrides</button>
+                </div>
                 <p class="section-copy">Use these fields when the live feed misses the strongest current-market listings. These manual comps will supplement the live data and can move the price bracket.</p>
+                <p class="inline-note" id="manualOverridesSummary">Overrides are hidden until you need them for MLS-only pending or active comps.</p>
+                <div id="manualOverridesPanel" hidden>
                 <div class="form-stack" style="margin-top: 12px;">
                   <section class="sub-card">
                     <div class="section-label">Override 1</div>
@@ -196,6 +203,7 @@
                 <div class="field" style="margin-top: 12px;">
                   <label for="excludedComparableAddresses">Exclude weak feed comps by address</label>
                   <textarea id="excludedComparableAddresses" name="excludedComparableAddresses" placeholder="Enter one address per line for any closed or live comps you do not want the CMA to use. Example:\n12 Weak Comp Ln, Springfield, IL 62704\n45 Busy Road Dr, Springfield, IL 62704"></textarea>
+                </div>
                 </div>
               </section>
               <section class="sub-card">
@@ -338,6 +346,9 @@
     const marketCompBadge = document.getElementById("marketCompBadge");
     const liveStatusBadge = document.getElementById("liveStatusBadge");
     const generateBtn = form.querySelector('button[type="submit"]');
+    const manualOverridesToggle = document.getElementById("manualOverridesToggle");
+    const manualOverridesPanel = document.getElementById("manualOverridesPanel");
+    const manualOverridesSummary = document.getElementById("manualOverridesSummary");
     const SUBJECT_FACT_FIELD_NAMES = [
       "subjectSqft",
       "subjectPropertyType",
@@ -1007,6 +1018,11 @@
 
     function findSubjectComparable(values, comps) {
       return comps.find((comp) => addressesLikelyMatch(values, comp)) || null;
+    }
+
+    function filterSubjectComparablePool(values, comps) {
+      if (!Array.isArray(comps) || !comps.length) return [];
+      return comps.filter((comp) => !addressesLikelyMatch(values, comp));
     }
 
     function normalizeComp(item) {
@@ -2381,15 +2397,19 @@
     }
 
     function buildReport(values, subject, soldComps, activeComp, pendingComps, selectionMeta, sourceNote, providerAvms = null) {
-      if (!soldComps.length) throw new Error("No sold comparable properties passed the CMA rules for this search.");
-      const pricing = buildPricingModel(values, subject, soldComps, activeComp, pendingComps);
+      const subjectComparableCheck = { subjectAddress: subject?.address || values?.subjectAddress || "" };
+      const reportSoldComps = filterSubjectComparablePool(subjectComparableCheck, soldComps);
+      const reportPendingComps = filterSubjectComparablePool(subjectComparableCheck, pendingComps || []);
+      const reportActiveComp = activeComp && !addressesLikelyMatch(subjectComparableCheck, activeComp) ? activeComp : null;
+      if (!reportSoldComps.length) throw new Error("No sold comparable properties passed the CMA rules for this search.");
+      const pricing = buildPricingModel(values, subject, reportSoldComps, reportActiveComp, reportPendingComps);
       subject.estimatedValue = pricing.coreValueEstimate ?? pricing.suggestedListPrice;
       return {
         generatedAt: new Date(),
         providerMode: LIVE_PROVIDER_MODE,
         subject,
-        soldComps,
-        activeComp,
+        soldComps: reportSoldComps,
+        activeComp: reportActiveComp,
         coreValueEstimate: pricing.coreValueEstimate,
         coreAnchorLabels: pricing.coreAnchorLabels,
         recommendedRange: pricing.recommendedRange,
@@ -2419,7 +2439,7 @@
         normalizeComp({ id: "sample-3", formattedAddress: "85 Oak Hollow Ln, Springfield, IL 62704", status: "Sold", soldPrice: 389500, listPrice: 384900, squareFootage: 2140, bedrooms: 3, bathrooms: 3, yearBuilt: 2012, lotSizeAcres: 0.22, daysOnMarket: 18, soldDate: "2025-12-22", subdivision: "Oak Hollow", propertyType: subject.propertyType || "Single Family", stories: "2" })
       ].map((comp) => scoreComparable(subject, comp, values, { radius: 1.5 }, "sold"));
       const sampleActiveComp = scoreComparable(subject, normalizeComp({ id: "sample-4", formattedAddress: "109 Willow Creek Ct, Springfield, IL 62704", status: "Active", listPrice: 414900, squareFootage: 2288, bedrooms: 4, bathrooms: 3, yearBuilt: 2016, lotSizeAcres: 0.25, daysOnMarket: 22, listDate: "2026-03-01", subdivision: "Willow Creek", propertyType: subject.propertyType || "Single Family", stories: "2" }), values, { radius: 1.5 }, "active");
-      const manualCurrentMarketComps = filterExcludedComparables(values.manualCurrentMarketComps || [], values.excludedComparableKeys);
+      const manualCurrentMarketComps = filterSubjectComparablePool(values, filterExcludedComparables(values.manualCurrentMarketComps || [], values.excludedComparableKeys));
       const usedIds = new Set(soldComps.map((comp) => compIdentityKey(comp)));
       const pendingSelection = selectPendingComparables(subject, manualCurrentMarketComps, values, usedIds);
       pendingSelection.pendingComps.forEach((comp) => usedIds.add(compIdentityKey(comp)));
@@ -2481,8 +2501,8 @@
         ? mergeComparableDetails(subjectRecord, matchedSubjectComp)
         : subjectRecord || matchedSubjectComp;
       const compPool = subjectMatch ? comps.filter((comp) => comp.id !== subjectMatch.id && !addressesLikelyMatch(values, comp)) : comps;
-      const filteredCompPool = filterExcludedComparables(compPool, values.excludedComparableKeys);
-      const manualCurrentMarketComps = filterExcludedComparables(values.manualCurrentMarketComps || [], values.excludedComparableKeys);
+      const filteredCompPool = filterSubjectComparablePool(values, filterExcludedComparables(compPool, values.excludedComparableKeys));
+      const manualCurrentMarketComps = filterSubjectComparablePool(values, filterExcludedComparables(values.manualCurrentMarketComps || [], values.excludedComparableKeys));
       const mergedCompPool = mergeManualCurrentMarketComps(filteredCompPool, manualCurrentMarketComps);
       let subject = buildSubjectProfile(values, mergedCompPool, subjectMatch);
       const subjectCompleteness = computeSubjectDataCompleteness(subject);
@@ -2492,8 +2512,8 @@
         error.payload = payload;
         throw error;
       }
-      const locationAwareCompPool = applyComputedDistances(subject, mergedCompPool);
-      const subjectMarketCompPool = filterComparablePoolToSubjectMarket(subject, locationAwareCompPool);
+      const locationAwareCompPool = filterSubjectComparablePool(values, applyComputedDistances(subject, mergedCompPool));
+      const subjectMarketCompPool = filterSubjectComparablePool(values, filterComparablePoolToSubjectMarket(subject, locationAwareCompPool));
       if (LIVE_PROVIDER_MODE === "attom" && !subjectMarketCompPool.length) {
         const error = new Error("ATTOM returned comparable records outside the subject's market, so no reliable ATTOM-only CMA could be built. Enter stronger subject details manually or switch back to hybrid mode.");
         error.code = "INSUFFICIENT_ATTOM_COMPS";
@@ -2644,6 +2664,16 @@
       if (setFormFieldValue("subjectStoryCount", subject.storyCount, (value) => Number.isFinite(value) ? String(value) : String(value), overwrite)) rememberAutoPopulatedField("subjectStoryCount");
       if (setFormFieldValue("subjectGarageParking", subject.garageParking, (value) => String(value), overwrite)) rememberAutoPopulatedField("subjectGarageParking");
       updateSubjectFactMissingState();
+    }
+
+    function setManualOverridesVisibility(isOpen) {
+      if (!manualOverridesToggle || !manualOverridesPanel || !manualOverridesSummary) return;
+      manualOverridesPanel.hidden = !isOpen;
+      manualOverridesToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      manualOverridesToggle.textContent = isOpen ? "Hide overrides" : "Show overrides";
+      manualOverridesSummary.textContent = isOpen
+        ? "Overrides are open. Use them only when the live feed misses a strong current-market comp."
+        : "Overrides are hidden until you need them for MLS-only pending or active comps.";
     }
 
     function renderReport(values, report) {
@@ -2813,6 +2843,7 @@
       setTimeout(() => {
         resetReport();
         setGenerateState(false);
+        setManualOverridesVisibility(false);
       }, 0);
     });
 
@@ -2831,6 +2862,13 @@
 
     updateSubjectFactMissingState();
     setReportBadges({ soldCount: 0, marketCount: 0, liveLabel: "Awaiting data", liveAccent: false });
+    setManualOverridesVisibility(false);
+
+    if (manualOverridesToggle) {
+      manualOverridesToggle.addEventListener("click", () => {
+        setManualOverridesVisibility(manualOverridesPanel?.hidden);
+      });
+    }
 
     printReportBtn.addEventListener("click", () => {
       if (reportSection.dataset.ready !== "true") return;

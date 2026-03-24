@@ -1863,6 +1863,7 @@
             value: values.priorAppraisalValue * (1 + annualTrend * (monthsOld / 12)) * (1 + conditionPct * 0.75),
             weight: clamp(1.8 - (monthsOld / 24), 0.45, 1.8)
           };
+          references.push(appraisalReference);
           if (monthsOld <= 18) recentAppraisal = appraisalReference;
         }
       }

@@ -537,6 +537,11 @@
       return `${sign}${Math.abs(value * 100).toFixed(digits)}%`;
     }
 
+    function formatPercent(value, digits = 1) {
+      if (!Number.isFinite(value)) return "N/A";
+      return `${(Math.abs(value) * 100).toFixed(digits)}%`;
+    }
+
     function joinWithAnd(items) {
       const cleaned = items.filter(Boolean);
       if (!cleaned.length) return "";
@@ -2056,6 +2061,23 @@
       return { score, label: "Guarded", note: "The sold comp set is thinner or less consistent, so the pricing range is intentionally wider to stay defensible." };
     }
 
+    function buildAvmAgreementSignal(model, referenceValue) {
+      if (!model || !Number.isFinite(model.value) || !Number.isFinite(referenceValue) || referenceValue <= 0) return null;
+      const gapPct = Math.abs(model.value - referenceValue) / referenceValue;
+      const hasExplicitBand = Number.isFinite(model.rangeLow) && Number.isFinite(model.rangeHigh);
+      const withinModeledRange = hasExplicitBand
+        ? referenceValue >= model.rangeLow && referenceValue <= model.rangeHigh
+        : Number.isFinite(model.uncertaintyPct)
+          ? gapPct <= model.uncertaintyPct
+          : gapPct <= 0.05;
+      return {
+        gapPct,
+        withinModeledRange,
+        highConfidence: Number.isFinite(model.confidenceScore) && model.confidenceScore >= 92,
+        reliabilityWeight: model.reliabilityWeight ?? 0.45
+      };
+    }
+
     function buildAvmConsensus(providerAvms) {
       const models = [
         normalizeAvmModel(providerAvms?.rentcast, "RentCast AVM"),
@@ -2065,16 +2087,39 @@
         return {
           value: null,
           providerCount: 0,
-          spreadPct: null
+          spreadPct: null,
+          reliabilityWeight: null,
+          uncertaintyPct: null,
+          rangeLow: null,
+          rangeHigh: null,
+          attomModel: null
         };
       }
       const values = models.map((model) => model.value);
       const midpoint = average(values);
       const spread = values.length > 1 ? Math.max(...values) - Math.min(...values) : 0;
+      const value = weightedAverage(models, "value", (model) => model.reliabilityWeight || 1) ?? median(values) ?? midpoint;
+      const rangeLow = weightedAverage(
+        models.filter((model) => Number.isFinite(model.rangeLow)),
+        "rangeLow",
+        (model) => model.reliabilityWeight || 1
+      );
+      const rangeHigh = weightedAverage(
+        models.filter((model) => Number.isFinite(model.rangeHigh)),
+        "rangeHigh",
+        (model) => model.reliabilityWeight || 1
+      );
+      const reliabilityWeight = average(models.map((model) => model.reliabilityWeight).filter((weight) => Number.isFinite(weight)));
+      const uncertaintyPct = average(models.map((model) => model.uncertaintyPct).filter((item) => Number.isFinite(item)));
       return {
-        value: median(values) ?? midpoint,
+        value,
         providerCount: models.length,
-        spreadPct: Number.isFinite(midpoint) && midpoint > 0 ? spread / midpoint : null
+        spreadPct: Number.isFinite(midpoint) && midpoint > 0 ? spread / midpoint : null,
+        reliabilityWeight,
+        uncertaintyPct,
+        rangeLow,
+        rangeHigh,
+        attomModel: models.find((model) => normalizeText(model.provider).includes("attom")) || null
       };
     }
 
@@ -2169,6 +2214,7 @@
       const historicalAnchor = historicalReference.value;
       const recentAppraisalValue = historicalReference.recentAppraisal?.value ?? null;
       const avmConsensus = buildAvmConsensus(providerAvms);
+      const attomAvm = avmConsensus.attomModel || normalizeAvmModel(providerAvms?.attom, "ATTOM AVM");
       const lowPpsf = compPpsf.length ? Math.min(...compPpsf) : null;
       const highPpsf = compPpsf.length ? Math.max(...compPpsf) : null;
       const avgPpsf = average(compPpsf);
@@ -2244,11 +2290,16 @@
         ], "value", "weight");
       }
       const weakSoldEvidence = closedSaleComps.length < 3 || thinAnchorSet || (coreValueModel.averageSimilarity ?? 0) < 76;
-      const avmConsensusWeight = avmConsensus.providerCount >= 2 && (avmConsensus.spreadPct == null || avmConsensus.spreadPct <= 0.05)
-        ? 0.85
-        : avmConsensus.providerCount === 1
-          ? 0.55
-          : 0.4;
+      const avmConsensusWeight = clamp(
+        avmConsensus.reliabilityWeight
+          ?? (avmConsensus.providerCount >= 2 && (avmConsensus.spreadPct == null || avmConsensus.spreadPct <= 0.05)
+            ? 0.85
+            : avmConsensus.providerCount === 1
+              ? 0.55
+              : 0.4),
+        0.35,
+        closedSaleComps.length === 0 ? 1.5 : 1.05
+      );
       const avmGapPct = Number.isFinite(coreValueEstimate) && Number.isFinite(avmConsensus.value) && coreValueEstimate > 0
         ? Math.abs(avmConsensus.value - coreValueEstimate) / coreValueEstimate
         : null;
@@ -2276,6 +2327,10 @@
       historicalGapPct = Number.isFinite(coreValueEstimate) && Number.isFinite(historicalAnchor) && coreValueEstimate > 0
         ? Math.abs(historicalAnchor - coreValueEstimate) / coreValueEstimate
         : 0;
+      const attomAgreement = buildAvmAgreementSignal(attomAvm, coreValueEstimate);
+      const attomPpsfGapPct = Number.isFinite(attomAvm?.pricePerSqft) && Number.isFinite(avgPpsf) && avgPpsf > 0
+        ? Math.abs(attomAvm.pricePerSqft - avgPpsf) / avgPpsf
+        : null;
       const appraisalCrossCheckGapPct = Number.isFinite(coreValueEstimate) && Number.isFinite(recentAppraisalValue) && coreValueEstimate > 0
         ? Math.abs(recentAppraisalValue - coreValueEstimate) / coreValueEstimate
         : null;
@@ -2296,6 +2351,15 @@
       if (marketTrend.trend !== "stable") rangePaddingPct += 0.003;
       if (historicalGapPct > 0.06) rangePaddingPct += 0.008;
       else if (historicalGapPct > 0.035) rangePaddingPct += 0.004;
+      if (attomAgreement?.highConfidence && attomAgreement.withinModeledRange) {
+        rangePaddingPct -= closedSaleComps.length >= 3 ? 0.0015 : 0.0035;
+      } else if (attomAgreement?.highConfidence && !attomAgreement.withinModeledRange) {
+        rangePaddingPct += closedSaleComps.length >= 3 ? 0.0025 : 0.0055;
+      }
+      if (Number.isFinite(attomPpsfGapPct) && Number.isFinite(attomAvm?.confidenceScore) && attomAvm.confidenceScore >= 92) {
+        if (attomPpsfGapPct <= 0.04) rangePaddingPct -= 0.0015;
+        else if (attomPpsfGapPct >= 0.08) rangePaddingPct += 0.0025;
+      }
       rangePaddingPct = clamp(rangePaddingPct, 0.025, 0.085);
 
       let low = average([
@@ -2311,6 +2375,17 @@
       if (!Number.isFinite(low) || !Number.isFinite(high)) {
         low = Number.isFinite(coreValueEstimate) ? coreValueEstimate * (1 - Math.max(rangePaddingPct, 0.04)) : 0;
         high = Number.isFinite(coreValueEstimate) ? coreValueEstimate * (1 + Math.max(rangePaddingPct, 0.04)) : 0;
+      }
+      if (weakSoldEvidence && closedSaleComps.length <= 1 && Number.isFinite(attomAvm?.rangeLow) && Number.isFinite(attomAvm?.rangeHigh)) {
+        const attomRangeWeight = clamp((attomAvm.reliabilityWeight ?? 0.7) * (closedSaleComps.length === 0 ? 0.8 : 0.45), 0.2, 1.1);
+        low = weightedAverage([
+          { value: low, weight: 1 },
+          { value: attomAvm.rangeLow, weight: attomRangeWeight }
+        ], "value", "weight");
+        high = weightedAverage([
+          { value: high, weight: 1 },
+          { value: attomAvm.rangeHigh, weight: attomRangeWeight }
+        ], "value", "weight");
       }
       if (
         Number.isFinite(currentMarketSupport) &&
@@ -2406,13 +2481,23 @@
         : Number.isFinite(historicalAnchor)
           ? " Historical pricing evidence was used only as a secondary reconciliation check."
           : "";
+      const attomFsdPct = Number.isFinite(attomAvm?.confidenceScore)
+        ? clamp((100 - attomAvm.confidenceScore) / 100, 0, 0.25)
+        : attomAvm?.uncertaintyPct ?? null;
+      const attomNote = attomAgreement?.highConfidence
+        ? attomAgreement.withinModeledRange
+          ? ` ATTOM's ${Math.round(attomAvm.confidenceScore)}/100 score implies roughly +/-${formatPercent(attomFsdPct, 1)} modeled uncertainty, and the comp-based core value sits inside that band.`
+          : ` ATTOM's ${Math.round(attomAvm.confidenceScore)}/100 score implies roughly +/-${formatPercent(attomFsdPct, 1)} modeled uncertainty, but the comp-based core value sits outside that band, so the final range stays more cautious.`
+        : Number.isFinite(attomAvm?.value)
+          ? " ATTOM AVM was treated as a secondary cross-check only."
+          : "";
       const strategyBase = `Core value is anchored by sold comps at ${coreAnchorText}.`;
       const launchPostureNote = pricingConfidence.label === "Guarded"
         ? " The launch recommendation is intentionally centered inside the supported range because the comp evidence is thinner."
         : pricingConfidence.label === "Moderate"
           ? " The launch recommendation is slightly tempered toward the middle of the supported range."
           : "";
-      const strategyNote = `${strategyBase}${marketPressureNote}${historicalNote}${launchPostureNote} Pricing confidence is ${pricingConfidence.label.toLowerCase()}.`;
+      const strategyNote = `${strategyBase}${marketPressureNote}${historicalNote}${attomNote}${launchPostureNote} Pricing confidence is ${pricingConfidence.label.toLowerCase()}.`;
 
       const conditionSupport = conditionPct > 0
         ? "The subject's upgrades and condition notes support nudging the list price toward the upper half of the range."
@@ -2451,7 +2536,7 @@
           { label: "Balanced market pricing", price: suggested, note: "Best mix of exposure, perceived value, and negotiation flexibility." },
           { label: "Faster sale strategy", price: psychPrice(rangeLow, "up"), note: "Lower-range strategy for stronger early activity and faster absorption." }
         ],
-        explanation: `Core value estimate is ${formatCurrency(coreValueEstimate)}, anchored by sold comps at ${coreAnchorText}. Recommend listing at ${formatCurrency(suggested)} with a defensible range of ${formatCurrency(rangeLow)} to ${formatCurrency(rangeHigh)}. ${conditionSupport}${detailAdjustmentNote} ${pricingConfidence.note}${marketPressureNote}${historicalNote}`
+        explanation: `Core value estimate is ${formatCurrency(coreValueEstimate)}, anchored by sold comps at ${coreAnchorText}. Recommend listing at ${formatCurrency(suggested)} with a defensible range of ${formatCurrency(rangeLow)} to ${formatCurrency(rangeHigh)}. ${conditionSupport}${detailAdjustmentNote} ${pricingConfidence.note}${marketPressureNote}${historicalNote}${attomNote}`
       };
     }
 
@@ -2483,23 +2568,76 @@
 
     function normalizeAvmModel(value, fallbackProvider = "AVM") {
       const provider = cleanText(value?.provider || fallbackProvider || "AVM");
+      const rawConfidenceScore = coerceNumber(value?.confidenceScore ?? value?.score ?? value?.scr);
+      const confidenceScore = Number.isFinite(rawConfidenceScore) ? clamp(rawConfidenceScore, 0, 100) : null;
       const low = coerceNumber(value?.low);
       const high = coerceNumber(value?.high);
       const estimate = coerceNumber(value?.value ?? value?.amount ?? average([low, high]));
-      const confidenceScore = coerceNumber(value?.confidenceScore ?? value?.score ?? value?.scr);
       const comparablesCount = coerceNumber(value?.comparablesCount ?? value?.comparableCount ?? value?.compsCount);
       const eventDate = parseDateValue(value?.eventDate ?? value?.asOfDate ?? value?.date);
+      const pricePerSqft = coerceNumber(value?.pricePerSqft ?? value?.perSizeUnit);
 
       if (![estimate, low, high].some((item) => Number.isFinite(item))) return null;
+
+      const rangePct = Number.isFinite(estimate) && estimate > 0
+        ? average([
+          Number.isFinite(low) ? Math.abs(estimate - low) / estimate : null,
+          Number.isFinite(high) ? Math.abs(high - estimate) / estimate : null
+        ].filter((item) => Number.isFinite(item)))
+        : null;
+      const uncertaintyPct = Number.isFinite(confidenceScore)
+        ? clamp((100 - confidenceScore) / 100, 0, 0.25)
+        : Number.isFinite(rangePct)
+          ? clamp(rangePct, 0, 0.25)
+          : null;
+      const rangeLow = Number.isFinite(low)
+        ? low
+        : Number.isFinite(estimate) && Number.isFinite(uncertaintyPct)
+          ? estimate * (1 - uncertaintyPct)
+          : null;
+      const rangeHigh = Number.isFinite(high)
+        ? high
+        : Number.isFinite(estimate) && Number.isFinite(uncertaintyPct)
+          ? estimate * (1 + uncertaintyPct)
+          : null;
+      const ageMonths = eventDate ? monthsSince(eventDate) : null;
+      let reliabilityWeight = 0.45;
+      if (Number.isFinite(confidenceScore)) {
+        if (confidenceScore >= 95) reliabilityWeight += 0.75;
+        else if (confidenceScore >= 92) reliabilityWeight += 0.62;
+        else if (confidenceScore >= 88) reliabilityWeight += 0.48;
+        else if (confidenceScore >= 82) reliabilityWeight += 0.28;
+        else if (confidenceScore >= 75) reliabilityWeight += 0.12;
+      } else if (Number.isFinite(uncertaintyPct)) {
+        if (uncertaintyPct <= 0.05) reliabilityWeight += 0.55;
+        else if (uncertaintyPct <= 0.07) reliabilityWeight += 0.35;
+        else if (uncertaintyPct <= 0.1) reliabilityWeight += 0.18;
+      }
+      if (Number.isFinite(ageMonths)) {
+        if (ageMonths > 12) reliabilityWeight -= 0.18;
+        else if (ageMonths > 6) reliabilityWeight -= 0.08;
+      }
+      if (Number.isFinite(comparablesCount)) {
+        if (comparablesCount >= 10) reliabilityWeight += 0.08;
+        else if (comparablesCount <= 2) reliabilityWeight -= 0.05;
+      }
+      reliabilityWeight = clamp(reliabilityWeight, 0.25, 1.65);
 
       return {
         provider,
         value: estimate,
         low,
         high,
+        rangeLow,
+        rangeHigh,
         confidenceScore,
         comparablesCount,
-        eventDate
+        eventDate,
+        pricePerSqft,
+        uncertaintyPct,
+        rangePct,
+        ageMonths,
+        reliabilityWeight
       };
     }
 
@@ -2565,9 +2703,11 @@
           };
         }
         const footnote = [];
-        if (Number.isFinite(model.low) && Number.isFinite(model.high)) footnote.push(`Range ${formatCurrency(model.low)} to ${formatCurrency(model.high)}.`);
+        if (Number.isFinite(model.rangeLow) && Number.isFinite(model.rangeHigh)) footnote.push(`Range ${formatCurrency(model.rangeLow)} to ${formatCurrency(model.rangeHigh)}.`);
         if (Number.isFinite(model.confidenceScore)) footnote.push(`Confidence ${Math.round(model.confidenceScore)}/100.`);
+        if (normalizeText(model.provider).includes("attom") && Number.isFinite(model.uncertaintyPct)) footnote.push(`ATTOM score implies roughly +/-${formatPercent(model.uncertaintyPct, 1)} modeled uncertainty.`);
         if (Number.isFinite(model.comparablesCount)) footnote.push(`${Math.round(model.comparablesCount)} comps in model.`);
+        if (Number.isFinite(model.pricePerSqft)) footnote.push(`${formatPpsf(model.pricePerSqft)} AVM PPSF.`);
         if (model.eventDate) footnote.push(`As of ${formatDateOnly(model.eventDate)}.`);
         if (Number.isFinite(coreValueEstimate) && Number.isFinite(model.value) && coreValueEstimate > 0) {
           const gapPct = Math.abs(model.value - coreValueEstimate) / coreValueEstimate;

@@ -28,10 +28,23 @@
     .nav-list{list-style:none;padding:4px;display:flex;flex-direction:column;gap:4px}.nav-item{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:10px;color:#e5e7eb;text-decoration:none;font-size:13px;transition:background .2s ease,transform .12s ease,box-shadow .2s ease}.nav-item:hover{background:rgba(148,163,184,.2);transform:translateY(-1px)}.nav-item.active{background:linear-gradient(135deg,#2563eb,#4f46e5);box-shadow:0 8px 20px rgba(37,99,235,.6)}.nav-item-label{flex:1}
     .main{flex:1;display:flex;flex-direction:column;gap:14px}.main-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-radius:var(--radius);background:rgba(255,255,255,.9);box-shadow:var(--shadow);backdrop-filter:blur(10px)}.main-title{font-size:18px;font-weight:700;letter-spacing:.04em}.main-subtitle{font-size:12px;color:var(--muted);margin-top:3px}.main-content{flex:1;display:flex;flex-direction:column;gap:12px}
     .hero,.card,.report-shell{background:var(--bg-card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;border:1px solid var(--border)}
-    .hero-eyebrow,.section-label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--primary);font-weight:700}.hero-title{font-size:clamp(1.7rem,4vw,2.4rem);line-height:1.05;margin-top:6px}.hero-copy,.section-copy,.muted-text,.report-subtitle{color:var(--muted);font-size:14px;line-height:1.55;margin-top:8px}.layout{display:grid;grid-template-columns:minmax(320px,420px) minmax(0,1fr);gap:14px;align-items:start}.section-title{font-size:18px;font-weight:700;margin-top:4px}
-    .form-stack{display:grid;gap:14px;margin-top:14px}.field-grid{display:grid;gap:12px}.field-grid.two-col{grid-template-columns:repeat(2,minmax(0,1fr))}.field{display:grid;gap:6px}.field label,legend{font-size:13px;font-weight:600}input[type="text"],input[type="number"],select,textarea{width:100%;min-height:46px;padding:11px 12px;border-radius:12px;border:1px solid #dbe1ea;background:#fff;color:var(--text);font:inherit}textarea{min-height:110px;resize:vertical}input:focus,select:focus,textarea:focus{outline:none;border-color:rgba(37,99,235,.45);box-shadow:0 0 0 4px rgba(37,99,235,.12)}
+    .hero{padding:14px 16px}
+    .hero-eyebrow,.section-label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--primary);font-weight:700}.hero-title{font-size:clamp(1.55rem,3.2vw,2.15rem);line-height:1.08;margin-top:6px}.hero-copy,.section-copy,.muted-text,.report-subtitle{color:var(--muted);font-size:13px;line-height:1.5;margin-top:6px}.layout{display:grid;grid-template-columns:minmax(360px,480px) minmax(0,1fr);gap:14px;align-items:start}.section-title{font-size:18px;font-weight:700;margin-top:4px}
+    .form-stack{display:grid;gap:12px;margin-top:14px}.field-grid{display:grid;gap:12px}.field-grid.two-col{grid-template-columns:repeat(2,minmax(0,1fr))}.quick-start-grid,.subject-fact-grid,.control-grid{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}.field{display:grid;gap:6px}.field label,legend{font-size:13px;font-weight:600}input[type="text"],input[type="number"],select,textarea{width:100%;min-height:44px;padding:10px 12px;border-radius:12px;border:1px solid #dbe1ea;background:#fff;color:var(--text);font:inherit}textarea{min-height:88px;resize:vertical}input:focus,select:focus,textarea:focus{outline:none;border-color:rgba(37,99,235,.45);box-shadow:0 0 0 4px rgba(37,99,235,.12)}
     .sub-card{border:1px solid var(--border);border-radius:12px;background:#f8fafc;padding:14px}.sub-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}.inline-link-btn{border:none;background:none;padding:0;color:#4338ca;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}.inline-link-btn:hover{text-decoration:underline}.inline-link-btn:focus-visible{outline:2px solid rgba(37,99,235,.35);outline-offset:4px;border-radius:6px}.inline-note{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.45}.fixed-list,.search-list{margin-top:10px;padding-left:18px;color:var(--muted);display:grid;gap:8px;font-size:14px;line-height:1.45}fieldset{border:0;min-width:0}.checkbox-row{display:grid;gap:10px;margin-top:12px}.toggle{display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:12px;border:1px solid var(--border);background:#fff}.toggle input{width:18px;height:18px;margin-top:2px;accent-color:var(--primary)}.toggle strong{display:block;font-size:14px}.toggle span:last-child{color:var(--muted);font-size:13px;line-height:1.45}
-    .toolbar{display:flex;flex-wrap:wrap;gap:10px}.btn,.print-btn{min-height:42px;border:none;border-radius:var(--pill);padding:0 14px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:transform .12s ease,box-shadow .2s ease,background .2s ease}.btn-primary,.badge-accent{background:var(--primary-soft);color:#fff;box-shadow:0 10px 24px rgba(37,99,235,.24)}.btn-secondary,.print-btn{background:#eef2ff;color:#4338ca}.btn:hover,.print-btn:hover{transform:translateY(-1px)}
+    .toolbar{display:flex;flex-wrap:wrap;gap:10px}.toolbar-sticky{position:sticky;top:12px;z-index:20;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.96);box-shadow:var(--shadow-lg);backdrop-filter:blur(12px)}.toolbar-copy{display:grid;gap:3px;max-width:330px}.toolbar-title{font-size:13px;font-weight:700}.toolbar-note{font-size:12px;line-height:1.4;color:var(--muted)}.toolbar-actions{display:flex;flex-wrap:wrap;gap:10px}.btn,.print-btn{min-height:42px;border:none;border-radius:var(--pill);padding:0 14px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:transform .12s ease,box-shadow .2s ease,background .2s ease}.btn-primary,.badge-accent{background:var(--primary-soft);color:#fff;box-shadow:0 10px 24px rgba(37,99,235,.24)}.btn-secondary,.print-btn{background:#eef2ff;color:#4338ca}.btn:hover,.print-btn:hover{transform:translateY(-1px)}
+    .quick-start-card{background:linear-gradient(180deg,#ffffff 0,#f8fbff 100%)}
+    .accordion{padding:0;overflow:hidden}
+    .accordion-summary{list-style:none;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px;cursor:pointer}
+    .accordion-summary::-webkit-details-marker{display:none}
+    .accordion-copy{max-width:calc(100% - 32px)}
+    .accordion-title{display:block;margin-top:4px;font-size:17px;font-weight:700;color:var(--text)}
+    .accordion-subtitle{display:block;margin-top:6px;font-size:13px;line-height:1.45;color:var(--muted)}
+    .accordion-icon{flex:0 0 auto;font-size:20px;line-height:1;color:#4338ca;transform:rotate(0deg);transition:transform .18s ease}
+    .accordion[open] .accordion-icon{transform:rotate(45deg)}
+    .accordion-body{padding:0 14px 14px}
+    #fixedParameterList{list-style:none;padding-left:0;grid-template-columns:1fr}
+    #fixedParameterList li{padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:#fff;color:var(--muted);font-size:13px;line-height:1.45}
     .report-shell{padding:0;overflow:hidden}.report-head{padding:16px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.92);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}.report-title{font-size:20px;font-weight:700}.report-badges{display:flex;flex-wrap:wrap;gap:8px}.badge,.comp-status{min-height:28px;display:inline-flex;align-items:center;padding:0 10px;border-radius:var(--pill);background:#eef2ff;color:#4338ca;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.report-body{padding:16px;display:grid;gap:14px}.print-toolbar{display:flex;justify-content:flex-end}
     .empty-state{padding:34px 18px;text-align:center;color:var(--muted);font-size:14px;line-height:1.6;border:1px dashed var(--border);border-radius:12px;background:#f8fafc}.report-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px}.report-card{grid-column:span 12;padding:14px;border-radius:12px;border:1px solid var(--border);background:#fff;box-shadow:var(--shadow)}.span-7{grid-column:span 7}.span-5{grid-column:span 5}
     .metrics,.estimate-grid,.comp-meta{display:grid;gap:10px}.metrics{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:12px}.estimate-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:12px}.metric,.estimate-card,.comp-card,.comp-meta div,.strategy-card{padding:12px;border-radius:12px;border:1px solid var(--border);background:#f8fafc}.metric span,.estimate-label,.comp-meta span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}.metric strong,.estimate-value,.comp-meta strong{display:block;margin-top:6px;font-size:16px;font-weight:700}.estimate-footnote,.comp-notes,.comp-price-line{margin-top:8px;font-size:13px;line-height:1.45;color:var(--muted)}
@@ -39,9 +52,10 @@
     .missing-data{border-color:#92400e !important;background:#fff7ed !important;color:#111827 !important;box-shadow:inset 0 0 0 1px rgba(146,64,14,.12)}.missing-data::placeholder{color:#111827;opacity:.72}
     .comp-grid{display:grid;gap:12px;margin-top:12px}.comp-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}.comp-address{font-size:16px;font-weight:700}.comp-status.active{background:linear-gradient(135deg,var(--success),#245740);color:#fff}.comp-status.pending{background:linear-gradient(135deg,#b45309,#92400e);color:#fff}.comp-meta{grid-template-columns:repeat(5,minmax(0,1fr));margin-top:12px}.strategy-grid{display:grid;gap:10px;margin-top:12px}.strategy-card strong{display:block;font-size:14px}.strategy-card p{margin-top:6px;font-size:13px;line-height:1.45;color:var(--muted)}
     .report-shell[data-ready="false"] .print-toolbar,.report-shell[data-ready="false"] .report-grid{display:none}
-    @media (max-width:1080px){.layout{grid-template-columns:1fr}}
+    @media (max-width:1080px){.layout{grid-template-columns:1fr}.toolbar-copy{max-width:none}}
     @media (max-width:960px){.app-shell{flex-direction:column}.sidebar{width:100%;flex-direction:row;align-items:center;overflow-x:auto}.sidebar-section-title{display:none}.nav-list{flex-direction:row;flex-wrap:wrap}}
-    @media (max-width:760px){.app-shell{margin:12px auto;padding:0 10px}.field-grid.two-col,.metrics,.estimate-grid,.comp-meta{grid-template-columns:1fr 1fr}.span-7,.span-5{grid-column:span 12}.toolbar{flex-direction:column}.btn,.print-btn{width:100%}}
+    @media (max-width:760px){.app-shell{margin:12px auto;padding:0 10px}.field-grid.two-col,.quick-start-grid,.subject-fact-grid,.control-grid,.metrics,.estimate-grid,.comp-meta{grid-template-columns:1fr 1fr}.span-7,.span-5{grid-column:span 12}.toolbar,.toolbar-actions{flex-direction:column}.toolbar-sticky{position:static;padding:0;border:none;background:transparent;box-shadow:none;backdrop-filter:none}.btn,.print-btn{width:100%}}
+    @media (max-width:620px){.field-grid.two-col,.quick-start-grid,.subject-fact-grid,.control-grid,.metrics,.estimate-grid,.comp-meta{grid-template-columns:1fr}}
     @media print{
       body{background:#fff;font-size:11px;line-height:1.35}
       .sidebar,.main-header,.hero,.card{display:none}
@@ -106,20 +120,43 @@
           <section class="card">
             <div class="section-label">Input</div>
             <h2 class="section-title">Subject property and search setup</h2>
-            <p class="section-copy">Use the subject property fields when you have them. The engine blends those details with live comparable data and a structured pricing model.</p>
+            <p class="section-copy">Start with the address and any standout details. Expand the advanced sections only when you want to tighten the comp search or add manual overrides.</p>
             <form id="cmaForm" class="form-stack">
-              <div class="field">
-                <label for="subjectAddress">Subject property address</label>
-                <input id="subjectAddress" name="subjectAddress" type="text" placeholder="123 Main St, Springfield, IL 62704" autocomplete="street-address" required />
+              <div class="toolbar toolbar-sticky">
+                <div class="toolbar-copy">
+                  <span class="toolbar-title">Generate from anywhere in the form</span>
+                  <span class="toolbar-note">Enter the address, add any notes you have, and run the CMA without scrolling to the bottom.</span>
+                </div>
+                <div class="toolbar-actions">
+                  <button type="submit" class="btn btn-primary">Generate CMA</button>
+                  <button type="reset" class="btn btn-secondary">Reset</button>
+                </div>
               </div>
-              <div class="field">
-                <label for="specialDetails">Special details that may affect value</label>
-                <textarea id="specialDetails" name="specialDetails" placeholder="Example: new roof in 2024, updated kitchen, corner lot, fresh paint, new HVAC, covered patio..."></textarea>
-              </div>
-              <section class="sub-card">
-                <div class="section-label">Subject Details</div>
-                <h3 class="section-title">Property facts to strengthen the comp search</h3>
-                <div class="field-grid two-col" style="margin-top: 12px;">
+              <section class="sub-card quick-start-card">
+                <div class="section-label">Quick Start</div>
+                <h3 class="section-title">Start with the subject and standout details</h3>
+                <div class="quick-start-grid" style="margin-top: 12px;">
+                  <div class="field">
+                    <label for="subjectAddress">Subject property address</label>
+                    <input id="subjectAddress" name="subjectAddress" type="text" placeholder="123 Main St, Springfield, IL 62704" autocomplete="street-address" required />
+                  </div>
+                  <div class="field">
+                    <label for="specialDetails">Special details that may affect value</label>
+                    <textarea id="specialDetails" name="specialDetails" placeholder="Example: new roof in 2024, updated kitchen, corner lot, fresh paint, new HVAC, covered patio..."></textarea>
+                  </div>
+                </div>
+              </section>
+              <details class="sub-card accordion">
+                <summary class="accordion-summary">
+                  <span class="accordion-copy">
+                    <span class="section-label">Subject Details</span>
+                    <span class="accordion-title">Property facts to strengthen the comp search</span>
+                    <span class="accordion-subtitle">Use this when you want to add the subject's facts, prior sale history, or condition context.</span>
+                  </span>
+                  <span class="accordion-icon" aria-hidden="true">+</span>
+                </summary>
+                <div class="accordion-body">
+                <div class="field-grid subject-fact-grid">
                   <div class="field"><label for="subjectSqft">Square footage</label><input id="subjectSqft" name="subjectSqft" type="number" min="0" step="1" placeholder="2180" /></div>
                   <div class="field"><label for="subjectPropertyType">Property type</label><input id="subjectPropertyType" name="subjectPropertyType" type="text" placeholder="Single Family, Condo, Townhome..." /></div>
                   <div class="field"><label for="subjectBeds">Bedrooms</label><input id="subjectBeds" name="subjectBeds" type="number" min="0" max="20" step="1" placeholder="4" /></div>
@@ -138,7 +175,8 @@
                   <label for="conditionNotes">Condition notes</label>
                   <textarea id="conditionNotes" name="conditionNotes" placeholder="Example: dated baths, backs to greenbelt, strong curb appeal, busy road, fenced yard, deferred maintenance..."></textarea>
                 </div>
-              </section>
+                </div>
+              </details>
               <section class="sub-card">
                 <div class="sub-card-head">
                   <div>
@@ -206,15 +244,17 @@
                 </div>
                 </div>
               </section>
-              <section class="sub-card">
-                <div class="section-label">Fixed Search Parameters</div>
-                <h3 class="section-title">Always applied in the background</h3>
-                <ul class="fixed-list" id="fixedParameterList"></ul>
-              </section>
-              <section class="sub-card">
-                <div class="section-label">Adjustable Search Parameters</div>
-                <h3 class="section-title">Search controls</h3>
-                <div class="field-grid two-col" style="margin-top: 12px;">
+              <details class="sub-card accordion">
+                <summary class="accordion-summary">
+                  <span class="accordion-copy">
+                    <span class="section-label">Search Controls</span>
+                    <span class="accordion-title">Tune the comp search only when needed</span>
+                    <span class="accordion-subtitle">The defaults are already loaded. Open this only when you want to widen or tighten the search.</span>
+                  </span>
+                  <span class="accordion-icon" aria-hidden="true">+</span>
+                </summary>
+                <div class="accordion-body">
+                <div class="field-grid control-grid">
                   <div class="field"><label for="searchRadius">Search radius (miles)</label><input id="searchRadius" name="searchRadius" type="number" min="0.25" max="5" step="0.25" value="1.5" /></div>
                   <div class="field"><label for="ageVariance">Maximum age difference (years)</label><input id="ageVariance" name="ageVariance" type="number" min="0" max="50" step="1" value="10" /></div>
                   <div class="field"><label for="sqftVariance">Square footage variance (%)</label><input id="sqftVariance" name="sqftVariance" type="number" min="5" max="60" step="5" value="20" /></div>
@@ -235,11 +275,21 @@
                     <span><strong>Prioritize similar home style/type</strong><span>Favor a closer match in design or construction style.</span></span>
                   </label>
                 </fieldset>
-              </section>
-              <div class="toolbar">
-                <button type="submit" class="btn btn-primary">Generate CMA</button>
-                <button type="reset" class="btn btn-secondary">Reset</button>
-              </div>
+                </div>
+              </details>
+              <details class="sub-card accordion">
+                <summary class="accordion-summary">
+                  <span class="accordion-copy">
+                    <span class="section-label">Fixed Search Parameters</span>
+                    <span class="accordion-title">Always applied in the background</span>
+                    <span class="accordion-subtitle">These rules stay on for every CMA, so you do not need to manage them each time.</span>
+                  </span>
+                  <span class="accordion-icon" aria-hidden="true">+</span>
+                </summary>
+                <div class="accordion-body">
+                  <ul class="fixed-list" id="fixedParameterList"></ul>
+                </div>
+              </details>
             </form>
           </section>
           <section class="report-shell" id="reportSection" data-ready="false">

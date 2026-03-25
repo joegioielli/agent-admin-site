@@ -311,10 +311,16 @@
               <div class="report-grid">
                 <section class="report-card span-7"><div class="section-label">Subject Property</div><h3 class="section-title">Subject property overview</h3><p class="section-copy" id="subjectPropertyAddress">Not generated yet.</p><div class="metrics" id="subjectPropertyMetrics"></div></section>
                 <section class="report-card span-5"><div class="section-label">Special Details</div><h3 class="section-title">Value-impact notes</h3><p class="section-copy" id="specialDetailsOutput">No special details entered yet.</p></section>
-                <section class="report-card span-7"><div class="section-label">CMA Summary</div><h3 class="section-title">Pricing takeaway</h3><p class="section-copy" id="summaryText"></p></section>
-                <section class="report-card span-5 print-hide"><div class="section-label">Search Summary</div><h3 class="section-title">Parameters used</h3><ul class="search-list" id="searchSummaryList"></ul></section>
+                <section class="report-card">
+                  <div class="section-label">CMA Summary + Strategy</div>
+                  <h3 class="section-title">Pricing takeaway and positioning</h3>
+                  <p class="section-copy" id="summaryText"></p>
+                  <div class="section-label" style="margin-top: 12px;">Recommended Positioning</div>
+                  <p class="section-copy" id="strategyNoteText"></p>
+                  <div class="strategy-grid" id="strategyOptions"></div>
+                </section>
                 <section class="report-card span-7"><div class="section-label">PPSF Support</div><h3 class="section-title">Price per square foot and market read</h3><div class="metrics" id="ppsfMetrics"></div><p class="muted-text" id="marketTrendText"></p></section>
-                <section class="report-card span-5 print-hide"><div class="section-label">Pricing Strategy</div><h3 class="section-title">Recommended positioning</h3><p class="section-copy" id="strategyNoteText"></p><div class="strategy-grid" id="strategyOptions"></div></section>
+                <section class="report-card span-5 print-hide"><div class="section-label">Search Summary</div><h3 class="section-title">Parameters used</h3><ul class="search-list" id="searchSummaryList"></ul></section>
                 <section class="report-card span-7"><div class="section-label">Value Guidance</div><h3 class="section-title">Pricing recommendation</h3><div class="estimate-grid" id="estimateGrid"></div></section>
                 <section class="report-card span-5"><div class="section-label">AVM Cross-Check</div><h3 class="section-title">Automated valuation models</h3><p class="section-copy" id="avmSummaryText">Generate a report to review the RentCast and ATTOM AVMs and any returned model values.</p><div class="estimate-grid" id="avmGrid"></div></section>
                 <section class="report-card"><div class="section-label">Comparable Sales</div><h3 class="section-title">Closed comparable properties</h3><p class="muted-text">These cards show the best sold matches returned after staged search filtering and similarity scoring.</p><div class="comp-grid" id="soldCompGrid"></div></section>

@@ -917,6 +917,46 @@
       };
     }
 
+    function buildConditionAdjustmentSummary(detailAdjustment, appliedPct, baseValue = null, adjustedValue = null) {
+      if (!detailAdjustment?.hits?.length || !Number.isFinite(appliedPct)) {
+        return {
+          appliedPct: Number.isFinite(appliedPct) ? appliedPct : 0,
+          appliedDeltaValue: null,
+          summaryShort: "",
+          summaryLong: ""
+        };
+      }
+
+      const signalPct = Number.isFinite(detailAdjustment.netPct) ? detailAdjustment.netPct : appliedPct;
+      const deltaValue = Number.isFinite(baseValue) && Number.isFinite(adjustedValue)
+        ? adjustedValue - baseValue
+        : Number.isFinite(baseValue)
+          ? baseValue * appliedPct
+          : null;
+      const signedDollarChange = Number.isFinite(deltaValue)
+        ? `${deltaValue >= 0 ? "+" : "-"}${formatCurrency(Math.abs(deltaValue))}`
+        : "";
+      const driverLabels = detailAdjustment.hits.slice(0, 4).map((rule) => rule.label);
+      const driverText = driverLabels.length ? ` for ${joinWithAnd(driverLabels)}` : "";
+      const dollarText = signedDollarChange ? ` (${signedDollarChange})` : "";
+      const cappedNote = detailAdjustment.wasCapped ? " The gross signal was capped to stay disciplined." : "";
+      const signalDiffers = Math.abs(signalPct - appliedPct) >= 0.001;
+
+      const summaryShort = signalDiffers
+        ? `Special-details effect ${formatPercentDelta(appliedPct)}${dollarText} applied to core value from ${formatPercentDelta(signalPct)} gross signals.`
+        : `Special-details effect ${formatPercentDelta(appliedPct)}${dollarText} applied to core value${driverText}.`;
+      const summaryLong = signalDiffers
+        ? `Detail signals supported ${formatPercentDelta(signalPct)}${driverText}. After guardrails, ${formatPercentDelta(appliedPct)}${dollarText} was applied to the reconciled core value.${cappedNote}`
+        : `Pricing model applied ${formatPercentDelta(appliedPct)}${dollarText} to the reconciled core value${driverText}.${cappedNote}`;
+
+      return {
+        appliedPct,
+        appliedDeltaValue: deltaValue,
+        summaryShort,
+        summaryLong
+      };
+    }
+
     function buildCompAddress(item) {
       const direct = pickFirstPath(item, [
         "formattedAddress",
@@ -1855,7 +1895,7 @@
       };
     }
 
-    function buildHistoricalReference(values, marketTrend, conditionPct) {
+    function buildHistoricalReference(values, marketTrend, appliedConditionPct) {
       const references = [];
       let recentAppraisal = null;
       const annualTrend = marketTrend.trend === "strengthening" ? 0.04 : marketTrend.trend === "softening" ? -0.01 : 0.02;
@@ -1865,7 +1905,7 @@
           const appraisalReference = {
             kind: "appraisal",
             monthsOld,
-            value: values.priorAppraisalValue * (1 + annualTrend * (monthsOld / 12)) * (1 + conditionPct * 0.75),
+            value: values.priorAppraisalValue * (1 + annualTrend * (monthsOld / 12)) * (1 + appliedConditionPct),
             weight: clamp(1.8 - (monthsOld / 24), 0.45, 1.8)
           };
           references.push(appraisalReference);
@@ -1878,7 +1918,7 @@
           references.push({
             kind: "purchase",
             monthsOld,
-            value: values.priorPurchasePrice * (1 + annualTrend * (monthsOld / 12)) * (1 + conditionPct),
+            value: values.priorPurchasePrice * (1 + annualTrend * (monthsOld / 12)) * (1 + appliedConditionPct),
             weight: clamp(1.25 - (monthsOld / 30), 0.3, 1.25)
           });
         }
@@ -2249,9 +2289,10 @@
       const pendingPrices = pendingComps.map((comp) => getConservativeCurrentMarketValue(comp)).filter((value) => Number.isFinite(value));
       const subjectSqft = Number.isFinite(subject.sqft) ? subject.sqft : median(pricingAnchorComps.map((comp) => comp.sqft));
       const detailAdjustment = evaluateSubjectDetailAdjustments(subject.specialDetails, subject.conditionNotes);
-      const conditionPct = detailAdjustment.netPct;
+      const rawConditionPct = detailAdjustment.netPct;
+      const effectiveConditionPct = rawConditionPct * 0.75;
       const marketTrend = inferMarketTrend(closedSaleComps.length ? closedSaleComps : pricingAnchorComps, activeComp, pendingComps);
-      const historicalReference = buildHistoricalReference(values, marketTrend, conditionPct);
+      const historicalReference = buildHistoricalReference(values, marketTrend, effectiveConditionPct);
       const historicalAnchor = historicalReference.value;
       const recentAppraisalValue = historicalReference.recentAppraisal?.value ?? null;
       const avmConsensus = buildAvmConsensus(providerAvms);
@@ -2319,7 +2360,6 @@
           ], "value", "weight");
         }
       }
-      if (Number.isFinite(coreValueEstimate)) coreValueEstimate *= 1 + (conditionPct * 0.75);
 
       let historicalGapPct = Number.isFinite(coreValueEstimate) && Number.isFinite(historicalAnchor) && coreValueEstimate > 0
         ? Math.abs(historicalAnchor - coreValueEstimate) / coreValueEstimate
@@ -2365,6 +2405,14 @@
           ], "value", "weight");
         }
       }
+      const coreValueBeforeConditionAdjustment = coreValueEstimate;
+      if (Number.isFinite(coreValueEstimate)) coreValueEstimate *= 1 + effectiveConditionPct;
+      const conditionAdjustmentSummary = buildConditionAdjustmentSummary(
+        detailAdjustment,
+        effectiveConditionPct,
+        coreValueBeforeConditionAdjustment,
+        coreValueEstimate
+      );
       historicalGapPct = Number.isFinite(coreValueEstimate) && Number.isFinite(historicalAnchor) && coreValueEstimate > 0
         ? Math.abs(historicalAnchor - coreValueEstimate) / coreValueEstimate
         : 0;
@@ -2473,7 +2521,7 @@
       }
       if ((coreValueModel.averageSimilarity ?? 0) >= 82) listAdjustmentPct += 0.003;
       else if ((coreValueModel.averageSimilarity ?? 0) < 72) listAdjustmentPct -= 0.004;
-      listAdjustmentPct += clamp(conditionPct * 0.45, -0.012, 0.012);
+      listAdjustmentPct += clamp(effectiveConditionPct * 0.45, -0.012, 0.012);
       if (pricingConfidence.label === "Guarded") {
         listAdjustmentPct = clamp(listAdjustmentPct * 0.45, -0.008, strongCurrentSupport ? 0.003 : 0.0015);
       } else if (pricingConfidence.label === "Moderate") {
@@ -2549,12 +2597,12 @@
           : "";
       const strategyNote = `${strategyBase}${marketPressureNote}${historicalNote}${attomNote}${launchPostureNote} Pricing confidence is ${pricingConfidence.label.toLowerCase()}.`;
 
-      const conditionSupport = conditionPct > 0
+      const conditionSupport = effectiveConditionPct > 0
         ? "The subject's upgrades and condition notes support nudging the list price toward the upper half of the range."
-        : conditionPct < 0
+        : effectiveConditionPct < 0
           ? "The subject's condition notes suggest staying closer to core value or the lower half of the range."
           : "With neutral condition notes, the sold comp anchor supports a balanced launch around core value.";
-      const detailAdjustmentNote = detailAdjustment.summaryLong ? ` ${detailAdjustment.summaryLong}` : "";
+      const detailAdjustmentNote = conditionAdjustmentSummary.summaryLong ? ` ${conditionAdjustmentSummary.summaryLong}` : "";
       const fallbackGuardrailNote = closedSaleComps.length === 0
         ? " No recent closed-sale anchors qualified, so the estimate was stabilized with AVM and current-market checks."
         : hasListingFallbackAnchors
@@ -2578,9 +2626,9 @@
         confidenceLabel: pricingConfidence.label,
         confidenceScore: pricingConfidence.score,
         historicalAnchor,
-        conditionAdjustmentPct: detailAdjustment.netPct,
-        conditionAdjustmentSummaryShort: detailAdjustment.summaryShort,
-        conditionAdjustmentSummaryLong: detailAdjustment.summaryLong,
+        conditionAdjustmentPct: conditionAdjustmentSummary.appliedPct,
+        conditionAdjustmentSummaryShort: conditionAdjustmentSummary.summaryShort,
+        conditionAdjustmentSummaryLong: conditionAdjustmentSummary.summaryLong,
         pricingOptions: [
           { label: "Maximum price with patience", price: psychPrice(rangeHigh, "down"), note: "Upper-range strategy for more room if traffic and presentation are strong." },
           { label: "Balanced market pricing", price: suggested, note: "Best mix of exposure, perceived value, and negotiation flexibility." },

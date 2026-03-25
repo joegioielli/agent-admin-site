@@ -1786,7 +1786,7 @@
 
       return {
         soldComps: selected.slice(0, 3),
-        soldCandidateCount: candidatePool.length,
+        soldCandidateCount: soldPool.length,
         soldStageUsed: stageUsed,
         usedLiveFallbackPool
       };
@@ -2021,36 +2021,77 @@
       };
     }
 
-    function buildPricingConfidence(soldComps, subjectCompleteness, rangePaddingPct, historicalGapPct, coreValueModel = null, closedSaleCount = soldComps.length, hasListingFallbackAnchors = false) {
+    function buildPricingConfidence(
+      soldComps,
+      subjectCompleteness,
+      rangePaddingPct,
+      historicalGapPct,
+      coreValueModel = null,
+      closedSaleCount = soldComps.length,
+      hasListingFallbackAnchors = false,
+      selectionMeta = null
+    ) {
       let score = 100;
       const anchorCount = coreValueModel?.anchorComps?.length || 0;
       const anchorStrength = coreValueModel?.averageSimilarity ?? average(soldComps.map((comp) => comp.similarityScore));
       const anchorSpreadPct = coreValueModel?.anchorSpreadPct ?? rangePaddingPct;
       const sameMarketShare = coreValueModel?.sameMarketShare ?? 0;
       const localizedAnchorCount = coreValueModel?.localizedAnchorCount ?? 0;
-      if (soldComps.length <= 3) score -= 10;
-      else if (soldComps.length <= 5) score -= 6;
+      const soldCandidateCount = Math.max(
+        Number.isFinite(selectionMeta?.soldCandidateCount) ? selectionMeta.soldCandidateCount : 0,
+        closedSaleCount
+      );
+      if (soldCandidateCount <= 0) score -= 16;
+      else if (soldCandidateCount === 1) score -= 12;
+      else if (soldCandidateCount === 2) score -= 7;
+      else if (soldCandidateCount === 3) score -= 3;
       if (closedSaleCount <= 0) score -= 22;
       else if (closedSaleCount === 1) score -= 14;
       else if (closedSaleCount === 2) score -= 8;
       if (hasListingFallbackAnchors) score -= 6;
       if (anchorCount < 2) score -= 15;
       else if (anchorCount < 3) score -= 8;
-      if (localizedAnchorCount === 0) score -= 12;
-      else if (localizedAnchorCount === 1) score -= 7;
-      else if (localizedAnchorCount === 2) score -= 3;
-      if (anchorStrength < 72) score -= 14;
-      else if (anchorStrength < 80) score -= 7;
-      if (sameMarketShare < 0.5) score -= 10;
-      else if (sameMarketShare < 0.67) score -= 5;
-      if (subjectCompleteness < 0.6) score -= 14;
-      else if (subjectCompleteness < 0.8) score -= 8;
-      if (anchorSpreadPct > 0.055) score -= 12;
-      else if (anchorSpreadPct > 0.04) score -= 6;
-      if (rangePaddingPct > 0.065) score -= 10;
-      else if (rangePaddingPct > 0.05) score -= 5;
-      if (historicalGapPct > 0.06) score -= 10;
-      else if (historicalGapPct > 0.035) score -= 5;
+      if (localizedAnchorCount === 0) score -= 10;
+      else if (localizedAnchorCount === 1) score -= 6;
+      else if (localizedAnchorCount === 2) score -= 2;
+      if (anchorStrength < 70) score -= 16;
+      else if (anchorStrength < 76) score -= 9;
+      else if (anchorStrength < 82) score -= 4;
+      if (sameMarketShare < 0.34) score -= 12;
+      else if (sameMarketShare < 0.67) score -= 6;
+      if (subjectCompleteness < 0.45) score -= 12;
+      else if (subjectCompleteness < 0.65) score -= 6;
+      else if (subjectCompleteness < 0.8) score -= 3;
+      if (anchorSpreadPct > 0.06) score -= 12;
+      else if (anchorSpreadPct > 0.045) score -= 6;
+      else if (anchorSpreadPct > 0.03) score -= 3;
+      if (rangePaddingPct > 0.07) score -= 10;
+      else if (rangePaddingPct > 0.055) score -= 5;
+      else if (rangePaddingPct > 0.045) score -= 2;
+      if (historicalGapPct > 0.08) score -= 8;
+      else if (historicalGapPct > 0.05) score -= 4;
+      const eliteAnchorSet = (
+        closedSaleCount >= 3 &&
+        !hasListingFallbackAnchors &&
+        anchorCount >= 3 &&
+        localizedAnchorCount >= 2 &&
+        anchorStrength >= 82 &&
+        sameMarketShare >= 0.67 &&
+        subjectCompleteness >= 0.65 &&
+        anchorSpreadPct <= 0.04 &&
+        rangePaddingPct <= 0.045
+      );
+      const strongAnchorSet = (
+        closedSaleCount >= 3 &&
+        !hasListingFallbackAnchors &&
+        anchorCount >= 3 &&
+        anchorStrength >= 78 &&
+        sameMarketShare >= 0.5 &&
+        anchorSpreadPct <= 0.05 &&
+        rangePaddingPct <= 0.055
+      );
+      if (eliteAnchorSet) score += 6;
+      else if (strongAnchorSet) score += 3;
       score = clamp(score, closedSaleCount <= 0 ? 36 : 42, 95);
       if (score >= 86 && closedSaleCount >= 3 && !hasListingFallbackAnchors) {
         return { score, label: "High", note: "The top sold comps are closely aligned, so the core value and range can stay relatively tight." };
@@ -2196,7 +2237,7 @@
       return pricingWeights.get(key) ?? fallback;
     }
 
-    function buildPricingModel(values, subject, soldComps, activeComp, pendingComps = [], providerAvms = null) {
+    function buildPricingModel(values, subject, soldComps, activeComp, pendingComps = [], providerAvms = null, selectionMeta = null) {
       const closedSaleComps = soldComps.filter((comp) => isSoldComp(comp));
       const pricingAnchorComps = closedSaleComps.length ? closedSaleComps : soldComps;
       const hasListingFallbackAnchors = soldComps.some((comp) => !isSoldComp(comp));
@@ -2406,7 +2447,16 @@
 
       const rangeLow = psychPrice(low, "down");
       const rangeHigh = psychPrice(high, "up");
-      const pricingConfidence = buildPricingConfidence(pricingAnchorComps, subjectCompleteness, rangePaddingPct, historicalGapPct, coreValueModel, closedSaleComps.length, hasListingFallbackAnchors);
+      const pricingConfidence = buildPricingConfidence(
+        pricingAnchorComps,
+        subjectCompleteness,
+        rangePaddingPct,
+        historicalGapPct,
+        coreValueModel,
+        closedSaleComps.length,
+        hasListingFallbackAnchors,
+        selectionMeta
+      );
       const currentMarketGapPctRaw = Number.isFinite(currentMarketSupport) && Number.isFinite(coreValueEstimate) && coreValueEstimate > 0
         ? (currentMarketSupport - coreValueEstimate) / coreValueEstimate
         : 0;
@@ -2733,7 +2783,7 @@
       const reportPendingComps = filterSubjectComparablePool(values, pendingComps || [], subject);
       const reportActiveComp = activeComp && !samePropertyAsSubject(subject, activeComp, values) ? activeComp : null;
       if (!reportSoldComps.length) throw new Error("No sold comparable properties passed the CMA rules for this search.");
-      const pricing = buildPricingModel(values, subject, reportSoldComps, reportActiveComp, reportPendingComps, providerAvms);
+      const pricing = buildPricingModel(values, subject, reportSoldComps, reportActiveComp, reportPendingComps, providerAvms, selectionMeta);
       subject.estimatedValue = pricing.coreValueEstimate ?? pricing.suggestedListPrice;
       return {
         generatedAt: new Date(),

@@ -31,7 +31,7 @@
     .hero{padding:14px 16px}
     .hero-eyebrow,.section-label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--primary);font-weight:700}.hero-title{font-size:clamp(1.55rem,3.2vw,2.15rem);line-height:1.08;margin-top:6px}.hero-copy,.section-copy,.muted-text,.report-subtitle{color:var(--muted);font-size:13px;line-height:1.5;margin-top:6px}.layout{display:grid;grid-template-columns:minmax(360px,480px) minmax(0,1fr);grid-template-areas:"quick quick" "input report";gap:14px;align-items:start}.section-title{font-size:18px;font-weight:700;margin-top:4px}
     .form-stack{display:grid;gap:12px;margin-top:14px}.field-grid{display:grid;gap:12px}.field-grid.two-col{grid-template-columns:repeat(2,minmax(0,1fr))}.quick-start-grid,.subject-fact-grid,.control-grid{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}.field{display:grid;gap:6px}.field label,legend{font-size:13px;font-weight:600}input[type="text"],input[type="number"],select,textarea{width:100%;min-height:44px;padding:10px 12px;border-radius:12px;border:1px solid #dbe1ea;background:#fff;color:var(--text);font:inherit}textarea{min-height:88px;resize:vertical}input:focus,select:focus,textarea:focus{outline:none;border-color:rgba(37,99,235,.45);box-shadow:0 0 0 4px rgba(37,99,235,.12)}
-    .sub-card{border:1px solid var(--border);border-radius:12px;background:#f8fafc;padding:14px}.sub-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}.inline-link-btn{border:none;background:none;padding:0;color:#4338ca;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}.inline-link-btn:hover{text-decoration:underline}.inline-link-btn:focus-visible{outline:2px solid rgba(37,99,235,.35);outline-offset:4px;border-radius:6px}.inline-note{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.45}.fixed-list,.search-list{margin-top:10px;padding-left:18px;color:var(--muted);display:grid;gap:8px;font-size:14px;line-height:1.45}fieldset{border:0;min-width:0}.checkbox-row{display:grid;gap:10px;margin-top:12px}.toggle{display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:12px;border:1px solid var(--border);background:#fff}.toggle input{width:18px;height:18px;margin-top:2px;accent-color:var(--primary)}.toggle strong{display:block;font-size:14px}.toggle span:last-child{color:var(--muted);font-size:13px;line-height:1.45}
+    .sub-card{border:1px solid var(--border);border-radius:12px;background:#f8fafc;padding:14px}.sub-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}.inline-link-btn{border:none;background:none;padding:0;color:#4338ca;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}.inline-link-btn:hover{text-decoration:underline}.inline-link-btn:focus-visible{outline:2px solid rgba(37,99,235,.35);outline-offset:4px;border-radius:6px}.inline-note{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.45}.fixed-list{margin-top:10px;padding-left:18px;color:var(--muted);display:grid;gap:8px;font-size:14px;line-height:1.45}fieldset{border:0;min-width:0}.checkbox-row{display:grid;gap:10px;margin-top:12px}.toggle{display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:12px;border:1px solid var(--border);background:#fff}.toggle input{width:18px;height:18px;margin-top:2px;accent-color:var(--primary)}.toggle strong{display:block;font-size:14px}.toggle span:last-child{color:var(--muted);font-size:13px;line-height:1.45}
     .layout-quick-start{grid-area:quick}.layout-input{grid-area:input;display:grid;gap:12px;align-content:start}.layout-report{grid-area:report}
     .toolbar{display:flex;flex-wrap:wrap;gap:10px}.toolbar-sticky{position:sticky;top:12px;z-index:20;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.96);box-shadow:var(--shadow-lg);backdrop-filter:blur(12px)}.toolbar-copy{display:grid;gap:3px;max-width:330px}.toolbar-title{font-size:13px;font-weight:700}.toolbar-note{font-size:12px;line-height:1.4;color:var(--muted)}.toolbar-actions{display:flex;flex-wrap:wrap;gap:10px}.btn,.print-btn{min-height:42px;border:none;border-radius:var(--pill);padding:0 14px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:transform .12s ease,box-shadow .2s ease,background .2s ease}.btn-primary,.badge-accent{background:var(--primary-soft);color:#fff;box-shadow:0 10px 24px rgba(37,99,235,.24)}.btn-secondary,.print-btn{background:#eef2ff;color:#4338ca}.btn:hover,.print-btn:hover{transform:translateY(-1px)}
     .quick-start-card{background:linear-gradient(180deg,#ffffff 0,#f8fbff 100%)}
@@ -63,7 +63,7 @@
       .app-shell{display:block;max-width:none;margin:0;padding:0}
       .report-shell{border:none;box-shadow:none;border-radius:0}
       .report-head,.report-body{padding:10px 0}
-      .print-toolbar,.report-badges,.report-card.print-hide,.strategy-grid,.search-list{display:none !important}
+      .print-toolbar,.report-badges,.report-card.print-hide,.strategy-grid{display:none !important}
       .report-title{font-size:18px}
       .report-subtitle,.section-copy{font-size:11px;line-height:1.35;margin-top:4px}
       .report-grid{display:block}
@@ -320,7 +320,6 @@
                   <div class="strategy-grid" id="strategyOptions"></div>
                 </section>
                 <section class="report-card span-7"><div class="section-label">PPSF Support</div><h3 class="section-title">Price per square foot and market read</h3><div class="metrics" id="ppsfMetrics"></div><p class="muted-text" id="marketTrendText"></p></section>
-                <section class="report-card span-5 print-hide"><div class="section-label">Search Summary</div><h3 class="section-title">Parameters used</h3><ul class="search-list" id="searchSummaryList"></ul></section>
                 <section class="report-card span-7"><div class="section-label">Value Guidance</div><h3 class="section-title">Pricing recommendation</h3><div class="estimate-grid" id="estimateGrid"></div></section>
                 <section class="report-card span-5"><div class="section-label">AVM Cross-Check</div><h3 class="section-title">Automated valuation models</h3><p class="section-copy" id="avmSummaryText">Generate a report to review the RentCast and ATTOM AVMs and any returned model values.</p><div class="estimate-grid" id="avmGrid"></div></section>
                 <section class="report-card"><div class="section-label">Comparable Sales</div><h3 class="section-title">Closed comparable properties</h3><p class="muted-text">These cards show the best sold matches returned after staged search filtering and similarity scoring.</p><div class="comp-grid" id="soldCompGrid"></div></section>
@@ -387,7 +386,6 @@
     const subjectPropertyMetrics = document.getElementById("subjectPropertyMetrics");
     const specialDetailsOutput = document.getElementById("specialDetailsOutput");
     const summaryText = document.getElementById("summaryText");
-    const searchSummaryList = document.getElementById("searchSummaryList");
     const ppsfMetrics = document.getElementById("ppsfMetrics");
     const marketTrendText = document.getElementById("marketTrendText");
     const strategyNoteText = document.getElementById("strategyNoteText");
@@ -3196,18 +3194,6 @@
       subjectPropertyMetrics.appendChild(renderMetric("Core Value", formatCurrency(report.coreValueEstimate ?? report.subject.estimatedValue)));
       subjectPropertyMetrics.appendChild(renderMetric("Pricing Confidence", report.confidenceLabel ? `${report.confidenceLabel} (${report.confidenceScore}/100)` : "Pending"));
 
-      searchSummaryList.innerHTML = "";
-      FIXED_SEARCH_PARAMS.forEach((item) => {
-        const li = document.createElement("li");
-        li.textContent = item;
-        searchSummaryList.appendChild(li);
-      });
-      report.searchSummary.forEach((item) => {
-        const li = document.createElement("li");
-        li.textContent = item;
-        searchSummaryList.appendChild(li);
-      });
-
       ppsfMetrics.innerHTML = "";
       ppsfMetrics.appendChild(renderMetric("Low PPSF", formatPpsf(report.ppsfSummary?.low)));
       ppsfMetrics.appendChild(renderMetric("Average PPSF", formatPpsf(report.ppsfSummary?.average)));
@@ -3254,7 +3240,6 @@
       marketTrendText.textContent = "";
       avmSummaryText.textContent = "Generate a report to review the RentCast and ATTOM AVMs and any returned model values.";
       subjectPropertyMetrics.innerHTML = "";
-      searchSummaryList.innerHTML = "";
       ppsfMetrics.innerHTML = "";
       strategyOptions.innerHTML = "";
       estimateGrid.innerHTML = "";

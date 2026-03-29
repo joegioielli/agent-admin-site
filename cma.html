@@ -57,30 +57,44 @@
     @media (max-width:960px){.app-shell{flex-direction:column}.sidebar{width:100%;flex-direction:row;align-items:center;overflow-x:auto}.sidebar-section-title{display:none}.nav-list{flex-direction:row;flex-wrap:wrap}}
     @media (max-width:760px){.app-shell{margin:12px auto;padding:0 10px}.field-grid.two-col,.quick-start-grid,.subject-fact-grid,.control-grid,.metrics,.estimate-grid,.comp-meta{grid-template-columns:1fr 1fr}.span-7,.span-5{grid-column:span 12}.toolbar,.toolbar-actions{flex-direction:column}.toolbar-sticky{position:static;padding:0;border:none;background:transparent;box-shadow:none;backdrop-filter:none}.btn,.print-btn{width:100%}}
     @media (max-width:620px){.field-grid.two-col,.quick-start-grid,.subject-fact-grid,.control-grid,.metrics,.estimate-grid,.comp-meta{grid-template-columns:1fr}}
+    @page{size:letter portrait;margin:.3in}
     @media print{
-      body{background:#fff;font-size:11px;line-height:1.35}
+      body{background:#fff;font-size:10px;line-height:1.22;-webkit-print-color-adjust:exact;print-color-adjust:exact}
       .sidebar,.main-header,.hero,.card,.layout-quick-start,.layout-toolbar,.layout-input{display:none}
       .app-shell{display:block;max-width:none;margin:0;padding:0}
+      .main,.main-content{display:block}
       .report-shell{border:none;box-shadow:none;border-radius:0}
-      .report-head,.report-body{padding:10px 0}
-      .print-toolbar,.report-badges,.report-card.print-hide,.strategy-grid{display:none !important}
-      .report-title{font-size:18px}
-      .report-subtitle,.section-copy{font-size:11px;line-height:1.35;margin-top:4px}
-      .report-grid{display:block}
-      .report-card{padding:10px 0;border:none;box-shadow:none;border-radius:0;break-inside:avoid;page-break-inside:avoid}
-      .section-title{font-size:15px}
-      .metrics,.estimate-grid,.comp-meta{gap:6px}
-      .metrics{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:8px}
-      .estimate-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:8px}
-      .comp-grid{gap:8px;margin-top:8px}
-      .metric,.estimate-card,.comp-card,.comp-meta div,.strategy-card{padding:8px;border-radius:8px;box-shadow:none}
-      .metric strong,.estimate-value,.comp-meta strong,.comp-address{font-size:13px}
-      .estimate-footnote,.comp-price-line{margin-top:3px;font-size:10px;line-height:1.25}
-      .comp-notes,.report-card > .muted-text{display:none !important}
-      .comp-meta{grid-template-columns:repeat(5,minmax(0,1fr));margin-top:6px}
-      .comp-head{gap:6px}
-      .comp-status{min-height:22px;padding:0 8px;font-size:10px}
+      .report-head{padding:0 0 6px;border-bottom:1px solid #d1d5db;gap:6px}
+      .report-body{padding:8px 0 0;gap:8px}
+      .print-toolbar,.report-badges,.report-card.print-hide,.strategy-grid,.report-card-market-read,.report-card-avm{display:none !important}
+      .report-title{font-size:16px}
+      .report-subtitle,.section-copy{font-size:9px;line-height:1.22;margin-top:3px}
+      .section-label{font-size:8px;letter-spacing:.12em}
+      .report-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:8px}
+      .report-card{padding:8px;border:1px solid #dbe1ea;box-shadow:none;border-radius:8px;break-inside:avoid;page-break-inside:avoid;background:#fff}
+      .report-card-summary{grid-column:span 12}
+      .report-card-guidance{grid-column:span 7}
+      .report-card-competitive{grid-column:span 5}
+      .report-card-comps{grid-column:span 12}
+      .section-title{font-size:12px;margin-top:2px}
+      .metrics,.estimate-grid,.comp-meta{gap:4px}
+      .metrics{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:6px}
+      .estimate-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:6px}
+      .comp-grid{gap:6px;margin-top:6px}
+      .metric,.estimate-card,.comp-card,.comp-meta div,.strategy-card{padding:6px;border-radius:6px;box-shadow:none}
+      .metric span,.estimate-label,.comp-meta span{font-size:7px}
+      .metric strong,.estimate-value,.comp-meta strong,.comp-address{font-size:10px;margin-top:3px}
+      .estimate-footnote,.comp-price-line{margin-top:2px;font-size:8px;line-height:1.15}
+      .comp-notes,.report-card > .muted-text,#marketTrendText,#avmSummaryText{display:none !important}
+      .comp-meta{grid-template-columns:repeat(5,minmax(0,1fr));margin-top:5px}
+      .comp-meta div:nth-child(3),.comp-meta div:nth-child(4),.comp-meta div:nth-child(7){display:none}
+      .comp-head{gap:4px}
+      .comp-status{min-height:18px;padding:0 6px;font-size:8px}
       .comp-card{break-inside:avoid;page-break-inside:avoid}
+      #subjectPropertyMetrics .metric:nth-child(6),#subjectPropertyMetrics .metric:nth-child(7),#subjectPropertyMetrics .metric:nth-child(8){display:none}
+      #estimateGrid .estimate-card:nth-child(1),#estimateGrid .estimate-card:nth-child(4){display:none !important}
+      #soldCompGrid .comp-card:nth-child(n+3){display:none !important}
+      #specialDetailsOutput,#summaryText,#strategyNoteText{max-height:3.7em;overflow:hidden}
     }
   </style>
 </head>
@@ -309,9 +323,9 @@
               <div class="print-toolbar"><button type="button" class="print-btn" id="printReportBtn">Print Report</button></div>
               <div class="empty-state" id="reportEmptyState">Enter a subject property address and generate the CMA to populate the report. Live RentCast and ATTOM data will load first, and the page will fall back gracefully if the result set is thin.</div>
               <div class="report-grid">
-                <section class="report-card span-7"><div class="section-label">Subject Property</div><h3 class="section-title">Subject property overview</h3><p class="section-copy" id="subjectPropertyAddress">Not generated yet.</p><div class="metrics" id="subjectPropertyMetrics"></div></section>
-                <section class="report-card span-5"><div class="section-label">Special Details</div><h3 class="section-title">Value-impact notes</h3><p class="section-copy" id="specialDetailsOutput">No special details entered yet.</p></section>
-                <section class="report-card">
+                <section class="report-card report-card-subject span-7"><div class="section-label">Subject Property</div><h3 class="section-title">Subject property overview</h3><p class="section-copy" id="subjectPropertyAddress">Not generated yet.</p><div class="metrics" id="subjectPropertyMetrics"></div></section>
+                <section class="report-card report-card-special span-5"><div class="section-label">Special Details</div><h3 class="section-title">Value-impact notes</h3><p class="section-copy" id="specialDetailsOutput">No special details entered yet.</p></section>
+                <section class="report-card report-card-summary">
                   <div class="section-label">CMA Summary + Strategy</div>
                   <h3 class="section-title">Pricing takeaway and positioning</h3>
                   <p class="section-copy" id="summaryText"></p>
@@ -319,11 +333,11 @@
                   <p class="section-copy" id="strategyNoteText"></p>
                   <div class="strategy-grid" id="strategyOptions"></div>
                 </section>
-                <section class="report-card span-7"><div class="section-label">PPSF Support</div><h3 class="section-title">Price per square foot and market read</h3><div class="metrics" id="ppsfMetrics"></div><p class="muted-text" id="marketTrendText"></p></section>
-                <section class="report-card span-7"><div class="section-label">Value Guidance</div><h3 class="section-title">Pricing recommendation</h3><div class="estimate-grid" id="estimateGrid"></div></section>
-                <section class="report-card span-5"><div class="section-label">AVM Cross-Check</div><h3 class="section-title">Automated valuation models</h3><p class="section-copy" id="avmSummaryText">Generate a report to review the RentCast and ATTOM AVMs and any returned model values.</p><div class="estimate-grid" id="avmGrid"></div></section>
-                <section class="report-card"><div class="section-label">Comparable Sales</div><h3 class="section-title">Closed comparable properties</h3><p class="muted-text">These cards show the best sold matches returned after staged search filtering and similarity scoring.</p><div class="comp-grid" id="soldCompGrid"></div></section>
-                <section class="report-card"><div class="section-label">Competitive Listing</div><h3 class="section-title">Current market comparable</h3><p class="muted-text">This card shows the strongest current benchmark available from the live search, including pending or under-contract listings.</p><div class="comp-grid" id="activeCompGrid"></div></section>
+                <section class="report-card report-card-market-read span-7"><div class="section-label">PPSF Support</div><h3 class="section-title">Price per square foot and market read</h3><div class="metrics" id="ppsfMetrics"></div><p class="muted-text" id="marketTrendText"></p></section>
+                <section class="report-card report-card-guidance span-7"><div class="section-label">Value Guidance</div><h3 class="section-title">Pricing recommendation</h3><div class="estimate-grid" id="estimateGrid"></div></section>
+                <section class="report-card report-card-avm span-5"><div class="section-label">AVM Cross-Check</div><h3 class="section-title">Automated valuation models</h3><p class="section-copy" id="avmSummaryText">Generate a report to review the RentCast and ATTOM AVMs and any returned model values.</p><div class="estimate-grid" id="avmGrid"></div></section>
+                <section class="report-card report-card-comps"><div class="section-label">Comparable Sales</div><h3 class="section-title">Closed comparable properties</h3><p class="muted-text">These cards show the best sold matches returned after staged search filtering and similarity scoring.</p><div class="comp-grid" id="soldCompGrid"></div></section>
+                <section class="report-card report-card-competitive"><div class="section-label">Competitive Listing</div><h3 class="section-title">Current market comparable</h3><p class="muted-text">This card shows the strongest current benchmark available from the live search, including pending or under-contract listings.</p><div class="comp-grid" id="activeCompGrid"></div></section>
               </div>
             </div>
           </section>

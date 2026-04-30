@@ -11,6 +11,8 @@
   const resultsShell = document.getElementById("resultsShell");
   const lastRunLabel = document.getElementById("lastRunLabel");
   const sourceDetailsBody = document.getElementById("sourceDetailsBody");
+  const importantTermsGrid = document.getElementById("importantTermsGrid");
+  const importantTermsEmpty = document.getElementById("importantTermsEmpty");
 
   const dateFieldIds = {
     binding_date: "bindingDateValue",
@@ -130,6 +132,34 @@
     });
   }
 
+  function renderImportantTerms(importantTerms) {
+    importantTermsGrid.innerHTML = "";
+
+    if (!Array.isArray(importantTerms) || !importantTerms.length) {
+      importantTermsGrid.hidden = true;
+      importantTermsEmpty.hidden = false;
+      return;
+    }
+
+    importantTermsEmpty.hidden = true;
+    importantTermsGrid.hidden = false;
+
+    importantTerms.forEach((item) => {
+      const card = document.createElement("article");
+      card.className = "detail-tile term-tile";
+      card.innerHTML = `
+        <span class="tile-label">${item.category || "Important Term"}</span>
+        <strong class="tile-value">${item.value || "Not found"}</strong>
+        <p class="term-title">${item.label || "Important Term"}</p>
+        <div class="term-meta">
+          <span>${item.sourceDocumentName || "Unknown source"}</span>
+          <span>${formatPercent(item.confidence)}</span>
+        </div>
+      `;
+      importantTermsGrid.appendChild(card);
+    });
+  }
+
   function renderPayload(payload) {
     resultsShell.dataset.ready = "true";
     const summary = `${payload.documents.length} PDF${payload.documents.length === 1 ? "" : "s"} processed`;
@@ -140,6 +170,7 @@
     renderUploadedDocuments(payload.documents);
     renderImportantDates(payload.fields);
     renderDetailFields(payload.fields);
+    renderImportantTerms(payload.important_terms);
     renderSourceDetails(payload.source_details);
     debugOutput.textContent = JSON.stringify(payload, null, 2);
   }
@@ -156,6 +187,9 @@
     Object.values(detailFieldIds).forEach((elementId) => {
       document.getElementById(elementId).textContent = "Not found";
     });
+    importantTermsGrid.innerHTML = "";
+    importantTermsGrid.hidden = true;
+    importantTermsEmpty.hidden = false;
     sourceDetailsBody.innerHTML = `
       <tr>
         <td colspan="5" class="table-empty">Run extraction to populate source and confidence details.</td>

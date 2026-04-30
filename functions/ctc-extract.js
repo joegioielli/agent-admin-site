@@ -3,6 +3,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY_CTC || process.env.OPENAI_API_
 
 const MAX_TEXT_CHARS_PER_DOCUMENT = 32000;
 const MAX_FORM_FIELDS_PER_DOCUMENT = 80;
+const MAX_IMPORTANT_TERMS = 12;
 const OPENAI_TIMEOUT_MS = 25000;
 
 const FIELD_LABELS = {
@@ -161,8 +162,8 @@ function countDocumentMappedFields(documentName, fieldMap) {
   return Object.values(fieldMap).filter((field) => field.sourceDocumentName === documentName && field.value != null && field.value !== "" && (!Array.isArray(field.value) || field.value.length)).length;
 }
 
-function buildSourceDetails(fieldMap) {
-  return Object.values(fieldMap).map((field) => ({
+function buildSourceDetails(fieldMap, importantTerms = []) {
+  const fieldDetails = Object.values(fieldMap).map((field) => ({
     field: field.key,
     label: field.label,
     value: field.displayValue,
@@ -171,6 +172,20 @@ function buildSourceDetails(fieldMap) {
     sourceDocumentType: field.sourceDocumentType || "Not found",
     evidence: field.evidence || ""
   }));
+
+  const termDetails = importantTerms
+    .filter((term) => cleanText(term?.label) && cleanText(term?.value))
+    .map((term, index) => ({
+      field: `important_term_${index + 1}`,
+      label: term.label,
+      value: term.value,
+      confidence: term.confidence,
+      sourceDocumentName: term.sourceDocumentName || "Not found",
+      sourceDocumentType: term.sourceDocumentType || "Not found",
+      evidence: term.evidence || ""
+    }));
+
+  return [...fieldDetails, ...termDetails];
 }
 
 function extractJsonFromCompletion(payload) {
@@ -258,6 +273,33 @@ function makeArrayFieldSchema(description) {
   };
 }
 
+function makeImportantTermSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      label: { type: "string" },
+      category: { type: "string" },
+      value: { type: "string" },
+      source_document_name: { type: "string" },
+      source_document_type: { type: "string" },
+      source_document_index: { type: "integer" },
+      confidence: { type: "number" },
+      evidence: { type: "string" }
+    },
+    required: [
+      "label",
+      "category",
+      "value",
+      "source_document_name",
+      "source_document_type",
+      "source_document_index",
+      "confidence",
+      "evidence"
+    ]
+  };
+}
+
 const EXTRACTION_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -304,12 +346,16 @@ const EXTRACTION_SCHEMA = {
         "possession_date"
       ]
     },
+    important_terms: {
+      type: "array",
+      items: makeImportantTermSchema()
+    },
     warnings: {
       type: "array",
       items: { type: "string" }
     }
   },
-  required: ["documents", "fields", "warnings"]
+  required: ["documents", "fields", "important_terms", "warnings"]
 };
 
 const DATE_REGEX = /\b(?:\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}|(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2},?\s+\d{2,4})\b/i;
@@ -339,8 +385,98 @@ const RELEVANT_TEXT_PATTERNS = [
   /\binspection\b/i,
   /\bdue diligence\b/i,
   /\boption period\b/i,
+  /\boption fee\b/i,
+  /\bdue diligence fee\b/i,
+  /\bappraisal\b/i,
+  /\bloan commitment\b/i,
+  /\bloan approval\b/i,
+  /\bfinancing contingency\b/i,
+  /\bmortgage contingency\b/i,
+  /\btitle company\b/i,
+  /\bescrow\b/i,
+  /\bclosing agent\b/i,
+  /\bseller concession\b/i,
+  /\bclosing costs paid by seller\b/i,
+  /\bhome warranty\b/i,
+  /\bhome sale contingency\b/i,
+  /\bassociation dues\b/i,
+  /\bhomeowners association\b/i,
+  /\brepair\b/i,
+  /\btermite\b/i,
+  /\bradon\b/i,
   /\bpossession\b/i,
-  /\boccupancy\b/i
+  /\boccupancy\b/i,
+  /\bleaseback\b/i,
+  /\brent back\b/i
+];
+
+const IMPORTANT_TERM_DEFINITIONS = [
+  {
+    key: "financing_contingency",
+    label: "Financing / Loan Contingency",
+    category: "Contingency",
+    patterns: [/\bloan commitment\b/i, /\bloan approval\b/i, /\bfinancing contingency\b/i, /\bmortgage contingency\b/i]
+  },
+  {
+    key: "appraisal_term",
+    label: "Appraisal Term",
+    category: "Contingency",
+    patterns: [/\bappraisal\b/i]
+  },
+  {
+    key: "inspection_due_diligence",
+    label: "Inspection / Due Diligence Term",
+    category: "Contingency",
+    patterns: [/\binspection period\b/i, /\bdue diligence\b/i, /\boption period\b/i]
+  },
+  {
+    key: "option_fee",
+    label: "Option / Due Diligence Fee",
+    category: "Money",
+    patterns: [/\boption fee\b/i, /\bdue diligence fee\b/i, /\boption money\b/i]
+  },
+  {
+    key: "seller_concessions",
+    label: "Seller Concessions / Closing Costs",
+    category: "Money",
+    patterns: [/\bseller\b.*\bclosing costs?\b/i, /\bclosing costs paid by seller\b/i, /\bseller\b.*\bconcessions?\b/i, /\bseller contribution\b/i]
+  },
+  {
+    key: "title_escrow",
+    label: "Title / Escrow Company",
+    category: "Closing",
+    patterns: [/\btitle company\b/i, /\bescrow (?:agent|company|holder)\b/i, /\bclosing (?:agent|company)\b/i]
+  },
+  {
+    key: "occupancy_terms",
+    label: "Occupancy / Possession Terms",
+    category: "Occupancy",
+    patterns: [/\bpost[- ]closing occupancy\b/i, /\boccupancy\b/i, /\bleaseback\b/i, /\brent back\b/i, /\brent-back\b/i]
+  },
+  {
+    key: "home_sale_contingency",
+    label: "Home Sale Contingency",
+    category: "Contingency",
+    patterns: [/\bhome sale contingency\b/i, /\bsale of buyer'?s property\b/i, /\bsubject to sale\b/i]
+  },
+  {
+    key: "home_warranty",
+    label: "Home Warranty",
+    category: "Closing",
+    patterns: [/\bhome warranty\b/i]
+  },
+  {
+    key: "hoa_terms",
+    label: "HOA / Association",
+    category: "Property",
+    patterns: [/\bhoa\b/i, /\bhomeowners association\b/i, /\bassociation dues\b/i]
+  },
+  {
+    key: "repair_terms",
+    label: "Repair / Treatment Terms",
+    category: "Repairs",
+    patterns: [/\brepair\b/i, /\btermite\b/i, /\bwood destroying\b/i, /\bradon\b/i, /\bmold\b/i]
+  }
 ];
 const DOCUMENT_PRIORITIES = {
   purchase_contract: 100,
@@ -363,18 +499,30 @@ function hasFieldValue(field) {
 }
 
 function buildRelevantTextExcerpt(text, maxLength) {
-  const lines = splitLines(text);
+  const normalized = normalizePdfText(text);
+  if (!normalized) return { text: "", truncated: false };
+  if (normalized.length <= maxLength) {
+    return { text: normalized, truncated: false };
+  }
+
+  const lines = splitLines(normalized);
   if (!lines.length) return { text: "", truncated: false };
 
   const relevantIndexes = new Set();
-  for (let index = 0; index < Math.min(lines.length, 18); index += 1) {
+  for (let index = 0; index < Math.min(lines.length, 24); index += 1) {
+    relevantIndexes.add(index);
+  }
+  for (let index = Math.max(0, lines.length - 18); index < lines.length; index += 1) {
     relevantIndexes.add(index);
   }
 
   lines.forEach((line, index) => {
-    if (!RELEVANT_TEXT_PATTERNS.some((pattern) => pattern.test(line))) return;
+    const isRelevant = RELEVANT_TEXT_PATTERNS.some((pattern) => pattern.test(line))
+      || DATE_REGEX.test(line)
+      || /\$\s?\d/.test(line);
+    if (!isRelevant) return;
 
-    for (let offset = -1; offset <= 1; offset += 1) {
+    for (let offset = -2; offset <= 3; offset += 1) {
       const targetIndex = index + offset;
       if (targetIndex >= 0 && targetIndex < lines.length) {
         relevantIndexes.add(targetIndex);
@@ -387,7 +535,7 @@ function buildRelevantTextExcerpt(text, maxLength) {
     .map((index) => lines[index])
     .join("\n");
 
-  return truncateText(excerpt || text, maxLength);
+  return truncateText(excerpt || normalized, maxLength);
 }
 
 function detectDocumentType(name, text) {
@@ -521,6 +669,127 @@ function extractTextDateHint(text, labels) {
   }
 
   return "";
+}
+
+function trimSnippet(value, maxLength = 220) {
+  const cleaned = cleanText(value).replace(/\s{2,}/g, " ").trim();
+  if (!cleaned) return "";
+  if (cleaned.length <= maxLength) return cleaned;
+  return `${cleaned.slice(0, maxLength - 3).trim()}...`;
+}
+
+function buildLineSnippet(lines, index, before = 0, after = 2) {
+  return trimSnippet(
+    lines
+      .slice(Math.max(0, index - before), Math.min(lines.length, index + after + 1))
+      .join(" ")
+      .replace(/\[\[page\s+\d+\]\]/ig, " ")
+  );
+}
+
+function extractValueFromLabeledLine(line) {
+  const match = line.match(/(?:\:\s*|\s-\s*)(.+)$/);
+  return match ? trimSnippet(match[1], 180) : "";
+}
+
+function buildHeuristicImportantTermsForDocument(document) {
+  const lines = splitLines(document.text);
+  const importantTerms = [];
+
+  IMPORTANT_TERM_DEFINITIONS.forEach((definition) => {
+    const fieldMatch = findBestFormField(
+      document.formFields,
+      definition.patterns,
+      (value) => cleanText(value).length > 1
+    );
+    if (fieldMatch) {
+      importantTerms.push({
+        key: definition.key,
+        label: definition.label,
+        category: definition.category,
+        value: trimSnippet(fieldMatch.value, 180),
+        confidence: 0.72,
+        evidence: `form field: ${fieldMatch.name}: ${fieldMatch.value}`,
+        sourceDocumentId: document.id,
+        sourceDocumentName: document.name,
+        sourceDocumentType: document.localDocType?.label || "Unknown",
+        sourceDocumentIndex: document.sourceIndex
+      });
+      return;
+    }
+
+    for (let index = 0; index < lines.length; index += 1) {
+      if (!definition.patterns.some((pattern) => pattern.test(lines[index]))) continue;
+      const inlineValue = extractValueFromLabeledLine(lines[index]);
+      const directLine = trimSnippet(lines[index], 180);
+      const snippet = inlineValue || directLine || buildLineSnippet(lines, index, 0, 2);
+      if (!snippet) continue;
+
+      importantTerms.push({
+        key: definition.key,
+        label: definition.label,
+        category: definition.category,
+        value: snippet,
+        confidence: 0.62,
+        evidence: buildLineSnippet(lines, index, 0, 2),
+        sourceDocumentId: document.id,
+        sourceDocumentName: document.name,
+        sourceDocumentType: document.localDocType?.label || "Unknown",
+        sourceDocumentIndex: document.sourceIndex
+      });
+      break;
+    }
+  });
+
+  return importantTerms;
+}
+
+function importantTermLabelKey(term) {
+  return slugify(term?.label || "");
+}
+
+function importantTermValueKey(term) {
+  return slugify(`${term?.label || ""}-${term?.value || ""}`);
+}
+
+function mergeImportantTerms(primaryTerms = [], fallbackTerms = []) {
+  const merged = [];
+  const seenLabels = new Set();
+  const seenValues = new Set();
+
+  [...primaryTerms, ...fallbackTerms].forEach((term) => {
+    const label = cleanText(term?.label);
+    const value = trimSnippet(term?.value, 220);
+    if (!label || !value) return;
+
+    const labelKey = importantTermLabelKey({ label });
+    const valueKey = importantTermValueKey({ label, value });
+    if (!labelKey || seenLabels.has(labelKey) || seenValues.has(valueKey)) return;
+
+    seenLabels.add(labelKey);
+    seenValues.add(valueKey);
+    merged.push({
+      ...term,
+      label,
+      value
+    });
+  });
+
+  return merged.slice(0, MAX_IMPORTANT_TERMS);
+}
+
+function buildHeuristicImportantTerms(documents) {
+  const prioritizedDocuments = [...documents].sort((left, right) => {
+    const leftPriority = DOCUMENT_PRIORITIES[left.localDocType?.type] || DOCUMENT_PRIORITIES.unknown;
+    const rightPriority = DOCUMENT_PRIORITIES[right.localDocType?.type] || DOCUMENT_PRIORITIES.unknown;
+    if (rightPriority !== leftPriority) return rightPriority - leftPriority;
+    return right.sourceIndex - left.sourceIndex;
+  });
+
+  return mergeImportantTerms(
+    [],
+    prioritizedDocuments.flatMap((document) => document.importantTermHints || [])
+  );
 }
 
 function buildCandidateHints(document) {
@@ -709,6 +978,13 @@ function buildDocumentContext(document) {
     });
   }
 
+  if (document.importantTermHints?.length) {
+    sections.push("Additional important-term hints from heuristic parsing. Validate them against the text before using them:");
+    document.importantTermHints.forEach((term) => {
+      sections.push(`- ${term.label}: ${term.value}`);
+    });
+  }
+
   return sections.join("\n");
 }
 
@@ -727,6 +1003,8 @@ function buildPrompt(documents) {
     "If a field is not clearly present, return an empty string for scalar values, an empty array for name arrays, -1 for source_document_index, 0 for confidence, and an empty string for evidence.",
     "For date fields, normalize to YYYY-MM-DD when possible. If a time is present, return it in the time field; otherwise use an empty string.",
     "For money fields, return numeric strings without currency symbols or commas when possible.",
+    "Also return up to 12 additional important_terms for materially important clauses that are not fully captured by the core fields. Prioritize contingencies, seller concessions, option or due-diligence terms, appraisal, financing deadlines, title or escrow, occupancy or rent-back, HOA, home warranty, and repair obligations.",
+    "important_terms values should be short, human-readable summaries grounded in the text. They may include relative periods or conditional language if that is how the contract states the term.",
     "Classify each uploaded document by likely document type.",
     "Choose the best current value for each field across all documents. A later amendment or counteroffer can override an earlier purchase contract only if it clearly changes that field.",
     "When source_document_name is populated, it must match one of these exact uploaded names:",
@@ -930,6 +1208,31 @@ function normalizeModelField(fieldName, rawField, documentLookup) {
   };
 }
 
+function normalizeImportantTerm(rawTerm, documentLookup) {
+  const label = cleanText(rawTerm?.label);
+  const value = trimSnippet(rawTerm?.value, 220);
+  if (!label || !value) return null;
+
+  const sourceDocumentName = cleanText(rawTerm?.source_document_name);
+  const fallbackDocument = documentLookup.get(sourceDocumentName) || null;
+  const sourceDocumentIndex = Number.isInteger(rawTerm?.source_document_index) && rawTerm.source_document_index >= 0
+    ? rawTerm.source_document_index
+    : fallbackDocument?.sourceIndex ?? null;
+  const sourceDocumentType = cleanText(rawTerm?.source_document_type) || fallbackDocument?.likelyDocumentType || null;
+
+  return {
+    label,
+    category: cleanText(rawTerm?.category) || "Important Term",
+    value,
+    confidence: clampConfidence(rawTerm?.confidence),
+    sourceDocumentId: fallbackDocument?.id || (sourceDocumentName ? slugify(`${sourceDocumentName}-${sourceDocumentIndex ?? "x"}`) : null),
+    sourceDocumentName: sourceDocumentName || null,
+    sourceDocumentType: sourceDocumentType || null,
+    sourceDocumentIndex,
+    evidence: trimSnippet(rawTerm?.evidence, 260) || null
+  };
+}
+
 function buildEmptyField(fieldName) {
   return {
     key: fieldName,
@@ -948,9 +1251,10 @@ function buildEmptyField(fieldName) {
 
 function buildFallbackPayload(documents, warnings) {
   const fields = buildHeuristicFieldMap(documents);
+  const importantTerms = buildHeuristicImportantTerms(documents);
 
   return {
-    schema_version: "ctc.contract.extraction.v2",
+    schema_version: "ctc.contract.extraction.v3",
     provider: "client_pdf_text_form_extraction",
     model: null,
     extracted_at: new Date().toISOString(),
@@ -967,7 +1271,8 @@ function buildFallbackPayload(documents, warnings) {
       extractedFieldCount: countDocumentMappedFields(document.name, fields)
     })),
     fields,
-    source_details: buildSourceDetails(fields),
+    important_terms: importantTerms,
+    source_details: buildSourceDetails(fields, importantTerms),
     warnings,
     debug: {
       provider: "client_pdf_text_form_extraction",
@@ -981,7 +1286,8 @@ function buildFallbackPayload(documents, warnings) {
         status: document.status,
         textPreview: (document.text || "").slice(0, 1600),
         formFieldPreview: document.formFields.slice(0, 20),
-        candidateHints: document.candidateHints
+        candidateHints: document.candidateHints,
+        importantTermHints: document.importantTermHints
       }))
     }
   };
@@ -989,6 +1295,7 @@ function buildFallbackPayload(documents, warnings) {
 
 function normalizePayload(modelParsed, documents) {
   const heuristicFields = buildHeuristicFieldMap(documents);
+  const heuristicImportantTerms = buildHeuristicImportantTerms(documents);
   const documentLookupInput = documents.map((document) => ({
     id: slugify(`${document.name}-${document.sourceIndex}`),
     sourceIndex: document.sourceIndex,
@@ -1021,6 +1328,12 @@ function normalizePayload(modelParsed, documents) {
   });
 
   const fields = mergeFieldMaps(modelFields, heuristicFields);
+  const modelImportantTerms = Array.isArray(modelParsed?.important_terms)
+    ? modelParsed.important_terms
+      .map((term) => normalizeImportantTerm(term, documentLookup))
+      .filter(Boolean)
+    : [];
+  const importantTerms = mergeImportantTerms(modelImportantTerms, heuristicImportantTerms);
 
   const documentsWithCounts = normalizedDocuments.map((document) => ({
     ...document,
@@ -1028,13 +1341,14 @@ function normalizePayload(modelParsed, documents) {
   }));
 
   return {
-    schema_version: "ctc.contract.extraction.v2",
+    schema_version: "ctc.contract.extraction.v3",
     provider: "openai_server_text_extraction",
     model: MODEL,
     extracted_at: new Date().toISOString(),
     documents: documentsWithCounts,
     fields,
-    source_details: buildSourceDetails(fields),
+    important_terms: importantTerms,
+    source_details: buildSourceDetails(fields, importantTerms),
     warnings: Array.isArray(modelParsed?.warnings) ? modelParsed.warnings.map((warning) => cleanText(warning)).filter(Boolean) : [],
     debug: {
       provider: "openai_server_text_extraction",
@@ -1049,7 +1363,8 @@ function normalizePayload(modelParsed, documents) {
         status: document.status,
         textPreview: (document.text || "").slice(0, 1600),
         formFieldPreview: document.formFields.slice(0, 20),
-        candidateHints: document.candidateHints
+        candidateHints: document.candidateHints,
+        importantTermHints: document.importantTermHints
       }))
     }
   };
@@ -1064,6 +1379,14 @@ function normalizeInputDocument(document, index) {
     formFields
   });
   const localDocType = detectDocumentType(document?.name, normalizedText);
+  const importantTermHints = buildHeuristicImportantTermsForDocument({
+    id: slugify(`${document?.name || "document"}-${index}`),
+    sourceIndex: Number.isInteger(document?.sourceIndex) ? document.sourceIndex : index,
+    name: cleanText(document?.name),
+    text: normalizedText,
+    formFields,
+    localDocType
+  });
 
   return {
     id: slugify(`${document?.name || "document"}-${index}`),
@@ -1076,6 +1399,7 @@ function normalizeInputDocument(document, index) {
     textTruncated: textInfo.truncated,
     formFields,
     candidateHints,
+    importantTermHints,
     localDocType,
     status: cleanText(document?.status) || ((textInfo.text || formFields.length) ? "processed" : "needs ocr"),
     note: cleanText(document?.note) || "",

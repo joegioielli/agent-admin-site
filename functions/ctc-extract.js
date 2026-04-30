@@ -72,6 +72,32 @@ function normalizePdfText(value) {
     .trim();
 }
 
+function lineMatchesAnyPattern(line, patterns) {
+  const cleaned = cleanText(line);
+  if (!cleaned) return false;
+  return patterns.some((pattern) => pattern.test(cleaned));
+}
+
+function isBoilerplateLine(line) {
+  return lineMatchesAnyPattern(line, BOILERPLATE_LINE_PATTERNS);
+}
+
+function isAgentAttributionLine(line) {
+  return lineMatchesAnyPattern(line, AGENT_ATTRIBUTION_PATTERNS);
+}
+
+function stripBoilerplatePdfText(value) {
+  const normalized = normalizePdfText(value);
+  if (!normalized) return "";
+
+  return normalized
+    .split(/\n+/)
+    .map((line) => cleanText(line))
+    .filter(Boolean)
+    .filter((line) => /^\[\[page\s+\d+\]\]$/i.test(line) || !isBoilerplateLine(line))
+    .join("\n");
+}
+
 function slugify(input) {
   return cleanText(input)
     .toLowerCase()
@@ -361,7 +387,37 @@ const EXTRACTION_SCHEMA = {
 const DATE_REGEX = /\b(?:\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}|(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2},?\s+\d{2,4})\b/i;
 const TIME_REGEX = /\b\d{1,2}(?::\d{2})?\s?(?:a\.?m\.?|p\.?m\.?)\b/i;
 const ADDRESS_REGEX = /\b\d{1,6}\s+[A-Za-z0-9.'#-]+(?:\s+[A-Za-z0-9.'#-]+){0,7}\s+(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Court|Ct|Circle|Cir|Way|Boulevard|Blvd|Place|Pl|Terrace|Ter|Trail|Trl|Parkway|Pkwy)\b(?:[^\n,]*)(?:,\s*[A-Za-z .'-]+,\s*[A-Z]{2}\s*\d{5}(?:-\d{4})?)?/i;
-const NAME_STOPWORDS = /\b(closing|costs|prepaid|items|temporary|permanent|rate|buy|down|mortgage|loan|seller|buyer|pay|paid|credit|commission|broker|agent|inspection|possession|date|earnest|money|price|financing)\b/i;
+const NAME_STOPWORDS = /\b(closing|costs|prepaid|items|temporary|permanent|rate|buy|down|mortgage|loan|seller|buyer|pay|paid|credit|commission|broker|agent|inspection|possession|date|earnest|money|price|financing|realtors?|association|authorized|copyright|version|licensee|brokerage|office|prepared|mls)\b/i;
+const BOILERPLATE_LINE_PATTERNS = [
+  /\bthis form is copyrighted\b/i,
+  /\bcopyright\b/i,
+  /\bauthorized user\b/i,
+  /\bunauthorized use\b/i,
+  /\blegal sanctions\b/i,
+  /\breported to\b/i,
+  /\bassociation of realtors\b/i,
+  /\btennessee realtors\b/i,
+  /\brealtors?\b/i,
+  /\bversion\s+\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\b/i,
+  /\bpage\s+\d+\s+of\s+\d+\b/i,
+  /\brf\s*\d{3,}\b/i,
+  /\bpurchase and sale agreement\b/i,
+  /\blot\/land purchase and sale agreement\b/i
+];
+const AGENT_ATTRIBUTION_PATTERNS = [
+  /\bagent\b/i,
+  /\bbroker(?:age)?\b/i,
+  /\blicensee\b/i,
+  /\brealtors?\b/i,
+  /\bassociation\b/i,
+  /\bprepared by\b/i,
+  /\bmls\b/i,
+  /\boffice\b/i,
+  /\bphone\b/i,
+  /\bfax\b/i,
+  /\bemail\b/i,
+  /\bauthorized user\b/i
+];
 const RELEVANT_TEXT_PATTERNS = [
   /\[\[page/i,
   /\bproperty address\b/i,
@@ -605,6 +661,7 @@ function splitPartyNames(value) {
     .replace(/\bas (?:joint tenants|tenants in common|husband and wife)[\s\S]*$/i, "")
     .replace(/\bmarital status[\s\S]*$/i, "")
     .replace(/\bwhose address is[\s\S]*$/i, "")
+    .replace(/\b(?:agent|broker|brokerage|licensee|realtor|realtors|association|authorized user)\b[\s\S]*$/i, "")
     .trim();
 
   if (!cleaned) return [];
@@ -640,6 +697,7 @@ function findBestFormField(formFields, patterns, validator) {
   for (const field of formFields) {
     const matches = patterns.some((pattern) => pattern.test(field.normalizedName || ""));
     if (!matches) continue;
+    if (isAgentAttributionLine(field.normalizedName || "") || isBoilerplateLine(field.normalizedName || "")) continue;
     if (typeof validator === "function" && !validator(field.value, field)) continue;
     return field;
   }
@@ -997,6 +1055,7 @@ function buildPrompt(documents) {
     "Use only what is explicitly supported by the extracted text and form-field data below. Do not guess.",
     "Treat the field candidate hints below as non-binding suggestions only. They are helpers, not source of truth.",
     "Buyer names and seller names must be actual person or entity names only. Never use cost allocation text, financing language, or phrases like closing costs, prepaid items, to pay, rate buy down, or similar non-name content as party names.",
+    "Never use agent, broker, REALTOR association, authorized-user, copyright footer, page footer, title company, or signature-block names as buyer or seller parties.",
     "If a filename or document text says Purchase and Sale Agreement or RF 401, prefer classifying it as a purchase contract unless the document clearly says amendment, counteroffer, or addendum.",
     "Only extract financing type when the contract explicitly names a financing program or says cash.",
     "If an inspection or possession term is expressed only as a relative period or condition and not an actual date, leave the date blank and mention that in warnings.",
@@ -1233,6 +1292,65 @@ function normalizeImportantTerm(rawTerm, documentLookup) {
   };
 }
 
+function findLinesContainingName(documents, name) {
+  const normalizedNeedle = cleanText(name).toLowerCase();
+  if (!normalizedNeedle) return [];
+
+  return documents.flatMap((document) =>
+    splitLines(document.rawText || document.text)
+      .filter((line) => cleanText(line).toLowerCase().includes(normalizedNeedle))
+      .map((line) => ({
+        line,
+        documentName: document.name
+      }))
+  );
+}
+
+function isLikelyNoisePartyName(name, documents) {
+  const cleaned = cleanupCandidate(name);
+  if (!cleaned) return true;
+
+  const matchingLines = findLinesContainingName(documents, cleaned);
+  if (!matchingLines.length) return false;
+
+  const supportingLines = matchingLines.filter(({ line }) => !isBoilerplateLine(line) && !isAgentAttributionLine(line));
+  return supportingLines.length === 0;
+}
+
+function sanitizePartyField(field, documents) {
+  if (!ARRAY_FIELDS.has(field?.key)) return field;
+
+  const nextNames = normalizeNameArray(field.value).filter((name) => !isLikelyNoisePartyName(name, documents));
+  if (nextNames.length === normalizeNameArray(field.value).length) {
+    return {
+      ...field,
+      value: nextNames,
+      displayValue: formatFieldValue(field.key, nextNames, null)
+    };
+  }
+
+  if (!nextNames.length) {
+    return buildEmptyField(field.key);
+  }
+
+  return {
+    ...field,
+    value: nextNames,
+    displayValue: formatFieldValue(field.key, nextNames, null),
+    evidence: cleanText(field.evidence) || "Party names were filtered to remove footer or agent-attribution noise."
+  };
+}
+
+function resolvePartyField(primaryField, fallbackField, documents) {
+  const sanitizedPrimary = sanitizePartyField(primaryField, documents);
+  if (hasFieldValue(sanitizedPrimary)) return sanitizedPrimary;
+
+  const sanitizedFallback = sanitizePartyField(fallbackField, documents);
+  if (hasFieldValue(sanitizedFallback)) return sanitizedFallback;
+
+  return buildEmptyField(primaryField?.key || fallbackField?.key || "buyer_names");
+}
+
 function buildEmptyField(fieldName) {
   return {
     key: fieldName,
@@ -1251,6 +1369,8 @@ function buildEmptyField(fieldName) {
 
 function buildFallbackPayload(documents, warnings) {
   const fields = buildHeuristicFieldMap(documents);
+  fields.buyer_names = sanitizePartyField(fields.buyer_names, documents);
+  fields.seller_names = sanitizePartyField(fields.seller_names, documents);
   const importantTerms = buildHeuristicImportantTerms(documents);
 
   return {
@@ -1328,6 +1448,8 @@ function normalizePayload(modelParsed, documents) {
   });
 
   const fields = mergeFieldMaps(modelFields, heuristicFields);
+  fields.buyer_names = resolvePartyField(modelFields.buyer_names, heuristicFields.buyer_names, documents);
+  fields.seller_names = resolvePartyField(modelFields.seller_names, heuristicFields.seller_names, documents);
   const modelImportantTerms = Array.isArray(modelParsed?.important_terms)
     ? modelParsed.important_terms
       .map((term) => normalizeImportantTerm(term, documentLookup))
@@ -1371,7 +1493,8 @@ function normalizePayload(modelParsed, documents) {
 }
 
 function normalizeInputDocument(document, index) {
-  const normalizedText = normalizePdfText(document?.text);
+  const rawText = normalizePdfText(document?.text);
+  const normalizedText = stripBoilerplatePdfText(rawText);
   const textInfo = buildRelevantTextExcerpt(normalizedText, MAX_TEXT_CHARS_PER_DOCUMENT);
   const formFields = normalizeFormFields(document?.formFields);
   const candidateHints = buildCandidateHints({
@@ -1394,6 +1517,7 @@ function normalizeInputDocument(document, index) {
     name: cleanText(document?.name),
     size: Number(document?.size) || 0,
     pageCount: Number(document?.pageCount) || null,
+    rawText,
     text: normalizedText,
     modelText: textInfo.text,
     textTruncated: textInfo.truncated,

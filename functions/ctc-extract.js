@@ -418,6 +418,23 @@ const AGENT_ATTRIBUTION_PATTERNS = [
   /\bemail\b/i,
   /\bauthorized user\b/i
 ];
+const PARTY_FIELD_EXCLUSION_PATTERNS = [
+  /\bbuyer'?s?\s+agent\b/i,
+  /\bseller'?s?\s+agent\b/i,
+  /\blisting\s+(?:agent|broker|company|office|firm|licensee)\b/i,
+  /\bselling\s+(?:agent|broker|company|office|firm|licensee)\b/i,
+  /\bcooperating\s+(?:agent|broker|company|office|firm|licensee)\b/i,
+  /\bbroker(?:age)?\b/i,
+  /\blicensee\b/i,
+  /\bmls\b/i,
+  /\boffice\b/i,
+  /\bcompany\b/i,
+  /\bfirm\b/i,
+  /\bprepared by\b/i,
+  /\bphone\b/i,
+  /\bfax\b/i,
+  /\bemail\b/i
+];
 const RELEVANT_TEXT_PATTERNS = [
   /\[\[page/i,
   /\bproperty address\b/i,
@@ -674,6 +691,38 @@ function splitPartyNames(value) {
   )];
 }
 
+function hasPartyNameValue(value) {
+  return splitPartyNames(value).length > 0;
+}
+
+function isExcludedPartyFieldName(value) {
+  return lineMatchesAnyPattern(value, PARTY_FIELD_EXCLUSION_PATTERNS)
+    || isAgentAttributionLine(value)
+    || isBoilerplateLine(value);
+}
+
+function scorePartyFieldName(normalizedName, role) {
+  if (!normalizedName || isExcludedPartyFieldName(normalizedName)) return -1;
+
+  const exactPatterns = role === "buyer"
+    ? [/^buyer$/, /^buyers$/, /^buyer names?$/, /^name of buyers?$/, /^purchasers?$/, /^purchaser names?$/]
+    : [/^seller$/, /^sellers$/, /^seller names?$/, /^name of sellers?$/, /^owners?$/, /^owner names?$/];
+  const preferredPatterns = role === "buyer"
+    ? [/\bbuyer\b/i, /\bpurchaser\b/i]
+    : [/\bseller\b/i, /\bowner\b/i];
+
+  let score = 0;
+  if (exactPatterns.some((pattern) => pattern.test(normalizedName))) score += 320;
+  else if (preferredPatterns.some((pattern) => pattern.test(normalizedName))) score += 180;
+  else return -1;
+
+  if (/\bname\b/i.test(normalizedName)) score += 18;
+  if (/\b1\b|\bfirst\b/i.test(normalizedName)) score += 8;
+  if (/\b2\b|\bsecond\b/i.test(normalizedName)) score += 4;
+  if (/\bentity\b/i.test(normalizedName)) score += 2;
+  return score;
+}
+
 function getLineValueAfterLabel(lines, patterns) {
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
@@ -693,6 +742,35 @@ function getLineValueAfterLabel(lines, patterns) {
   return "";
 }
 
+function getPartyLineValue(lines, role) {
+  const patterns = role === "buyer"
+    ? [
+      /^(?:buyer(?:\(s\))?|buyers|purchaser(?:\(s\))?|purchasers)\s*[:\-]?\s*(.*)$/i,
+      /^(?:name of buyer(?:\(s\))?|buyer name(?:\(s\))?|buyer names|name of purchaser(?:\(s\))?)\s*[:\-]?\s*(.*)$/i
+    ]
+    : [
+      /^(?:seller(?:\(s\))?|sellers|owner(?:\(s\))?|owners)\s*[:\-]?\s*(.*)$/i,
+      /^(?:name of seller(?:\(s\))?|seller name(?:\(s\))?|seller names|name of owner(?:\(s\))?)\s*[:\-]?\s*(.*)$/i
+    ];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (isExcludedPartyFieldName(line)) continue;
+    for (const pattern of patterns) {
+      const match = line.match(pattern);
+      if (!match) continue;
+
+      const sameLineValue = cleanupCandidate(match[1] || "");
+      if (hasPartyNameValue(sameLineValue)) return sameLineValue;
+
+      const nextLineValue = cleanupCandidate(lines[index + 1] || "");
+      if (hasPartyNameValue(nextLineValue)) return nextLineValue;
+    }
+  }
+
+  return "";
+}
+
 function findBestFormField(formFields, patterns, validator) {
   for (const field of formFields) {
     const matches = patterns.some((pattern) => pattern.test(field.normalizedName || ""));
@@ -704,6 +782,18 @@ function findBestFormField(formFields, patterns, validator) {
   return null;
 }
 
+function findPartyFormField(formFields, role) {
+  const rankedFields = formFields
+    .map((field) => ({
+      field,
+      score: scorePartyFieldName(field.normalizedName || "", role)
+    }))
+    .filter(({ field, score }) => score > 0 && hasPartyNameValue(field.value))
+    .sort((left, right) => right.score - left.score);
+
+  return rankedFields[0]?.field || null;
+}
+
 function findFinanceKeyword(value) {
   const match = cleanText(value).match(/\b(conventional|cash|fha|va|usda|assumption|owner financing|seller financing)\b/i);
   return match ? match[1].replace(/\b\w/g, (char) => char.toUpperCase()) : "";
@@ -711,7 +801,7 @@ function findFinanceKeyword(value) {
 
 function extractTextDateHint(text, labels) {
   for (const label of labels) {
-    const regex = new RegExp(`${label}[\\s\\S]{0,120}`, "i");
+    const regex = new RegExp(`${label}[\\s\\S]{0,180}`, "i");
     const snippetMatch = text.match(regex);
     if (!snippetMatch) continue;
 
@@ -882,26 +972,20 @@ function buildCandidateHints(document) {
     }
   }
 
-  const buyerField = findBestFormField(document.formFields, [/\bbuyer\b/, /\bpurchaser\b/], (value) => looksLikePersonName(value));
+  const buyerField = findPartyFormField(document.formFields, "buyer");
   if (buyerField) {
     setHint("buyer_names", buyerField.value, `form field: ${buyerField.name}`);
   } else {
-    const buyerLine = getLineValueAfterLabel(lines, [
-      /^(?:buyer(?:\(s\))?|purchaser(?:\(s\))?)\s*[:\-]?\s*(.*)$/i,
-      /^(?:name of buyer|buyer name(?:\(s\))?)\s*[:\-]?\s*(.*)$/i
-    ]);
+    const buyerLine = getPartyLineValue(lines, "buyer");
     const names = splitPartyNames(buyerLine);
     if (names.length) setHint("buyer_names", names.join(", "), "text label");
   }
 
-  const sellerField = findBestFormField(document.formFields, [/\bseller\b/, /\bowner\b/], (value) => looksLikePersonName(value));
+  const sellerField = findPartyFormField(document.formFields, "seller");
   if (sellerField) {
     setHint("seller_names", sellerField.value, `form field: ${sellerField.name}`);
   } else {
-    const sellerLine = getLineValueAfterLabel(lines, [
-      /^(?:seller(?:\(s\))?|owner(?:\(s\))?)\s*[:\-]?\s*(.*)$/i,
-      /^(?:name of seller|seller name(?:\(s\))?)\s*[:\-]?\s*(.*)$/i
-    ]);
+    const sellerLine = getPartyLineValue(lines, "seller");
     const names = splitPartyNames(sellerLine);
     if (names.length) setHint("seller_names", names.join(", "), "text label");
   }
@@ -939,11 +1023,28 @@ function buildCandidateHints(document) {
     if (financing) setHint("financing_type", financing, financingLine ? "text label" : "text pattern");
   }
 
-  const bindingField = findBestFormField(document.formFields, [/\bbinding\b.*\bdate\b/, /\beffective\b.*\bdate\b/, /\bacceptance\b.*\bdate\b/], (value) => Boolean(normalizeDate(value)));
+  const bindingField = findBestFormField(document.formFields, [
+    /\bbinding\b.*\bagreement\b.*\bdate\b/,
+    /\bbinding\b.*\bdate\b/,
+    /\beffective\b.*\bdate\b/,
+    /\bacceptance\b.*\bdate\b/,
+    /\bdate\b.*\bacceptance\b/,
+    /\bdate\b.*\bagreement\b/,
+    /\bfinal\b.*\bacceptance\b.*\bdate\b/
+  ], (value) => Boolean(normalizeDate(value)));
   if (bindingField) {
     setHint("binding_date", normalizeDate(bindingField.value), `form field: ${bindingField.name}`);
   } else {
-    const bindingDate = extractTextDateHint(text, ["binding date", "effective date", "acceptance date"]);
+    const bindingDate = extractTextDateHint(text, [
+      "binding agreement date",
+      "binding date",
+      "effective date",
+      "acceptance date",
+      "date of acceptance",
+      "date of final acceptance",
+      "final acceptance date",
+      "date of agreement"
+    ]);
     if (bindingDate) setHint("binding_date", bindingDate, "text label");
   }
 
@@ -1056,6 +1157,7 @@ function buildPrompt(documents) {
     "Treat the field candidate hints below as non-binding suggestions only. They are helpers, not source of truth.",
     "Buyer names and seller names must be actual person or entity names only. Never use cost allocation text, financing language, or phrases like closing costs, prepaid items, to pay, rate buy down, or similar non-name content as party names.",
     "Never use agent, broker, REALTOR association, authorized-user, copyright footer, page footer, title company, or signature-block names as buyer or seller parties.",
+    "If the document has explicit Buyer, Purchaser, Seller, or Owner fields or lines, prefer those exact party labels over any other nearby names.",
     "If a filename or document text says Purchase and Sale Agreement or RF 401, prefer classifying it as a purchase contract unless the document clearly says amendment, counteroffer, or addendum.",
     "Only extract financing type when the contract explicitly names a financing program or says cash.",
     "If an inspection or possession term is expressed only as a relative period or condition and not an actual date, leave the date blank and mention that in warnings.",
@@ -1343,10 +1445,9 @@ function sanitizePartyField(field, documents) {
 
 function resolvePartyField(primaryField, fallbackField, documents) {
   const sanitizedPrimary = sanitizePartyField(primaryField, documents);
-  if (hasFieldValue(sanitizedPrimary)) return sanitizedPrimary;
-
   const sanitizedFallback = sanitizePartyField(fallbackField, documents);
   if (hasFieldValue(sanitizedFallback)) return sanitizedFallback;
+  if (hasFieldValue(sanitizedPrimary)) return sanitizedPrimary;
 
   return buildEmptyField(primaryField?.key || fallbackField?.key || "buyer_names");
 }
